@@ -1,0 +1,42 @@
+# Smart-E HE Application Settings
+nexus_only_when_active: false
+nexus_auto_close_tab_on_disconnect: false
+nexus_auto_session_logging: true
+nexus_cascade_exit: false
+nexus_runbook_show_progress: true
+nexus_runbook_auto_close: true
+nexus_runbook_auto_close_delay: 2
+show_nodes_tab: false
+nexus_pulse_style: "neonSonarWave"
+nexus_pulse_color: "emerald"
+floating_command_width: 50
+right_sidebar_width: 440
+left_sidebar_width: 200
+app_theme: "antigravity"
+app_font_size: "medium"
+border_animation_duration: 8.0
+remember_me: true
+remembered_username: "admin"
+tools_page_view: "grid"
+gilan_dashboard:
+  url: "https://10.52.10.180:31343/"
+  username: "hendra_kusuma_x"
+nodes_page_view:
+  current: "cards"
+  enabled:
+    - "cards"
+    - "tree"
+    - "table"
+    - "map"
+auto_check_updates: true
+auto_download_updates: false
+update_remote_path: "/home/vmridwan/smart_e_he_updates"
+file_explorer_density: "standard"
+file_explorer_font_family: "monospace"
+file_explorer_icon_theme: "smart"
+nexus_terminal_font_family: "courierNew"
+nexus_terminal_font_size: 14.0
+nexus_terminal_line_height: 1.0
+nexus_terminal_theme_mode: "followAppTheme"
+pinned_tools:
+  - "cluster_deployment"

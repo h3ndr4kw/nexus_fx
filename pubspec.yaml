@@ -1,0 +1,33 @@
+name: nexus_fx
+description: "NexusFX - SSH & Local Terminal Workspace, SFTP File Explorer, and Session Manager"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^2.0.0
+  yaml: ^3.1.3
+  dartssh2: ^4.1.0
+  xterm: ^4.0.0
+  provider: ^6.1.4
+  window_manager: ^0.5.2
+  archive: ^4.5.0
+  xml: ^7.1.0
+  crypto: ^3.0.7
+  file_selector: ^1.1.0
+  ffi: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/scripts/
+    - assets/icon/
