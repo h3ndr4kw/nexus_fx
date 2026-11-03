@@ -58,13 +58,14 @@ class SessionFolder {
   SessionFolder copyWith({
     String? id,
     String? parentId,
+    bool clearParentId = false,
     String? name,
     String? description,
     DateTime? modifiedAt,
   }) {
     return SessionFolder(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: clearParentId ? null : (parentId ?? this.parentId),
       name: name ?? this.name,
       description: description ?? this.description,
       modifiedAt: modifiedAt ?? this.modifiedAt,

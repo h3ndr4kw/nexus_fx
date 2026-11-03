@@ -6,6 +6,31 @@ import '../theme/app_theme.dart';
 import '../widgets/draggable_dialog.dart';
 import '../widgets/session_properties_dialog.dart';
 
+enum _ItemType { parent, folder, session }
+
+class _NavigableItem {
+  final _ItemType type;
+  final String? id;
+  final SessionFolder? folder;
+  final SessionProfile? session;
+
+  const _NavigableItem.parent()
+      : type = _ItemType.parent,
+        id = null,
+        folder = null,
+        session = null;
+
+  _NavigableItem.folder(this.folder)
+      : type = _ItemType.folder,
+        id = folder?.id,
+        session = null;
+
+  _NavigableItem.session(this.session)
+      : type = _ItemType.session,
+        id = session?.id,
+        folder = null;
+}
+
 class SessionsScreen extends StatefulWidget {
   final SessionManagerService? sessionManager;
   final void Function(List<SessionProfile> sessions, {bool openInRightSplit}) onConnectSessions;
@@ -37,7 +62,10 @@ class _SessionsScreenState extends State<SessionsScreen> {
   String? _currentFolderId;
   String? _selectedSessionId;
   String? _selectedFolderId;
+  bool _selectedParent = false;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
   late bool _showAtStartup;
 
@@ -48,6 +76,16 @@ class _SessionsScreenState extends State<SessionsScreen> {
     _mgr.addListener(_onManagerChanged);
     _showAtStartup = widget.initialShowAtStartup ?? false;
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_selectedFolderId == null && _selectedSessionId == null && !_selectedParent) {
+        final items = _getVisibleItems();
+        if (items.isNotEmpty) {
+          _selectItemAtIndex(0, visibleItems: items);
+        }
+      }
+    });
   }
 
   @override
@@ -55,19 +93,158 @@ class _SessionsScreenState extends State<SessionsScreen> {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _mgr.removeListener(_onManagerChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  List<_NavigableItem> _getVisibleItems() {
+    final List<_NavigableItem> items = [];
+    if (_currentFolderId != null && _searchQuery.isEmpty) {
+      items.add(const _NavigableItem.parent());
+    }
+
+    List<SessionFolder> folders = _mgr.getChildFolders(_currentFolderId);
+    List<SessionProfile> sessions = _mgr.getChildSessions(_currentFolderId);
+
+    if (_searchQuery.isNotEmpty) {
+      folders = _mgr.folders.where((f) => f.name.toLowerCase().contains(_searchQuery)).toList();
+      sessions = _mgr.sessions.where((s) =>
+          s.name.toLowerCase().contains(_searchQuery) ||
+          s.host.toLowerCase().contains(_searchQuery) ||
+          s.username.toLowerCase().contains(_searchQuery) ||
+          s.description.toLowerCase().contains(_searchQuery)).toList();
+    }
+
+    for (final f in folders) {
+      items.add(_NavigableItem.folder(f));
+    }
+    for (final s in sessions) {
+      items.add(_NavigableItem.session(s));
+    }
+    return items;
+  }
+
+  int _getSelectedIndex(List<_NavigableItem> items) {
+    if (items.isEmpty) return -1;
+    if (_selectedParent) {
+      final idx = items.indexWhere((it) => it.type == _ItemType.parent);
+      if (idx != -1) return idx;
+    }
+    if (_selectedFolderId != null) {
+      final idx = items.indexWhere((it) => it.type == _ItemType.folder && it.id == _selectedFolderId);
+      if (idx != -1) return idx;
+    }
+    if (_selectedSessionId != null) {
+      final idx = items.indexWhere((it) => it.type == _ItemType.session && it.id == _selectedSessionId);
+      if (idx != -1) return idx;
+    }
+    return -1;
+  }
+
+  void _selectItemAtIndex(int index, {List<_NavigableItem>? visibleItems}) {
+    final items = visibleItems ?? _getVisibleItems();
+    if (items.isEmpty) {
+      setState(() {
+        _selectedParent = false;
+        _selectedFolderId = null;
+        _selectedSessionId = null;
+      });
+      return;
+    }
+    final clampedIndex = index.clamp(0, items.length - 1);
+    final item = items[clampedIndex];
+    setState(() {
+      switch (item.type) {
+        case _ItemType.parent:
+          _selectedParent = true;
+          _selectedFolderId = null;
+          _selectedSessionId = null;
+          break;
+        case _ItemType.folder:
+          _selectedParent = false;
+          _selectedFolderId = item.id;
+          _selectedSessionId = null;
+          break;
+        case _ItemType.session:
+          _selectedParent = false;
+          _selectedFolderId = null;
+          _selectedSessionId = item.id;
+          break;
+      }
+    });
+    _scrollToIndex(clampedIndex);
+  }
+
+  void _moveCursor(int delta) {
+    final items = _getVisibleItems();
+    if (items.isEmpty) return;
+    final current = _getSelectedIndex(items);
+    int nextIndex;
+    if (current == -1) {
+      nextIndex = delta > 0 ? 0 : items.length - 1;
+    } else {
+      nextIndex = (current + delta).clamp(0, items.length - 1);
+    }
+    _selectItemAtIndex(nextIndex, visibleItems: items);
+  }
+
+  void _scrollToIndex(int index) {
+    if (!_scrollController.hasClients) return;
+    const rowHeight = 30.0;
+    final itemTop = index * rowHeight;
+    final itemBottom = itemTop + rowHeight;
+    final currentScroll = _scrollController.offset;
+    final viewportHeight = _scrollController.position.viewportDimension;
+
+    if (itemTop < currentScroll) {
+      _scrollController.jumpTo(itemTop);
+    } else if (itemBottom > currentScroll + viewportHeight) {
+      _scrollController.jumpTo((itemBottom - viewportHeight).clamp(0.0, _scrollController.position.maxScrollExtent));
+    }
+  }
+
+  void _openOrConnectActiveItem() {
+    final items = _getVisibleItems();
+    final current = _getSelectedIndex(items);
+    if (current == -1 || current >= items.length) return;
+    final item = items[current];
+
+    switch (item.type) {
+      case _ItemType.parent:
+        _navigateUp();
+        break;
+      case _ItemType.folder:
+        if (item.folder != null) {
+          if (_searchQuery.isNotEmpty) {
+            _searchController.clear();
+            setState(() => _searchQuery = '');
+            _searchFocusNode.unfocus();
+          }
+          _navigateToFolder(item.folder!.id);
+        }
+        break;
+      case _ItemType.session:
+        if (item.session != null) {
+          widget.onConnectSessions([item.session!]);
+          if (widget.isDialogMode) widget.onCloseDialog?.call();
+        }
+        break;
+    }
   }
 
   bool _handleKeyEvent(KeyEvent event) {
     if (!mounted) return false;
     if (!widget.isActive) return false;
-    if (event is! KeyDownEvent) return false;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
     if (!TickerMode.valuesOf(context).enabled) return false;
 
     // Do not intercept if a child modal route is open
     final route = ModalRoute.of(context);
     final isCurrentRoute = route == null || route.isCurrent;
     if (!isCurrentRoute) return false;
+
+    final isDownOnly = event is KeyDownEvent;
 
     final isCtrl = HardwareKeyboard.instance.isControlPressed ||
         HardwareKeyboard.instance.isMetaPressed ||
@@ -80,60 +257,145 @@ class _SessionsScreenState extends State<SessionsScreen> {
         HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altLeft) ||
         HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altRight);
 
+    // If search text field has focus
+    if (_searchFocusNode.hasFocus) {
+      if (isDownOnly && event.logicalKey == LogicalKeyboardKey.escape) {
+        if (_searchController.text.isNotEmpty) {
+          _searchController.clear();
+          setState(() {
+            _searchQuery = '';
+            final items = _getVisibleItems();
+            if (items.isNotEmpty) _selectItemAtIndex(0, visibleItems: items);
+          });
+        }
+        _searchFocusNode.unfocus();
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        _moveCursor(1);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _moveCursor(-1);
+        return true;
+      }
+      if (isDownOnly && !isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.enter) {
+        _openOrConnectActiveItem();
+        return true;
+      }
+      return false;
+    }
+
     // Ctrl+N -> New Session
-    if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyN) {
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyN) {
       _createNewSession();
       return true;
     }
     // Ctrl+Shift+N -> New Folder
-    if (isCtrl && isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyN) {
+    if (isDownOnly && isCtrl && isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyN) {
       _createNewFolder();
       return true;
     }
     // Ctrl+D -> Duplicate Session
-    if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyD) {
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyD) {
       _duplicateSelected();
       return true;
     }
     // Ctrl+C -> Copy
-    if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyC) {
       _copySelected();
       return true;
     }
     // Ctrl+X -> Cut
-    if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyX) {
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyX) {
       _cutSelected();
       return true;
     }
     // Ctrl+V -> Paste
-    if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyV) {
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyV) {
       _paste();
       return true;
     }
     // Delete -> Delete Selected
-    if (!isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.delete) {
+    if (isDownOnly && !isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.delete) {
       _deleteSelected();
       return true;
     }
     // Alt+Enter -> Edit Properties
-    if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.enter) {
+    if (isDownOnly && isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.enter) {
       _editSelectedProperties();
       return true;
     }
-    // Enter -> Connect session or enter folder
-    if (!isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.enter) {
-      if (_selectedSessionId != null) {
-        final s = _mgr.sessions.where((e) => e.id == _selectedSessionId).firstOrNull;
-        if (s != null) {
-          widget.onConnectSessions([s]);
-          widget.onCloseDialog?.call();
-          return true;
-        }
-      } else if (_selectedFolderId != null) {
-        setState(() {
-          _currentFolderId = _selectedFolderId;
-          _selectedFolderId = null;
-        });
+
+    // Ctrl+F or / -> Focus search field
+    final isSlash = event.logicalKey == LogicalKeyboardKey.slash ||
+        event.logicalKey == LogicalKeyboardKey.numpadDivide ||
+        event.physicalKey == PhysicalKeyboardKey.slash ||
+        event.physicalKey == PhysicalKeyboardKey.numpadDivide ||
+        (!isCtrl && !isAlt && event.character == '/');
+    if (isDownOnly && !isCtrl && !isAlt && !isShift && isSlash) {
+      _searchFocusNode.requestFocus();
+      _searchController.selection = TextSelection(baseOffset: 0, extentOffset: _searchController.text.length);
+      return true;
+    }
+    if (isDownOnly && isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyF) {
+      _searchFocusNode.requestFocus();
+      _searchController.selection = TextSelection(baseOffset: 0, extentOffset: _searchController.text.length);
+      return true;
+    }
+
+    // Vim-style / Arrow down (Down & Repeat)
+    if (!isCtrl && !isAlt && !isShift &&
+        (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+         event.logicalKey == LogicalKeyboardKey.keyJ)) {
+      _moveCursor(1);
+      return true;
+    }
+
+    // Vim-style / Arrow up (Down & Repeat)
+    if (!isCtrl && !isAlt && !isShift &&
+        (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+         event.logicalKey == LogicalKeyboardKey.keyK)) {
+      _moveCursor(-1);
+      return true;
+    }
+
+    // PageDown / PageUp
+    if (event.logicalKey == LogicalKeyboardKey.pageDown) {
+      _moveCursor(10);
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
+      _moveCursor(-10);
+      return true;
+    }
+
+    // Home / End
+    if (isDownOnly && event.logicalKey == LogicalKeyboardKey.home) {
+      _selectItemAtIndex(0);
+      return true;
+    }
+    if (isDownOnly && event.logicalKey == LogicalKeyboardKey.end) {
+      _selectItemAtIndex(999999);
+      return true;
+    }
+
+    // Enter / ArrowRight / l -> Connect session or enter folder
+    if (isDownOnly && !isCtrl && !isShift && !isAlt &&
+        (event.logicalKey == LogicalKeyboardKey.enter ||
+         event.logicalKey == LogicalKeyboardKey.arrowRight ||
+         event.logicalKey == LogicalKeyboardKey.keyL)) {
+      _openOrConnectActiveItem();
+      return true;
+    }
+
+    // Backspace / ArrowLeft / h -> Navigate to parent folder
+    if (isDownOnly && !isCtrl && !isShift && !isAlt &&
+        (event.logicalKey == LogicalKeyboardKey.backspace ||
+         event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+         event.logicalKey == LogicalKeyboardKey.keyH)) {
+      if (_currentFolderId != null) {
+        _navigateUp();
         return true;
       }
     }
@@ -142,27 +404,75 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 
   void _onManagerChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        final items = _getVisibleItems();
+        final idx = _getSelectedIndex(items);
+        if (idx == -1 && items.isNotEmpty) {
+          _selectItemAtIndex(0, visibleItems: items);
+        }
+      });
+    }
   }
 
-  void _navigateToFolder(String? folderId) {
+  void _navigateToFolder(String? folderId, {String? selectItemId, bool isFolder = true}) {
     setState(() {
       _currentFolderId = folderId;
-      _selectedSessionId = null;
-      _selectedFolderId = null;
+      if (selectItemId != null) {
+        if (isFolder) {
+          _selectedFolderId = selectItemId;
+          _selectedSessionId = null;
+          _selectedParent = false;
+        } else {
+          _selectedSessionId = selectItemId;
+          _selectedFolderId = null;
+          _selectedParent = false;
+        }
+      } else {
+        final childFolders = _mgr.getChildFolders(folderId);
+        final childSessions = _mgr.getChildSessions(folderId);
+        if (childFolders.isNotEmpty) {
+          _selectedFolderId = childFolders.first.id;
+          _selectedSessionId = null;
+          _selectedParent = false;
+        } else if (childSessions.isNotEmpty) {
+          _selectedSessionId = childSessions.first.id;
+          _selectedFolderId = null;
+          _selectedParent = false;
+        } else if (folderId != null) {
+          _selectedParent = true;
+          _selectedFolderId = null;
+          _selectedSessionId = null;
+        } else {
+          _selectedParent = false;
+          _selectedFolderId = null;
+          _selectedSessionId = null;
+        }
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final items = _getVisibleItems();
+      final idx = _getSelectedIndex(items);
+      if (idx != -1) {
+        _scrollToIndex(idx);
+      }
     });
   }
 
   void _navigateUp() {
     if (_currentFolderId == null) return;
     final cur = _mgr.folders.where((f) => f.id == _currentFolderId).firstOrNull;
-    _navigateToFolder(cur?.parentId);
+    final previousFolderId = _currentFolderId;
+    _navigateToFolder(cur?.parentId, selectItemId: previousFolderId, isFolder: true);
   }
 
-  Future<void> _createNewSession() async {
+  Future<void> _createNewSession({String? targetFolderId}) async {
+    final folderId = targetFolderId ?? _selectedFolderId ?? _currentFolderId;
     final result = await SessionPropertiesDialog.show(
       context,
-      parentFolderId: _currentFolderId,
+      parentFolderId: folderId,
       sessionManager: _mgr,
     );
     if (result != null) {
@@ -175,7 +485,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
     }
   }
 
-  Future<void> _createNewFolder() async {
+  Future<void> _createNewFolder({String? targetParentId}) async {
+    final parent = targetParentId ?? _selectedFolderId ?? _currentFolderId;
     final nameCtrl = TextEditingController(text: 'New Folder');
     final descCtrl = TextEditingController();
 
@@ -218,7 +529,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     if (ok == true && nameCtrl.text.trim().isNotEmpty) {
       final f = await _mgr.createFolder(
         name: nameCtrl.text.trim(),
-        parentId: _currentFolderId,
+        parentId: parent,
         description: descCtrl.text.trim(),
       );
       setState(() => _selectedFolderId = f.id);
@@ -463,10 +774,23 @@ class _SessionsScreenState extends State<SessionsScreen> {
             height: 32,
             child: TextField(
               controller: _searchController,
-              onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+              focusNode: _searchFocusNode,
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val.trim().toLowerCase();
+                  final items = _getVisibleItems();
+                  if (items.isNotEmpty) {
+                    _selectItemAtIndex(0, visibleItems: items);
+                  } else {
+                    _selectedParent = false;
+                    _selectedFolderId = null;
+                    _selectedSessionId = null;
+                  }
+                });
+              },
               style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Search sessions...',
+                hintText: 'Search sessions... (/ or Ctrl+F)',
                 hintStyle: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                 prefixIcon: const Icon(Icons.search, size: 16, color: AppTheme.textSecondary),
                 suffixIcon: _searchQuery.isNotEmpty
@@ -474,7 +798,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
                         icon: const Icon(Icons.clear, size: 14),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() => _searchQuery = '');
+                          setState(() {
+                            _searchQuery = '';
+                            final items = _getVisibleItems();
+                            if (items.isNotEmpty) {
+                              _selectItemAtIndex(0, visibleItems: items);
+                            }
+                          });
                         },
                       )
                     : null,
@@ -501,6 +831,312 @@ class _SessionsScreenState extends State<SessionsScreen> {
     );
   }
 
+  Future<void> _handleDrop(_SessionDragPayload payload, String? targetFolderId) async {
+    if (payload.parentId == targetFolderId) return;
+
+    try {
+      if (payload.isSession) {
+        await _mgr.moveSession(payload.session!.id, targetFolderId);
+      } else if (payload.isFolder) {
+        await _mgr.moveFolder(payload.folder!.id, targetFolderId);
+      }
+
+      final targetName = targetFolderId == null
+          ? 'Root (All Sessions)'
+          : (_mgr.folders.where((f) => f.id == targetFolderId).firstOrNull?.name ?? 'Folder');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Moved "${payload.name}" to $targetName'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.accentPrimary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to move: $e'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: AppTheme.statusError,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildDragFeedback(String name, IconData icon, Color iconColor) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.bgSurfaceSecondary,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppTheme.accentPrimary, width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: iconColor),
+            const SizedBox(width: 8),
+            Text(
+              name,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFolderContextMenu(BuildContext context, Offset position, SessionFolder folder) {
+    setState(() {
+      _selectedFolderId = folder.id;
+      _selectedSessionId = null;
+      _selectedParent = false;
+    });
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      color: AppTheme.bgSurface,
+      items: [
+        const PopupMenuItem(
+          value: 'open',
+          child: Row(
+            children: [
+              Icon(Icons.folder_open, size: 16, color: AppTheme.accentPrimary),
+              SizedBox(width: 8),
+              Text('Open Folder', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'new_session',
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 16, color: AppTheme.accentPrimary),
+              SizedBox(width: 8),
+              Text('New Session Here', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'new_subfolder',
+          child: Row(
+            children: [
+              Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
+              SizedBox(width: 8),
+              Text('New Subfolder', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'cut',
+          child: Row(
+            children: [
+              Icon(Icons.content_cut, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Cut (Ctrl+X)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_outlined, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Copy (Ctrl+C)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'properties',
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Rename / Properties', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 16, color: AppTheme.statusError),
+              SizedBox(width: 8),
+              Text('Delete', style: TextStyle(fontSize: 12, color: AppTheme.statusError)),
+            ],
+          ),
+        ),
+      ],
+    ).then((val) {
+      if (val == 'open') _navigateToFolder(folder.id);
+      if (val == 'new_session') _createNewSession(targetFolderId: folder.id);
+      if (val == 'new_subfolder') _createNewFolder(targetParentId: folder.id);
+      if (val == 'cut') _cutSelected();
+      if (val == 'copy') _copySelected();
+      if (val == 'properties') _editSelectedProperties();
+      if (val == 'delete') _deleteSelected();
+    });
+  }
+
+  void _showSessionContextMenu(BuildContext context, Offset position, SessionProfile session) {
+    setState(() {
+      _selectedSessionId = session.id;
+      _selectedFolderId = null;
+      _selectedParent = false;
+    });
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      color: AppTheme.bgSurface,
+      items: [
+        const PopupMenuItem(
+          value: 'connect',
+          child: Row(
+            children: [
+              Icon(Icons.play_arrow, size: 16, color: AppTheme.accentPrimary),
+              SizedBox(width: 8),
+              Text('Connect', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'file_explorer',
+          child: Row(
+            children: [
+              Icon(Icons.folder_shared, size: 16, color: AppTheme.accentPrimary),
+              SizedBox(width: 8),
+              Text('Open in File Explorer', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'duplicate',
+          child: Row(
+            children: [
+              Icon(Icons.control_point_duplicate, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Duplicate (Ctrl+D)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'cut',
+          child: Row(
+            children: [
+              Icon(Icons.content_cut, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Cut (Ctrl+X)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_outlined, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Copy (Ctrl+C)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'properties',
+          child: Row(
+            children: [
+              Icon(Icons.settings_ethernet, size: 16, color: AppTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('Properties (Alt+Enter)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 16, color: AppTheme.statusError),
+              SizedBox(width: 8),
+              Text('Delete', style: TextStyle(fontSize: 12, color: AppTheme.statusError)),
+            ],
+          ),
+        ),
+      ],
+    ).then((val) {
+      if (val == 'connect') {
+        widget.onConnectSessions([session]);
+        if (widget.isDialogMode) widget.onCloseDialog?.call();
+      }
+      if (val == 'file_explorer') widget.onOpenInFileExplorer(session);
+      if (val == 'duplicate') _duplicateSelected();
+      if (val == 'cut') _cutSelected();
+      if (val == 'copy') _copySelected();
+      if (val == 'properties') _editSelectedProperties();
+      if (val == 'delete') _deleteSelected();
+    });
+  }
+
+  void _showEmptyAreaContextMenu(BuildContext context, Offset position) {
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      color: AppTheme.bgSurface,
+      items: [
+        const PopupMenuItem(
+          value: 'new_session',
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 16, color: AppTheme.accentPrimary),
+              SizedBox(width: 8),
+              Text('New Session (Ctrl+N)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'new_folder',
+          child: Row(
+            children: [
+              Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
+              SizedBox(width: 8),
+              Text('New Folder (Ctrl+Shift+N)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        if (_mgr.hasClipboardItem) ...[
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'paste',
+            child: Row(
+              children: [
+                Icon(Icons.paste_outlined, size: 16, color: AppTheme.textSecondary),
+                SizedBox(width: 8),
+                Text('Paste (Ctrl+V)', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ],
+    ).then((val) {
+      if (val == 'new_session') _createNewSession();
+      if (val == 'new_folder') _createNewFolder();
+      if (val == 'paste') _paste();
+    });
+  }
+
   Widget _buildBreadcrumbBar() {
     final crumbs = _mgr.getBreadcrumbPath(_currentFolderId);
     return Container(
@@ -511,42 +1147,104 @@ class _SessionsScreenState extends State<SessionsScreen> {
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: () => _navigateToFolder(null),
-            child: Text(
-              'All Sessions',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: _currentFolderId == null ? FontWeight.bold : FontWeight.normal,
-                color: _currentFolderId == null ? AppTheme.accentPrimary : AppTheme.textSecondary,
-              ),
-            ),
+          DragTarget<_SessionDragPayload>(
+            onWillAcceptWithDetails: (details) {
+              return details.data.parentId != null;
+            },
+            onAcceptWithDetails: (details) {
+              _handleDrop(details.data, null);
+            },
+            builder: (context, candidateData, rejectedData) {
+              final isHovered = candidateData.isNotEmpty;
+              return InkWell(
+                onTap: () => _navigateToFolder(null),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isHovered ? AppTheme.accentPrimary.withValues(alpha: 0.25) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                    border: isHovered ? Border.all(color: AppTheme.accentPrimary, width: 1.5) : null,
+                  ),
+                  child: Text(
+                    isHovered ? 'All Sessions (Drop to move to Root)' : 'All Sessions',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: _currentFolderId == null || isHovered ? FontWeight.bold : FontWeight.normal,
+                      color: _currentFolderId == null || isHovered ? AppTheme.accentPrimary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           for (final f in crumbs) ...[
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
               child: Icon(Icons.chevron_right, size: 14, color: AppTheme.textMuted),
             ),
-            InkWell(
-              onTap: () => _navigateToFolder(f.id),
-              child: Text(
-                f.name,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: f.id == _currentFolderId ? FontWeight.bold : FontWeight.normal,
-                  color: f.id == _currentFolderId ? AppTheme.accentPrimary : AppTheme.textSecondary,
-                ),
-              ),
+            DragTarget<_SessionDragPayload>(
+              onWillAcceptWithDetails: (details) {
+                if (details.data.id == f.id) return false;
+                if (details.data.isFolder && _mgr.isFolderDescendantOf(f.id, details.data.id)) return false;
+                return details.data.parentId != f.id;
+              },
+              onAcceptWithDetails: (details) {
+                _handleDrop(details.data, f.id);
+              },
+              builder: (context, candidateData, rejectedData) {
+                final isHovered = candidateData.isNotEmpty;
+                return InkWell(
+                  onTap: () => _navigateToFolder(f.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isHovered ? AppTheme.accentPrimary.withValues(alpha: 0.25) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: isHovered ? Border.all(color: AppTheme.accentPrimary, width: 1.5) : null,
+                    ),
+                    child: Text(
+                      isHovered ? '${f.name} (Drop here)' : f.name,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: f.id == _currentFolderId || isHovered ? FontWeight.bold : FontWeight.normal,
+                        color: f.id == _currentFolderId || isHovered ? AppTheme.accentPrimary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.arrow_upward, size: 16, color: AppTheme.textSecondary),
-            tooltip: 'Up one folder',
-            onPressed: _currentFolderId != null ? _navigateUp : null,
-            splashRadius: 14,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+          DragTarget<_SessionDragPayload>(
+            onWillAcceptWithDetails: (details) {
+              if (_currentFolderId == null) return false;
+              final parentFolderId = _mgr.folders.where((f) => f.id == _currentFolderId).firstOrNull?.parentId;
+              return details.data.parentId != parentFolderId;
+            },
+            onAcceptWithDetails: (details) {
+              final parentFolderId = _mgr.folders.where((f) => f.id == _currentFolderId).firstOrNull?.parentId;
+              _handleDrop(details.data, parentFolderId);
+            },
+            builder: (context, candidateData, rejectedData) {
+              final isHovered = candidateData.isNotEmpty;
+              return Container(
+                decoration: BoxDecoration(
+                  color: isHovered ? AppTheme.accentPrimary.withValues(alpha: 0.3) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: isHovered ? Border.all(color: AppTheme.accentPrimary, width: 1.5) : null,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_upward, size: 16),
+                  color: isHovered ? AppTheme.accentPrimary : AppTheme.textSecondary,
+                  tooltip: isHovered ? 'Drop to move up one folder' : 'Up one folder',
+                  onPressed: _currentFolderId != null ? _navigateUp : null,
+                  splashRadius: 14,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 12),
           IconButton(
@@ -559,6 +1257,86 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildParentFolderRow() {
+    final parentFolderId = _mgr.folders.where((f) => f.id == _currentFolderId).firstOrNull?.parentId;
+    final parentFolderName = parentFolderId == null
+        ? 'All Sessions (Root)'
+        : (_mgr.folders.where((f) => f.id == parentFolderId).firstOrNull?.name ?? 'Parent Folder');
+
+    return DragTarget<_SessionDragPayload>(
+      onWillAcceptWithDetails: (details) {
+        return details.data.parentId == _currentFolderId;
+      },
+      onAcceptWithDetails: (details) {
+        _handleDrop(details.data, parentFolderId);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return InkWell(
+          onTap: () {
+            setState(() {
+              _selectedParent = true;
+              _selectedFolderId = null;
+              _selectedSessionId = null;
+            });
+          },
+          onDoubleTap: () => _navigateUp(),
+          child: Container(
+            height: 30,
+            decoration: BoxDecoration(
+              color: isHovered
+                  ? AppTheme.accentPrimary.withValues(alpha: 0.25)
+                  : (_selectedParent
+                      ? AppTheme.accentPrimary.withValues(alpha: 0.15)
+                      : Colors.transparent),
+              border: Border(
+                bottom: const BorderSide(color: AppTheme.borderSubtle, width: 0.5),
+                top: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+                left: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+                right: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+              ),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                Icon(
+                  isHovered ? Icons.drive_folder_upload : Icons.arrow_upward,
+                  size: 16,
+                  color: isHovered ? AppTheme.accentPrimary : const Color(0xFFFFCA28),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    isHovered ? '.. [Drop here to move to $parentFolderName]' : '..',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isHovered ? AppTheme.accentPrimary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Up to $parentFolderName',
+                    style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppTheme.textMuted),
+                  ),
+                ),
+                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -579,12 +1357,23 @@ class _SessionsScreenState extends State<SessionsScreen> {
       children: [
         _buildTableHeader(),
         Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              for (final folder in folders) _buildFolderRow(folder),
-              for (final session in sessions) _buildSessionRow(session),
-            ],
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (_searchFocusNode.hasFocus) {
+                _searchFocusNode.unfocus();
+              }
+            },
+            onSecondaryTapUp: (details) => _showEmptyAreaContextMenu(context, details.globalPosition),
+            child: ListView(
+              controller: _scrollController,
+              padding: EdgeInsets.zero,
+              children: [
+                if (_currentFolderId != null && _searchQuery.isEmpty) _buildParentFolderRow(),
+                for (final folder in folders) _buildFolderRow(folder),
+                for (final session in sessions) _buildSessionRow(session),
+              ],
+            ),
           ),
         ),
       ],
@@ -616,14 +1405,17 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
   Widget _buildFolderRow(SessionFolder folder) {
     final isSelected = _selectedFolderId == folder.id;
-    return InkWell(
+
+    final rowWidget = InkWell(
       onTap: () {
         setState(() {
           _selectedFolderId = folder.id;
           _selectedSessionId = null;
+          _selectedParent = false;
         });
       },
       onDoubleTap: () => _navigateToFolder(folder.id),
+      onSecondaryTapUp: (details) => _showFolderContextMenu(context, details.globalPosition, folder),
       child: Container(
         height: 30,
         decoration: BoxDecoration(
@@ -647,6 +1439,37 @@ class _SessionsScreenState extends State<SessionsScreen> {
         ),
       ),
     );
+
+    final draggableRow = Draggable<_SessionDragPayload>(
+      data: _SessionDragPayload.folder(folder),
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: _buildDragFeedback(folder.name, Icons.folder, const Color(0xFFFFCA28)),
+      childWhenDragging: Opacity(opacity: 0.3, child: rowWidget),
+      child: rowWidget,
+    );
+
+    return DragTarget<_SessionDragPayload>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data.id == folder.id) return false;
+        if (details.data.isFolder && _mgr.isFolderDescendantOf(folder.id, details.data.id)) return false;
+        return details.data.parentId != folder.id;
+      },
+      onAcceptWithDetails: (details) {
+        _handleDrop(details.data, folder.id);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        if (!isHovered) return draggableRow;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppTheme.accentPrimary.withValues(alpha: 0.25),
+            border: Border.all(color: AppTheme.accentPrimary, width: 1.5),
+          ),
+          child: draggableRow,
+        );
+      },
+    );
   }
 
   Widget _buildSessionRow(SessionProfile session) {
@@ -663,17 +1486,19 @@ class _SessionsScreenState extends State<SessionsScreen> {
       }
     }
 
-    return InkWell(
+    final rowWidget = InkWell(
       onTap: () {
         setState(() {
           _selectedSessionId = session.id;
           _selectedFolderId = null;
+          _selectedParent = false;
         });
       },
       onDoubleTap: () {
         widget.onConnectSessions([session]);
         if (widget.isDialogMode) widget.onCloseDialog?.call();
       },
+      onSecondaryTapUp: (details) => _showSessionContextMenu(context, details.globalPosition, session),
       child: Container(
         height: 30,
         decoration: BoxDecoration(
@@ -700,6 +1525,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ],
         ),
       ),
+    );
+
+    return Draggable<_SessionDragPayload>(
+      data: _SessionDragPayload.session(session),
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: _buildDragFeedback(
+        session.name,
+        isLocal ? Icons.terminal : Icons.cloud_queue,
+        isLocal ? const Color(0xFF64B5F6) : const Color(0xFFFF7043),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: rowWidget),
+      child: rowWidget,
     );
   }
 
@@ -800,4 +1637,18 @@ class SessionsDialog {
       ),
     );
   }
+}
+
+class _SessionDragPayload {
+  final SessionProfile? session;
+  final SessionFolder? folder;
+
+  const _SessionDragPayload.session(SessionProfile this.session) : folder = null;
+  const _SessionDragPayload.folder(SessionFolder this.folder) : session = null;
+
+  bool get isSession => session != null;
+  bool get isFolder => folder != null;
+  String get name => session?.name ?? folder?.name ?? '';
+  String? get parentId => session?.parentId ?? folder?.parentId;
+  String get id => session?.id ?? folder?.id ?? '';
 }

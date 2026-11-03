@@ -624,6 +624,32 @@ class FileExplorerService {
     await session.run('mv "$oldPath" "$newPath"');
   }
 
+  Future<void> moveRemote(RemoteSession session, String srcPath, String destDirPath) async {
+    final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
+        ? destDirPath.substring(0, destDirPath.length - 1)
+        : destDirPath;
+    final name = srcPath.split('/').last;
+    final targetPath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
+
+    if (session.sftp != null) {
+      try {
+        await session.sftp!.rename(srcPath, targetPath);
+        return;
+      } catch (_) {}
+    }
+    await session.run('mv "$srcPath" "$targetPath"');
+  }
+
+  Future<void> copyRemote(RemoteSession session, String srcPath, String destDirPath) async {
+    final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
+        ? destDirPath.substring(0, destDirPath.length - 1)
+        : destDirPath;
+    final name = srcPath.split('/').last;
+    final targetPath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
+
+    await session.run('cp -r "$srcPath" "$targetPath"');
+  }
+
   Future<String> readRemoteText(RemoteSession session, String path) async {
     if (session.sftp != null) {
       try {

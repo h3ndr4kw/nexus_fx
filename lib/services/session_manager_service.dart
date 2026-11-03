@@ -278,7 +278,7 @@ class SessionManagerService extends ChangeNotifier {
     _clipboard = _ClipboardItem(isCut: true, sessionId: sessionId, folderId: folderId);
   }
 
-  bool _isFolderDescendantOf(String potentialChildId, String parentFolderId) {
+  bool isFolderDescendantOf(String potentialChildId, String parentFolderId) {
     if (potentialChildId == parentFolderId) return true;
     String? current = potentialChildId;
     final visited = <String>{};
@@ -292,6 +292,30 @@ class SessionManagerService extends ChangeNotifier {
     return false;
   }
 
+  Future<void> moveSession(String sessionId, String? targetFolderId) async {
+    final sess = _sessions.where((s) => s.id == sessionId).firstOrNull;
+    if (sess == null) return;
+    if (sess.parentId == targetFolderId) return;
+    await updateSession(sess.copyWith(
+      parentId: targetFolderId,
+      clearParentId: targetFolderId == null,
+    ));
+  }
+
+  Future<void> moveFolder(String folderId, String? targetFolderId) async {
+    if (folderId == targetFolderId) return;
+    if (targetFolderId != null && isFolderDescendantOf(targetFolderId, folderId)) {
+      throw ArgumentError('Cannot move folder into its own descendant');
+    }
+    final folder = _folders.where((f) => f.id == folderId).firstOrNull;
+    if (folder == null) return;
+    if (folder.parentId == targetFolderId) return;
+    await updateFolder(folder.copyWith(
+      parentId: targetFolderId,
+      clearParentId: targetFolderId == null,
+    ));
+  }
+
   Future<void> pasteInto(String? targetFolderId) async {
     if (_clipboard == null) return;
     final clip = _clipboard!;
@@ -300,15 +324,21 @@ class SessionManagerService extends ChangeNotifier {
       if (clip.sessionId != null) {
         final sess = _sessions.where((s) => s.id == clip.sessionId).firstOrNull;
         if (sess != null) {
-          await updateSession(sess.copyWith(parentId: targetFolderId));
+          await updateSession(sess.copyWith(
+            parentId: targetFolderId,
+            clearParentId: targetFolderId == null,
+          ));
         }
       } else if (clip.folderId != null) {
-        if (targetFolderId != null && _isFolderDescendantOf(targetFolderId, clip.folderId!)) {
+        if (targetFolderId != null && isFolderDescendantOf(targetFolderId, clip.folderId!)) {
           throw ArgumentError('Cannot move folder into its own descendant');
         }
         final folder = _folders.where((f) => f.id == clip.folderId).firstOrNull;
         if (folder != null) {
-          await updateFolder(folder.copyWith(parentId: targetFolderId));
+          await updateFolder(folder.copyWith(
+            parentId: targetFolderId,
+            clearParentId: targetFolderId == null,
+          ));
         }
       }
       _clipboard = null;

@@ -197,5 +197,54 @@ void main() {
       expect(updatedDep.jumpHostMode, JumpHostMode.direct);
       expect(updatedDep.jumpSessionId, isNull);
     });
+
+    test('moveSession moves a session to another folder and to root', () async {
+      await service.loadSessions(customFilePath: sessionFile.path);
+
+      final folderA = await service.createFolder(name: 'FolderA');
+      final folderB = await service.createFolder(name: 'FolderB');
+
+      final sess = await service.createSession(SessionProfile(
+        id: 'sess_move_test',
+        parentId: null,
+        name: 'Server1',
+        protocol: SessionProtocol.ssh,
+        host: '192.168.1.100',
+        modifiedAt: DateTime.now(),
+      ));
+
+      expect(sess.parentId, isNull);
+
+      // Move into FolderA
+      await service.moveSession(sess.id, folderA.id);
+      expect(service.sessions.firstWhere((s) => s.id == sess.id).parentId, folderA.id);
+
+      // Move from FolderA to FolderB
+      await service.moveSession(sess.id, folderB.id);
+      expect(service.sessions.firstWhere((s) => s.id == sess.id).parentId, folderB.id);
+
+      // Move from FolderB back to Root (null)
+      await service.moveSession(sess.id, null);
+      expect(service.sessions.firstWhere((s) => s.id == sess.id).parentId, isNull);
+    });
+
+    test('moveFolder moves folder into another folder and prevents circular moves', () async {
+      await service.loadSessions(customFilePath: sessionFile.path);
+
+      final folder1 = await service.createFolder(name: 'F1');
+      final folder2 = await service.createFolder(name: 'F2');
+      final folder3 = await service.createFolder(name: 'F3', parentId: folder2.id);
+
+      // Move F1 into F2
+      await service.moveFolder(folder1.id, folder2.id);
+      expect(service.folders.firstWhere((f) => f.id == folder1.id).parentId, folder2.id);
+
+      // Attempting to move F2 into F3 (descendant) throws ArgumentError
+      expect(() => service.moveFolder(folder2.id, folder3.id), throwsArgumentError);
+
+      // Moving F1 back to Root
+      await service.moveFolder(folder1.id, null);
+      expect(service.folders.firstWhere((f) => f.id == folder1.id).parentId, isNull);
+    });
   });
 }

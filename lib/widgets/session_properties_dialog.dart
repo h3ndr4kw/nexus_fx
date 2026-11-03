@@ -23,6 +23,21 @@ enum _PropertyCategory {
   logging,
 }
 
+class _FolderDropdownItem {
+  final String? id;
+  final String label;
+
+  const _FolderDropdownItem(this.id, this.label);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _FolderDropdownItem && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
 class SessionPropertiesDialog extends StatefulWidget {
   final SessionProfile? initialSession;
   final String? parentFolderId;
@@ -88,6 +103,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   AuthMethod _authMethod = AuthMethod.password;
   JumpHostMode _jumpHostMode = JumpHostMode.direct;
   String? _selectedJumpSessionId;
+  String? _parentFolderId;
   TunnelMode _tunnelMode = TunnelMode.multiplexed;
   bool _autoReconnect = false;
   bool _enableLogging = false;
@@ -98,6 +114,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   void initState() {
     super.initState();
     final s = widget.initialSession;
+    _parentFolderId = s?.parentId ?? widget.parentFolderId;
     _protocol = s?.protocol ?? SessionProtocol.ssh;
     _authMethod = s?.authMethod ?? AuthMethod.password;
     _jumpHostMode = s?.jumpHostMode ?? JumpHostMode.direct;
@@ -191,7 +208,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     }
 
     final id = widget.initialSession?.id ?? 'sess_${DateTime.now().microsecondsSinceEpoch}';
-    final parentId = widget.initialSession?.parentId ?? widget.parentFolderId;
+    final parentId = _parentFolderId;
 
     final session = SessionProfile(
       id: id,
@@ -426,6 +443,44 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     }
   }
 
+  Widget _buildFolderDropdown() {
+    final allFolders = widget.sessionManager.folders;
+    final List<_FolderDropdownItem> items = [
+      const _FolderDropdownItem(null, '/ (Root / All Sessions)'),
+    ];
+    for (final f in allFolders) {
+      final crumbs = widget.sessionManager.getBreadcrumbPath(f.id);
+      final path = crumbs.map((c) => c.name).join(' / ');
+      items.add(_FolderDropdownItem(f.id, path));
+    }
+    final sublist = items.sublist(1)..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    final sortedItems = [items.first, ...sublist];
+
+    final selected = sortedItems.where((i) => i.id == _parentFolderId).firstOrNull ?? sortedItems.first;
+
+    return Row(
+      children: [
+        const SizedBox(
+          width: 110,
+          child: Text('Folder:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+        ),
+        Expanded(
+          child: FuzzySearchableDropdown<_FolderDropdownItem>(
+            items: sortedItems,
+            selectedItem: selected,
+            itemLabel: (item) => item.label,
+            hintText: 'Select folder...',
+            onChanged: (item) {
+              setState(() {
+                _parentFolderId = item?.id;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildConnectionTab() {
     return SingleChildScrollView(
       child: Column(
@@ -433,6 +488,8 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
         children: [
           _buildSectionHeader('General'),
           _buildTextField('Name:', _nameController),
+          const SizedBox(height: 10),
+          _buildFolderDropdown(),
           const SizedBox(height: 10),
           Row(
             children: [

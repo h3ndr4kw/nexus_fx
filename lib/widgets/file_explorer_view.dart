@@ -308,6 +308,7 @@ class _PaneController {
   List<FileExplorerItem> items = [];
   List<FileExplorerItem> filteredItems = [];
   int selectedIndex = 0;
+  int? selectionAnchorIndex;
   final ScrollController scrollController = ScrollController();
   final Set<String> multiSelected = {};
   bool isLoading = false;
@@ -434,12 +435,25 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               item.name.toLowerCase().contains(query) && !item.isParentDir)
           .toList();
     }
-    if (pane.selectedIndex >= pane.filteredItems.length) {
-      pane.selectedIndex = (pane.filteredItems.length - 1).clamp(0, 99999);
+    for (final item in pane.filteredItems) {
+      item.isSelected = pane.multiSelected.contains(item.path);
     }
-    if (pane.filteredItems.isNotEmpty && pane.selectedIndex < 0) {
-      pane.selectedIndex = 0;
+    if (pane.filteredItems.isEmpty) {
+      pane.selectedIndex = -1;
+    } else if (pane.selectedIndex >= pane.filteredItems.length) {
+      pane.selectedIndex = pane.filteredItems.length - 1;
     }
+  }
+
+  void _unselectAllAndUnfocus(_PaneController pane) {
+    setState(() {
+      pane.multiSelected.clear();
+      for (final item in pane.filteredItems) {
+        item.isSelected = false;
+      }
+      pane.selectedIndex = -1;
+      pane.selectionAnchorIndex = null;
+    });
   }
 
   void _openFilter(_PaneController pane) {
@@ -483,6 +497,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           pane.currentPath,
         );
         pane.items = results;
+        for (final item in pane.items) {
+          item.isSelected = pane.multiSelected.contains(item.path);
+        }
         _applyFilter(pane);
       } else {
         // Remote node
@@ -492,6 +509,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           pane.currentPath,
         );
         pane.items = results;
+        for (final item in pane.items) {
+          item.isSelected = pane.multiSelected.contains(item.path);
+        }
         _applyFilter(pane);
       }
     } catch (e) {
@@ -567,12 +587,20 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   void _moveCursorInPane(_PaneController pane, int delta) {
     if (pane.filteredItems.isEmpty) return;
 
-    final newIndex = (pane.selectedIndex + delta)
-        .clamp(0, pane.filteredItems.length - 1);
-    if (newIndex == pane.selectedIndex) return;
+    final baseIndex = pane.selectedIndex < 0
+        ? (delta > 0 ? -1 : pane.filteredItems.length)
+        : pane.selectedIndex;
+    final newIndex = (baseIndex + delta).clamp(0, pane.filteredItems.length - 1);
 
     setState(() {
       pane.selectedIndex = newIndex;
+      pane.selectionAnchorIndex = newIndex;
+      if (pane.multiSelected.isNotEmpty) {
+        pane.multiSelected.clear();
+        for (final item in pane.filteredItems) {
+          item.isSelected = false;
+        }
+      }
     });
 
     _scrollPaneToSelection(pane);
@@ -581,31 +609,22 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   void _moveCursorWithSelectionInPane(_PaneController pane, int delta) {
     if (pane.filteredItems.isEmpty) return;
 
-    final prevIndex = pane.selectedIndex;
-    final newIndex = (prevIndex + delta)
-        .clamp(0, pane.filteredItems.length - 1);
-    if (newIndex == prevIndex) return;
+    final anchor = pane.selectionAnchorIndex ?? (pane.selectedIndex < 0 ? 0 : pane.selectedIndex);
+    pane.selectionAnchorIndex = anchor;
+
+    final cur = pane.selectedIndex < 0 ? anchor : pane.selectedIndex;
+    final newIndex = (cur + delta).clamp(0, pane.filteredItems.length - 1);
 
     setState(() {
-      final currentItem = pane.filteredItems[prevIndex];
-      if (currentItem.name != '..') {
-        pane.multiSelected.add(currentItem.path);
-        currentItem.isSelected = true;
-      }
-
-      final nextItem = pane.filteredItems[newIndex];
-      if (nextItem.name != '..') {
-        pane.multiSelected.add(nextItem.path);
-        nextItem.isSelected = true;
-      }
-
       pane.selectedIndex = newIndex;
+      _selectRange(pane, anchor, newIndex);
     });
 
     _scrollPaneToSelection(pane);
   }
 
   void _scrollPaneToSelection(_PaneController pane) {
+    if (pane.selectedIndex < 0) return;
     if (!pane.scrollController.hasClients) return;
 
     final rowHeight = SettingsService.instance.fileExplorerDensity.rowHeight;
@@ -630,7 +649,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   Future<void> _enterActiveItem() async {
     final pane = activePaneState;
-    if (pane.filteredItems.isEmpty) return;
+    if (pane.selectedIndex < 0 || pane.filteredItems.isEmpty) return;
     await _enterItemInPane(pane, pane.selectedIndex);
   }
 
@@ -677,7 +696,10 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   }
 
   void _toggleSelectCurrent() {
-    _toggleSelectItem(activePaneState, activePaneState.selectedIndex);
+    final pane = activePaneState;
+    if (pane.selectedIndex >= 0 && pane.selectedIndex < pane.filteredItems.length) {
+      _toggleSelectItem(pane, pane.selectedIndex);
+    }
   }
 
   void _toggleSelectItem(_PaneController pane, int idx) {
@@ -693,6 +715,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         pane.multiSelected.add(item.path);
         item.isSelected = true;
       }
+      pane.selectedIndex = idx;
+      pane.selectionAnchorIndex = idx;
     });
   }
 
@@ -722,6 +746,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         clickedItem.isSelected = true;
       }
       pane.selectedIndex = clickedIdx;
+      pane.selectionAnchorIndex = clickedIdx;
     });
   }
 
@@ -733,11 +758,19 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final maxIdx = start > end ? start : end;
 
     setState(() {
-      for (int i = minIdx; i <= maxIdx; i++) {
+      pane.multiSelected.clear();
+      for (int i = 0; i < pane.filteredItems.length; i++) {
         final item = pane.filteredItems[i];
-        if (item.name == '..') continue;
-        pane.multiSelected.add(item.path);
-        item.isSelected = true;
+        if (item.name == '..') {
+          item.isSelected = false;
+          continue;
+        }
+        if (i >= minIdx && i <= maxIdx) {
+          pane.multiSelected.add(item.path);
+          item.isSelected = true;
+        } else {
+          item.isSelected = false;
+        }
       }
     });
   }
@@ -926,14 +959,310 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final pane = activePaneState;
     if (pane.multiSelected.isNotEmpty) {
       return pane.filteredItems
-          .where((i) => pane.multiSelected.contains(i.path))
+          .where((i) => pane.multiSelected.contains(i.path) && i.name != '..')
           .toList();
     }
-    if (pane.filteredItems.isNotEmpty) {
+    if (pane.selectedIndex >= 0 && pane.selectedIndex < pane.filteredItems.length) {
       final active = pane.filteredItems[pane.selectedIndex];
       if (active.name != '..') return [active];
     }
     return [];
+  }
+
+  Widget _buildDragFeedback(FileExplorerItem item, int count) {
+    final iconTheme = SettingsService.instance.fileExplorerIconTheme;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E222B),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFF56B6C2), width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              FileExplorerIconHelper.getIconData(item, iconTheme),
+              size: 16,
+              color: FileExplorerIconHelper.getIconColor(item, iconTheme, false),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              count > 1 ? '${item.name} (+$count items)' : item.name,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _canDropIntoDirectory(FileDragPayload payload, ExplorerNodeTarget destTarget, String targetDirPath) {
+    if (payload.sourceTarget.isSameTarget(destTarget) && payload.sourceDirPath == targetDirPath) {
+      return false;
+    }
+
+    final isLocal = destTarget.isLocal;
+    final separator = isLocal ? Platform.pathSeparator : '/';
+
+    for (final dragged in payload.items) {
+      if (dragged.path == targetDirPath) return false;
+      if (dragged.isDir) {
+        final prefix = dragged.path.endsWith(separator) ? dragged.path : '${dragged.path}$separator';
+        if (targetDirPath.startsWith(prefix)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  Future<void> _handleDropOnTarget({
+    required FileDragPayload payload,
+    required PaneSide destSide,
+    required String destDirPath,
+    required String targetFolderName,
+  }) async {
+    final srcPane = payload.sourceSide == PaneSide.left ? _leftPane : _rightPane;
+    final destPane = destSide == PaneSide.left ? _leftPane : _rightPane;
+
+    if (payload.items.isEmpty) return;
+
+    if (payload.sourceSide == destSide) {
+      // Intra-pane drop into subfolder: Move
+      final count = payload.items.length;
+      final msg = count > 1
+          ? "Are you sure you want to move $count items into '$targetFolderName'?"
+          : "Are you sure you want to move '${payload.items.first.name}' into '$targetFolderName'?";
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => FileExplorerConfirmDialog(
+          title: 'MOVE TO FOLDER',
+          message1: msg,
+          message2: 'Destination: $destDirPath',
+          borderColor: const Color(0xFF56B6C2),
+        ),
+      );
+
+      if (confirmed == true && mounted) {
+        await _executeTransfer(
+          src: srcPane,
+          dest: destPane,
+          targets: payload.items,
+          destDirPath: destDirPath,
+          isMove: true,
+        );
+      }
+    } else {
+      // Cross-pane drop: Ask Copy or Move
+      final count = payload.items.length;
+      final msg = count > 1
+          ? 'Transfer $count items to ${destPane.target.label} ($targetFolderName)?'
+          : "Transfer '${payload.items.first.name}' to ${destPane.target.label} ($targetFolderName)?";
+
+      final chosenAction = await showDialog<FileDropAction>(
+        context: context,
+        builder: (ctx) => FileExplorerDropActionDialog(
+          title: 'DRAG & DROP TRANSFER',
+          message: msg,
+          destPath: destDirPath,
+        ),
+      );
+
+      if (chosenAction != null && mounted) {
+        await _executeTransfer(
+          src: srcPane,
+          dest: destPane,
+          targets: payload.items,
+          destDirPath: destDirPath,
+          isMove: chosenAction == FileDropAction.move,
+        );
+      }
+    }
+    _focusNode.requestFocus();
+  }
+
+  Future<void> _executeTransfer({
+    required _PaneController src,
+    required _PaneController dest,
+    required List<FileExplorerItem> targets,
+    required String destDirPath,
+    required bool isMove,
+  }) async {
+    if (targets.isEmpty) return;
+
+    final actionLabel = isMove ? 'Moving' : 'Copying';
+    final progressNotifier = ValueNotifier<FileTransferProgress>(
+      FileTransferProgress(
+        title: '$actionLabel ${targets.length} item(s)...',
+        currentFile: targets.first.name,
+        completedItems: 0,
+        totalItems: targets.length,
+        progress: 0.0,
+      ),
+    );
+
+    bool isCancelled = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => FileExplorerProgressDialog(
+        progressNotifier: progressNotifier,
+        onCancel: () {
+          isCancelled = true;
+          Navigator.of(ctx).pop();
+        },
+      ),
+    );
+
+    int transferredCount = 0;
+    try {
+      final isSameTarget = src.target.isSameTarget(dest.target);
+
+      for (int i = 0; i < targets.length; i++) {
+        if (isCancelled) break;
+        final item = targets[i];
+
+        void updateItemProgress(int sentBytes, int totalBytes, {double stageOffset = 0.0, double stageMultiplier = 1.0}) {
+          if (isCancelled) return;
+          final fileRatio = totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
+          final combinedRatio = stageOffset + (fileRatio * stageMultiplier);
+          final overallProgress = (i + combinedRatio) / targets.length;
+          progressNotifier.value = FileTransferProgress(
+            title: '$actionLabel ${targets.length} item(s)...',
+            currentFile: item.name,
+            completedItems: i,
+            totalItems: targets.length,
+            progress: overallProgress,
+            currentBytes: sentBytes,
+            totalBytes: totalBytes,
+          );
+        }
+
+        final progressFraction = i / targets.length;
+        progressNotifier.value = FileTransferProgress(
+          title: '$actionLabel ${targets.length} item(s)...',
+          currentFile: item.name,
+          completedItems: i,
+          totalItems: targets.length,
+          progress: progressFraction,
+        );
+        _setStatus('[${i + 1}/${targets.length}] $actionLabel ${item.name} (${(progressFraction * 100).toInt()}%)...');
+
+        if (src.target.isLocal && dest.target.isLocal) {
+          // Local to Local
+          if (isMove) {
+            await _service.moveLocal(item.path, destDirPath);
+          } else {
+            await _service.copyLocal(
+              item.path,
+              destDirPath,
+              onProgress: (sent, total) => updateItemProgress(sent, total),
+            );
+          }
+        } else if (isSameTarget && !src.target.isLocal) {
+          // Same Remote to Same Remote (optimized direct remote shell/sftp command)
+          src.remoteSession ??= await _service.getOrConnectRemote(src.target);
+          if (isMove) {
+            await _service.moveRemote(src.remoteSession!, item.path, destDirPath);
+          } else {
+            await _service.copyRemote(src.remoteSession!, item.path, destDirPath);
+          }
+        } else if (src.target.isLocal && !dest.target.isLocal) {
+          // Local to Remote (Upload)
+          dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
+          await _service.uploadLocalToRemote(
+            item.path,
+            dest.remoteSession!,
+            destDirPath,
+            onProgress: (sent, total) => updateItemProgress(sent, total),
+          );
+          if (isMove) {
+            await _service.deleteLocal(item.path);
+          }
+        } else if (!src.target.isLocal && dest.target.isLocal) {
+          // Remote to Local (Download)
+          src.remoteSession ??= await _service.getOrConnectRemote(src.target);
+          await _service.downloadRemoteToLocal(
+            src.remoteSession!,
+            item.path,
+            item.isDir,
+            destDirPath,
+            onProgress: (rcv, total) => updateItemProgress(rcv, total),
+          );
+          if (isMove) {
+            await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
+          }
+        } else {
+          // Cross Remote to Different Remote
+          _setStatus('Remote-to-remote transfer in progress...');
+          final tempDir = await Directory.systemTemp.createTemp('he_transfer_');
+          try {
+            src.remoteSession ??= await _service.getOrConnectRemote(src.target);
+            await _service.downloadRemoteToLocal(
+              src.remoteSession!,
+              item.path,
+              item.isDir,
+              tempDir.path,
+              onProgress: (rcv, total) => updateItemProgress(rcv, total, stageOffset: 0.0, stageMultiplier: 0.5),
+            );
+            final downloadedPath = '${tempDir.path}${Platform.pathSeparator}${item.name}';
+            dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
+            await _service.uploadLocalToRemote(
+              downloadedPath,
+              dest.remoteSession!,
+              destDirPath,
+              onProgress: (sent, total) => updateItemProgress(sent, total, stageOffset: 0.5, stageMultiplier: 0.5),
+            );
+            if (isMove) {
+              await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
+            }
+          } finally {
+            await tempDir.delete(recursive: true);
+          }
+        }
+
+        transferredCount++;
+        src.multiSelected.remove(item.path);
+      }
+
+      progressNotifier.value = FileTransferProgress(
+        title: 'Complete',
+        currentFile: '',
+        completedItems: transferredCount,
+        totalItems: targets.length,
+        progress: 1.0,
+      );
+    } catch (e) {
+      _setStatus('$actionLabel failed: $e', isError: true);
+    } finally {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      progressNotifier.dispose();
+      if (isCancelled) {
+        _setStatus('$actionLabel cancelled ($transferredCount/${targets.length} items transferred).');
+      } else if (transferredCount > 0) {
+        _setStatus('Successfully ${isMove ? "moved" : "copied"} $transferredCount item(s).', isSuccess: true);
+        src.multiSelected.clear();
+      }
+      await _loadPane(src, silent: true);
+      if (src != dest || destDirPath != src.currentPath) {
+        await _loadPane(dest, silent: true);
+      }
+    }
   }
 
   Future<void> _initiateCopy() async {
@@ -957,139 +1286,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
 
     if (confirmed == true && mounted) {
-      final progressNotifier = ValueNotifier<FileTransferProgress>(
-        FileTransferProgress(
-          title: 'Copying ${targets.length} item(s)...',
-          currentFile: targets.first.name,
-          completedItems: 0,
-          totalItems: targets.length,
-          progress: 0.0,
-        ),
+      await _executeTransfer(
+        src: activePaneState,
+        dest: inactivePaneState,
+        targets: targets,
+        destDirPath: inactivePaneState.currentPath,
+        isMove: false,
       );
-
-      bool isCancelled = false;
-
-      // Show modal Progress Dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => FileExplorerProgressDialog(
-          progressNotifier: progressNotifier,
-          onCancel: () {
-            isCancelled = true;
-            Navigator.of(ctx).pop();
-          },
-        ),
-      );
-
-      int copiedCount = 0;
-      try {
-        final src = activePaneState;
-        for (int i = 0; i < targets.length; i++) {
-          if (isCancelled) break;
-          final item = targets[i];
-
-          void updateItemProgress(int sentBytes, int totalBytes, {double stageOffset = 0.0, double stageMultiplier = 1.0}) {
-            if (isCancelled) return;
-            final fileRatio = totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
-            final combinedRatio = stageOffset + (fileRatio * stageMultiplier);
-            final overallProgress = (i + combinedRatio) / targets.length;
-            progressNotifier.value = FileTransferProgress(
-              title: 'Copying ${targets.length} item(s)...',
-              currentFile: item.name,
-              completedItems: i,
-              totalItems: targets.length,
-              progress: overallProgress,
-              currentBytes: sentBytes,
-              totalBytes: totalBytes,
-            );
-          }
-
-          final progressFraction = i / targets.length;
-          progressNotifier.value = FileTransferProgress(
-            title: 'Copying ${targets.length} item(s)...',
-            currentFile: item.name,
-            completedItems: i,
-            totalItems: targets.length,
-            progress: progressFraction,
-          );
-          _setStatus('[${i + 1}/${targets.length}] Copying ${item.name} (${(progressFraction * 100).toInt()}%)...');
-
-          if (src.target.isLocal && dest.target.isLocal) {
-            await _service.copyLocal(
-              item.path,
-              dest.currentPath,
-              onProgress: (sent, total) => updateItemProgress(sent, total),
-            );
-          } else if (src.target.isLocal && !dest.target.isLocal) {
-            dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-            await _service.uploadLocalToRemote(
-              item.path,
-              dest.remoteSession!,
-              dest.currentPath,
-              onProgress: (sent, total) => updateItemProgress(sent, total),
-            );
-          } else if (!src.target.isLocal && dest.target.isLocal) {
-            src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-            await _service.downloadRemoteToLocal(
-              src.remoteSession!,
-              item.path,
-              item.isDir,
-              dest.currentPath,
-              onProgress: (rcv, total) => updateItemProgress(rcv, total),
-            );
-          } else {
-            // Remote to remote
-            _setStatus('Remote-to-remote copy in progress...');
-            final tempDir = await Directory.systemTemp.createTemp('he_transfer_');
-            try {
-              src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-              await _service.downloadRemoteToLocal(
-                src.remoteSession!,
-                item.path,
-                item.isDir,
-                tempDir.path,
-                onProgress: (rcv, total) => updateItemProgress(rcv, total, stageOffset: 0.0, stageMultiplier: 0.5),
-              );
-              final downloadedPath = '${tempDir.path}${Platform.pathSeparator}${item.name}';
-              dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-              await _service.uploadLocalToRemote(
-                downloadedPath,
-                dest.remoteSession!,
-                dest.currentPath,
-                onProgress: (sent, total) => updateItemProgress(sent, total, stageOffset: 0.5, stageMultiplier: 0.5),
-              );
-            } finally {
-              await tempDir.delete(recursive: true);
-            }
-          }
-          copiedCount++;
-          src.multiSelected.remove(item.path);
-        }
-
-        progressNotifier.value = FileTransferProgress(
-          title: 'Complete',
-          currentFile: '',
-          completedItems: copiedCount,
-          totalItems: targets.length,
-          progress: 1.0,
-        );
-      } catch (e) {
-        _setStatus('Copy failed: $e', isError: true);
-      } finally {
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
-        progressNotifier.dispose();
-        if (isCancelled) {
-          _setStatus('Copy cancelled ($copiedCount/${targets.length} items transferred).');
-        } else if (copiedCount > 0) {
-          _setStatus('Successfully copied $copiedCount item(s).', isSuccess: true);
-          activePaneState.multiSelected.clear();
-        }
-        await _loadPane(activePaneState, silent: true);
-        await _loadPane(inactivePaneState, silent: true);
-      }
     }
     _focusNode.requestFocus();
   }
@@ -1110,144 +1313,18 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ? 'Are you sure you want to move ${targets.length} items?'
             : "Are you sure you want to move '${targets.first.name}'?",
         message2: 'To: ${dest.currentPath} (${dest.target.label})',
-        borderColor: const Color(0xFF98C379),
+        borderColor: const Color(0xFF56B6C2),
       ),
     );
 
     if (confirmed == true && mounted) {
-      final progressNotifier = ValueNotifier<FileTransferProgress>(
-        FileTransferProgress(
-          title: 'Moving ${targets.length} item(s)...',
-          currentFile: targets.first.name,
-          completedItems: 0,
-          totalItems: targets.length,
-          progress: 0.0,
-        ),
+      await _executeTransfer(
+        src: activePaneState,
+        dest: inactivePaneState,
+        targets: targets,
+        destDirPath: inactivePaneState.currentPath,
+        isMove: true,
       );
-
-      bool isCancelled = false;
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => FileExplorerProgressDialog(
-          progressNotifier: progressNotifier,
-          onCancel: () {
-            isCancelled = true;
-            Navigator.of(ctx).pop();
-          },
-        ),
-      );
-
-      int movedCount = 0;
-      try {
-        final src = activePaneState;
-        for (int i = 0; i < targets.length; i++) {
-          if (isCancelled) break;
-          final item = targets[i];
-
-          void updateItemProgress(int sentBytes, int totalBytes, {double stageOffset = 0.0, double stageMultiplier = 1.0}) {
-            if (isCancelled) return;
-            final fileRatio = totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
-            final combinedRatio = stageOffset + (fileRatio * stageMultiplier);
-            final overallProgress = (i + combinedRatio) / targets.length;
-            progressNotifier.value = FileTransferProgress(
-              title: 'Moving ${targets.length} item(s)...',
-              currentFile: item.name,
-              completedItems: i,
-              totalItems: targets.length,
-              progress: overallProgress,
-              currentBytes: sentBytes,
-              totalBytes: totalBytes,
-            );
-          }
-
-          final progressFraction = i / targets.length;
-          progressNotifier.value = FileTransferProgress(
-            title: 'Moving ${targets.length} item(s)...',
-            currentFile: item.name,
-            completedItems: i,
-            totalItems: targets.length,
-            progress: progressFraction,
-          );
-          _setStatus('[${i + 1}/${targets.length}] Moving ${item.name} (${(progressFraction * 100).toInt()}%)...');
-
-          if (src.target.isLocal && dest.target.isLocal) {
-            await _service.moveLocal(item.path, dest.currentPath);
-          } else {
-            // Cross copy and delete
-            if (src.target.isLocal && !dest.target.isLocal) {
-              dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-              await _service.uploadLocalToRemote(
-                item.path,
-                dest.remoteSession!,
-                dest.currentPath,
-                onProgress: (sent, total) => updateItemProgress(sent, total),
-              );
-              await _service.deleteLocal(item.path);
-            } else if (!src.target.isLocal && dest.target.isLocal) {
-              src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-              await _service.downloadRemoteToLocal(
-                src.remoteSession!,
-                item.path,
-                item.isDir,
-                dest.currentPath,
-                onProgress: (rcv, total) => updateItemProgress(rcv, total),
-              );
-              await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
-            } else {
-              // Remote to remote
-              final tempDir = await Directory.systemTemp.createTemp('he_transfer_');
-              try {
-                src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-                await _service.downloadRemoteToLocal(
-                  src.remoteSession!,
-                  item.path,
-                  item.isDir,
-                  tempDir.path,
-                  onProgress: (rcv, total) => updateItemProgress(rcv, total, stageOffset: 0.0, stageMultiplier: 0.5),
-                );
-                final downloadedPath = '${tempDir.path}${Platform.pathSeparator}${item.name}';
-                dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-                await _service.uploadLocalToRemote(
-                  downloadedPath,
-                  dest.remoteSession!,
-                  dest.currentPath,
-                  onProgress: (sent, total) => updateItemProgress(sent, total, stageOffset: 0.5, stageMultiplier: 0.5),
-                );
-                await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
-              } finally {
-                await tempDir.delete(recursive: true);
-              }
-            }
-          }
-          movedCount++;
-          src.multiSelected.remove(item.path);
-        }
-
-        progressNotifier.value = FileTransferProgress(
-          title: 'Complete',
-          currentFile: '',
-          completedItems: movedCount,
-          totalItems: targets.length,
-          progress: 1.0,
-        );
-      } catch (e) {
-        _setStatus('Move failed: $e', isError: true);
-      } finally {
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
-        progressNotifier.dispose();
-        if (isCancelled) {
-          _setStatus('Move cancelled ($movedCount/${targets.length} items moved).');
-        } else if (movedCount > 0) {
-          _setStatus('Successfully moved $movedCount item(s).', isSuccess: true);
-          activePaneState.multiSelected.clear();
-        }
-        await _loadPane(activePaneState, silent: true);
-        await _loadPane(inactivePaneState, silent: true);
-      }
     }
     _focusNode.requestFocus();
   }
@@ -1856,13 +1933,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     if (isDownOnly &&
         (event.logicalKey == LogicalKeyboardKey.escape ||
          (!isCtrl && event.logicalKey == LogicalKeyboardKey.keyQ))) {
-      if (pane.multiSelected.isNotEmpty) {
-        setState(() {
-          pane.multiSelected.clear();
-          for (final i in pane.filteredItems) {
-            i.isSelected = false;
-          }
-        });
+      if (pane.multiSelected.isNotEmpty || pane.selectedIndex != -1) {
+        _unselectAllAndUnfocus(pane);
         return KeyEventResult.handled;
       }
       widget.onExit?.call();
@@ -2010,135 +2082,160 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           }
         }
       },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (_activePane != side) {
-            setState(() => _activePane = side);
-          }
-          _focusNode.requestFocus();
+      child: DragTarget<FileDragPayload>(
+        onWillAcceptWithDetails: (details) {
+          return details.data.sourceSide != side ||
+              _canDropIntoDirectory(details.data, pane.target, pane.currentPath);
         },
-        child: Container(
-        color: Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Directory header pill & Node indicator
-            _buildPaneHeader(pane, side, isActive: isActive),
-            const SizedBox(height: 6),
+        onAcceptWithDetails: (details) {
+          _handleDropOnTarget(
+            payload: details.data,
+            destSide: side,
+            destDirPath: pane.currentPath,
+            targetFolderName: pane.currentPath,
+          );
+        },
+        builder: (context, candidateData, rejectedData) {
+          final isDropHovered = candidateData.isNotEmpty;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (_activePane != side) {
+                setState(() => _activePane = side);
+              }
+              _focusNode.requestFocus();
+              _unselectAllAndUnfocus(pane);
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDropHovered
+                    ? const Color(0xFF56B6C2).withValues(alpha: 0.08)
+                    : Colors.transparent,
+                border: isDropHovered
+                    ? Border.all(color: const Color(0xFF56B6C2).withValues(alpha: 0.6), width: 1.5)
+                    : null,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Directory header pill & Node indicator
+                  _buildPaneHeader(pane, side, isActive: isActive),
+                  const SizedBox(height: 6),
 
-            // Filter bar if active
-            if (pane.isFiltering) _buildFilterBar(pane),
+                  // Filter bar if active
+                  if (pane.isFiltering) _buildFilterBar(pane),
 
-            // Table Column Headers
-            _buildTableHeader(),
-            const Divider(color: Color(0xFF2C313C), height: 1, thickness: 1),
+                  // Table Column Headers
+                  _buildTableHeader(),
+                  const Divider(color: Color(0xFF2C313C), height: 1, thickness: 1),
 
-            // Item List
-            Expanded(
-              child: (pane.isLoading && pane.items.isEmpty)
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.sync,
-                            size: 20,
-                            color: Color(0xFF56B6C2),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Connecting to ${pane.target.label}...',
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF56B6C2),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            pane.currentPath,
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 10,
-                              color: Color(0xFF5C6370),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : pane.errorMessage != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
+                  // Item List
+                  Expanded(
+                    child: (pane.isLoading && pane.items.isEmpty)
+                        ? Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(
-                                  Icons.error_outline_rounded,
-                                  color: Color(0xFFE06C75),
-                                  size: 36,
+                                  Icons.sync,
+                                  size: 20,
+                                  color: Color(0xFF56B6C2),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                                 Text(
-                                  pane.errorMessage!,
-                                  textAlign: TextAlign.center,
+                                  'Connecting to ${pane.target.label}...',
                                   style: const TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 12,
-                                    color: Color(0xFFE06C75),
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF56B6C2),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  alignment: WrapAlignment.center,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      icon: const Icon(Icons.refresh, size: 14),
-                                      label: const Text(
-                                        'Retry',
-                                        style: TextStyle(fontFamily: 'monospace', fontSize: 11),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF2C313C),
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      onPressed: () {
-                                        pane.remoteSession = null;
-                                        _loadPane(pane);
-                                      },
-                                    ),
-                                    if (!pane.target.isLocal && pane.target.type != ExplorerTargetType.fe)
-                                      ElevatedButton.icon(
-                                        icon: const Icon(Icons.key, size: 14),
-                                        label: const Text(
-                                          'Edit Credentials',
-                                          style: TextStyle(fontFamily: 'monospace', fontSize: 11),
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF56B6C2),
-                                          foregroundColor: const Color(0xFF1E222B),
-                                        ),
-                                        onPressed: () => _showEditCredentialsDialog(pane),
-                                      ),
-                                  ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  pane.currentPath,
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 10,
+                                    color: Color(0xFF5C6370),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        )
-                      : _buildItemsList(pane, side, isActive: isActive),
+                          )
+                        : pane.errorMessage != null
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline_rounded,
+                                        color: Color(0xFFE06C75),
+                                        size: 36,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        pane.errorMessage!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 12,
+                                          color: Color(0xFFE06C75),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        alignment: WrapAlignment.center,
+                                        children: [
+                                          ElevatedButton.icon(
+                                            icon: const Icon(Icons.refresh, size: 14),
+                                            label: const Text(
+                                              'Retry',
+                                              style: TextStyle(fontFamily: 'monospace', fontSize: 11),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF2C313C),
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            onPressed: () {
+                                              pane.remoteSession = null;
+                                              _loadPane(pane);
+                                            },
+                                          ),
+                                          if (!pane.target.isLocal && pane.target.type != ExplorerTargetType.fe)
+                                            ElevatedButton.icon(
+                                              icon: const Icon(Icons.key, size: 14),
+                                              label: const Text(
+                                                'Edit Credentials',
+                                                style: TextStyle(fontFamily: 'monospace', fontSize: 11),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF56B6C2),
+                                                foregroundColor: const Color(0xFF1E222B),
+                                              ),
+                                              onPressed: () => _showEditCredentialsDialog(pane),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : _buildItemsList(pane, side, isActive: isActive),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildPaneHeader(_PaneController pane, PaneSide side, {required bool isActive}) {
     return Row(
@@ -2377,13 +2474,23 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   Widget _buildItemsList(_PaneController pane, PaneSide side, {required bool isActive}) {
     if (pane.filteredItems.isEmpty) {
-      return const Center(
-        child: Text(
-          '(Empty folder)',
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-            color: Color(0xFF5C6370),
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (_activePane != side) {
+            setState(() => _activePane = side);
+          }
+          _focusNode.requestFocus();
+          _unselectAllAndUnfocus(pane);
+        },
+        child: const Center(
+          child: Text(
+            '(Empty folder)',
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: Color(0xFF5C6370),
+            ),
           ),
         ),
       );
@@ -2395,74 +2502,46 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final sizeWidth = density == FileExplorerDensity.large ? 95.0 : 80.0;
     final modWidth = density == FileExplorerDensity.large ? 130.0 : 110.0;
 
-    return ListView.builder(
-      controller: pane.scrollController,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: pane.filteredItems.length,
-      itemExtent: density.rowHeight,
-      itemBuilder: (context, idx) {
-        final item = pane.filteredItems[idx];
-        final isHovered = idx == pane.selectedIndex;
-        final isSelected = pane.multiSelected.contains(item.path);
-
-        // Highlight colors matching image 1 & 2
-        Color rowBg;
-        if (isHovered) {
-          rowBg = isActive ? const Color(0xFF2B3A4A) : const Color(0xFF252A35);
-        } else if (isSelected) {
-          rowBg = const Color(0xFF22352A);
-        } else {
-          rowBg = Colors.transparent;
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerUp: (event) {
+        final totalItemsHeight = pane.filteredItems.length * density.rowHeight;
+        final scrollOffset = pane.scrollController.hasClients ? pane.scrollController.offset : 0.0;
+        final visibleItemsHeight = totalItemsHeight - scrollOffset;
+        if (event.localPosition.dy > visibleItemsHeight) {
+          if (_activePane != side) {
+            setState(() => _activePane = side);
+          }
+          _focusNode.requestFocus();
+          _unselectAllAndUnfocus(pane);
         }
+      },
+      child: ListView.builder(
+        controller: pane.scrollController,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: pane.filteredItems.length,
+        itemExtent: density.rowHeight,
+        itemBuilder: (context, idx) {
+          final item = pane.filteredItems[idx];
+          final isFocused = idx == pane.selectedIndex;
+          final isSelected = pane.multiSelected.contains(item.path);
 
-        final textColor = isSelected
-            ? const Color(0xFF98C379)
-            : item.isDir
-                ? const Color(0xFFE5C07B) // Yellow for folders
-                : const Color(0xFFD8DEE9); // White/silver for files
+          Color rowBg;
+          if (isSelected) {
+            rowBg = const Color(0xFF22352A);
+          } else if (isFocused) {
+            rowBg = isActive ? const Color(0xFF2B3A4A) : const Color(0xFF1F242C);
+          } else {
+            rowBg = Colors.transparent;
+          }
 
-        return InkWell(
-          splashFactory: NoSplash.splashFactory,
-          highlightColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          onTap: () async {
-            final isCtrl = HardwareKeyboard.instance.isControlPressed ||
-                HardwareKeyboard.instance.isMetaPressed;
-            final isShift = HardwareKeyboard.instance.isShiftPressed;
+          final textColor = isSelected
+              ? const Color(0xFF98C379)
+              : item.isDir
+                  ? const Color(0xFFE5C07B)
+                  : const Color(0xFFD8DEE9);
 
-            if (_activePane != side) {
-              setState(() => _activePane = side);
-            }
-            _focusNode.requestFocus();
-
-            final now = DateTime.now().millisecondsSinceEpoch;
-            final isDoubleClick = _lastClickPane == side &&
-                _lastClickIndex == idx &&
-                (now - _lastClickTime) < 500;
-
-            _lastClickTime = now;
-            _lastClickIndex = idx;
-            _lastClickPane = side;
-
-            if (isDoubleClick) {
-              await _enterItemInPane(pane, idx);
-              return;
-            }
-
-            if (isCtrl) {
-              _toggleSelectItemWithCtrl(pane, idx);
-            } else if (isShift) {
-              _selectRange(pane, pane.selectedIndex, idx);
-              setState(() {
-                pane.selectedIndex = idx;
-              });
-            } else {
-              setState(() {
-                pane.selectedIndex = idx;
-              });
-            }
-          },
-          child: Container(
+          final rowContent = Container(
             color: rowBg,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
@@ -2508,7 +2587,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                     style: TextStyle(
                       fontFamily: fontFamily,
                       fontSize: density.fontSize,
-                      fontWeight: isHovered ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isFocused ? FontWeight.bold : FontWeight.normal,
                       color: textColor,
                     ),
                   ),
@@ -2543,9 +2622,127 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 ),
               ],
             ),
-          ),
-        );
-      },
+          );
+
+          final itemWidget = InkWell(
+            splashFactory: NoSplash.splashFactory,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            onTap: () async {
+              final isCtrl = HardwareKeyboard.instance.isControlPressed ||
+                  HardwareKeyboard.instance.isMetaPressed;
+              final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+              if (_activePane != side) {
+                setState(() => _activePane = side);
+              }
+              _focusNode.requestFocus();
+
+              final now = DateTime.now().millisecondsSinceEpoch;
+              final isDoubleClick = _lastClickPane == side &&
+                  _lastClickIndex == idx &&
+                  (now - _lastClickTime) < 500;
+
+              _lastClickTime = now;
+              _lastClickIndex = idx;
+              _lastClickPane = side;
+
+              if (isDoubleClick) {
+                await _enterItemInPane(pane, idx);
+                return;
+              }
+
+              if (isCtrl) {
+                _toggleSelectItemWithCtrl(pane, idx);
+              } else if (isShift) {
+                final anchor = pane.selectionAnchorIndex ?? (pane.selectedIndex >= 0 ? pane.selectedIndex : 0);
+                pane.selectionAnchorIndex = anchor;
+                setState(() {
+                  pane.selectedIndex = idx;
+                  _selectRange(pane, anchor, idx);
+                });
+              } else {
+                setState(() {
+                  pane.multiSelected.clear();
+                  for (final it in pane.filteredItems) {
+                    it.isSelected = false;
+                  }
+                  pane.selectedIndex = idx;
+                  pane.selectionAnchorIndex = idx;
+                });
+              }
+            },
+            child: rowContent,
+          );
+
+          // Make draggable if not '..'
+          Widget row = itemWidget;
+          if (item.name != '..') {
+            final draggedItems = pane.multiSelected.contains(item.path)
+                ? pane.filteredItems.where((i) => pane.multiSelected.contains(i.path) && i.name != '..').toList()
+                : [item];
+
+            final payload = FileDragPayload(
+              sourceSide: side,
+              sourceTarget: pane.target,
+              sourceDirPath: pane.currentPath,
+              items: draggedItems,
+            );
+
+            row = Draggable<FileDragPayload>(
+              data: payload,
+              dragAnchorStrategy: pointerDragAnchorStrategy,
+              feedback: _buildDragFeedback(item, draggedItems.length),
+              childWhenDragging: Opacity(opacity: 0.35, child: itemWidget),
+              child: itemWidget,
+            );
+          }
+
+          // If directory, make it a DragTarget
+          if (item.isDir) {
+            final targetChild = row;
+            final String targetDirPath;
+            if (item.name == '..') {
+              if (pane.target.isLocal) {
+                targetDirPath = Directory(pane.currentPath).parent.path;
+              } else {
+                final lastSlash = pane.currentPath.lastIndexOf('/');
+                targetDirPath = lastSlash <= 0 ? '/' : pane.currentPath.substring(0, lastSlash);
+              }
+            } else {
+              targetDirPath = item.path;
+            }
+
+            row = DragTarget<FileDragPayload>(
+              onWillAcceptWithDetails: (details) {
+                return _canDropIntoDirectory(details.data, pane.target, targetDirPath);
+              },
+              onAcceptWithDetails: (details) {
+                _handleDropOnTarget(
+                  payload: details.data,
+                  destSide: side,
+                  destDirPath: targetDirPath,
+                  targetFolderName: item.name == '..' ? 'Parent Folder (..)' : item.name,
+                );
+              },
+              builder: (context, candidateData, rejectedData) {
+                final isHovered = candidateData.isNotEmpty;
+                if (!isHovered) return targetChild;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF56B6C2).withValues(alpha: 0.25),
+                    border: Border.all(color: const Color(0xFF56B6C2), width: 1.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: targetChild,
+                );
+              },
+            );
+          }
+
+          return row;
+        },
+      ),
     );
   }
 

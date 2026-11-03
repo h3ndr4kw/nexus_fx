@@ -48,6 +48,16 @@ class ExplorerNodeTarget {
   bool get isLocal => type == ExplorerTargetType.local;
   bool get hasJumpHost => jumpHost != null && jumpHost!.isNotEmpty;
 
+  bool isSameTarget(ExplorerNodeTarget other) {
+    if (type != other.type) return false;
+    if (isLocal && other.isLocal) return true;
+    return host == other.host &&
+        port == other.port &&
+        username == other.username &&
+        feHostname == other.feHostname &&
+        sessionId == other.sessionId;
+  }
+
   static const ExplorerNodeTarget local = ExplorerNodeTarget(
     type: ExplorerTargetType.local,
     label: 'Local Filesystem',
@@ -156,6 +166,20 @@ class FileExplorerItem {
       isSelected: false,
     );
   }
+}
+
+class FileDragPayload {
+  final PaneSide sourceSide;
+  final ExplorerNodeTarget sourceTarget;
+  final String sourceDirPath;
+  final List<FileExplorerItem> items;
+
+  const FileDragPayload({
+    required this.sourceSide,
+    required this.sourceTarget,
+    required this.sourceDirPath,
+    required this.items,
+  });
 }
 
 enum PaneSide {

@@ -1210,6 +1210,210 @@ class _TerminalButton extends StatelessWidget {
   }
 }
 
+enum FileDropAction { copy, move }
+
+/// Dialog shown when dragging and dropping files across panes to choose Copy or Move
+class FileExplorerDropActionDialog extends StatefulWidget {
+  final String title;
+  final String message;
+  final String? destPath;
+
+  const FileExplorerDropActionDialog({
+    super.key,
+    required this.title,
+    required this.message,
+    this.destPath,
+  });
+
+  @override
+  State<FileExplorerDropActionDialog> createState() => _FileExplorerDropActionDialogState();
+}
+
+class _FileExplorerDropActionDialogState extends State<FileExplorerDropActionDialog> {
+  int _selectedIndex = 0; // 0: Copy, 1: Move, 2: Cancel
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              setState(() => _selectedIndex = (_selectedIndex - 1 + 3) % 3);
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                event.logicalKey == LogicalKeyboardKey.tab) {
+              setState(() => _selectedIndex = (_selectedIndex + 1) % 3);
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+              if (_selectedIndex == 0) {
+                Navigator.pop(context, FileDropAction.copy);
+              } else if (_selectedIndex == 1) {
+                Navigator.pop(context, FileDropAction.move);
+              } else {
+                Navigator.pop(context, null);
+              }
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.keyC) {
+              Navigator.pop(context, FileDropAction.copy);
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.keyM) {
+              Navigator.pop(context, FileDropAction.move);
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.escape ||
+                event.logicalKey == LogicalKeyboardKey.keyQ) {
+              Navigator.pop(context, null);
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Container(
+          width: 520,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E222B),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFF56B6C2), width: 1.8),
+            boxShadow: const [
+              BoxShadow(color: Colors.black54, blurRadius: 16, offset: Offset(0, 8)),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 6),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Divider(
+                        color: Color(0xFF56B6C2),
+                        thickness: 1.5,
+                        indent: 14,
+                        endIndent: 8,
+                      ),
+                    ),
+                    Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF56B6C2),
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const Expanded(
+                      child: Divider(
+                        color: Color(0xFF56B6C2),
+                        thickness: 1.5,
+                        indent: 8,
+                        endIndent: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  children: [
+                    Text(
+                      widget.message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        color: Color(0xFFD8DEE9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (widget.destPath != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Target: ${widget.destPath}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: Color(0xFF5C6370),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildOptionButton(
+                      index: 0,
+                      label: '[c] Copy',
+                      action: FileDropAction.copy,
+                      color: const Color(0xFF98C379),
+                    ),
+                    const SizedBox(width: 14),
+                    _buildOptionButton(
+                      index: 1,
+                      label: '[m] Move',
+                      action: FileDropAction.move,
+                      color: const Color(0xFF56B6C2),
+                    ),
+                    const SizedBox(width: 14),
+                    _buildOptionButton(
+                      index: 2,
+                      label: '[Esc] Cancel',
+                      action: null,
+                      color: const Color(0xFF5C6370),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionButton({
+    required int index,
+    required String label,
+    required FileDropAction? action,
+    required Color color,
+  }) {
+    final isSelected = _selectedIndex == index;
+    return InkWell(
+      onTap: () => Navigator.pop(context, action),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.25) : const Color(0xFF181A20),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFF2C313C),
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? color : const Color(0xFFABB2BF),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Notification Alert Dialog (e.g. Wireshark launch/not installed, alert messages)
 class FileExplorerNotificationDialog extends StatelessWidget {
   final String title;
