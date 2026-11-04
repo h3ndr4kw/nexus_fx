@@ -54,25 +54,25 @@ class AppPalette {
 
 class AppTheme {
   // Original constant colors for backwards compatibility with const widgets
-  static const Color background = Color(0xFF1D1E25);
-  static const Color surfaceColor = Color(0xFF252630);
-  static const Color primaryColor = Color(0xFF5AB9EA);
-  static const Color accentColor = Color(0xFFE5C07B);
-  static const Color textColor = Color(0xFFB0B3B8);
-  static const Color titleColor = Color(0xFF4A6572);
-  static const Color inputBorderColor = Color(0xFF383A45);
-  static const Color errorColor = Color(0xFFE06C75);
-  static const Color successColor = Color(0xFF98C379);
-  static const Color warningColor = Color(0xFFE5C07B);
+  static const Color background = Color(0xFF0D0E12);
+  static const Color surfaceColor = Color(0xFF16181F);
+  static const Color primaryColor = Color(0xFF60A5FA);
+  static const Color accentColor = Color(0xFF34D399);
+  static const Color textColor = Color(0xFF9AA0A6);
+  static const Color titleColor = Color(0xFFE2E4E9);
+  static const Color inputBorderColor = Color(0xFF232630);
+  static const Color errorColor = Color(0xFFF87171);
+  static const Color successColor = Color(0xFF34D399);
+  static const Color warningColor = Color(0xFFFBBF24);
 
   // Semantic aliases for modern widgets
   static const Color bgSurface = surfaceColor;
-  static const Color bgSurfaceSecondary = Color(0xFF20212B);
+  static const Color bgSurfaceSecondary = Color(0xFF13151B);
   static const Color accentPrimary = primaryColor;
   static const Color borderSubtle = inputBorderColor;
-  static const Color textPrimary = Color(0xFFE6E6E6);
+  static const Color textPrimary = Color(0xFFE2E4E9);
   static const Color textSecondary = textColor;
-  static const Color textMuted = Color(0xFF787B86);
+  static const Color textMuted = Color(0xFF6B7280);
   static const Color statusError = errorColor;
   static const Color statusSuccess = successColor;
   static const Color statusWarning = warningColor;
@@ -87,16 +87,16 @@ class AppTheme {
     AppThemeType.antigravity: const AppPalette(
       id: 'antigravity',
       name: 'Dark Mode Antigravity',
-      background: Color(0xFF1D1E25),
-      surfaceColor: Color(0xFF252630),
-      primaryColor: Color(0xFF5AB9EA),
-      accentColor: Color(0xFFE5C07B),
-      textColor: Color(0xFFB0B3B8),
-      titleColor: Color(0xFF4A6572),
-      inputBorderColor: Color(0xFF383A45),
-      errorColor: Color(0xFFE06C75),
-      successColor: Color(0xFF98C379),
-      warningColor: Color(0xFFE5C07B),
+      background: Color(0xFF0D0E12),
+      surfaceColor: Color(0xFF16181F),
+      primaryColor: Color(0xFF60A5FA),
+      accentColor: Color(0xFF34D399),
+      textColor: Color(0xFF9AA0A6),
+      titleColor: Color(0xFFE2E4E9),
+      inputBorderColor: Color(0xFF232630),
+      errorColor: Color(0xFFF87171),
+      successColor: Color(0xFF34D399),
+      warningColor: Color(0xFFFBBF24),
     ),
 
     // 2. Catppuccin Mocha

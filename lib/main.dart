@@ -2,14 +2,31 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'models/nexus_tool.dart';
 import 'screens/main_screen.dart';
+import 'services/nexus_tool_registry.dart';
 import 'services/session_manager_service.dart';
 import 'services/settings_service.dart';
 import 'services/window_state_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
+  await runNexusFxApp();
+}
+
+/// Initializes and runs the NexusFX desktop application.
+///
+/// Downstream projects can invoke [runNexusFxApp] with custom [tools] and
+/// a custom [title] so they automatically inherit all upstream updates.
+Future<void> runNexusFxApp({
+  List<NexusTool> tools = const [],
+  String title = 'NexusFX',
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (tools.isNotEmpty) {
+    NexusToolRegistry.instance.registerAll(tools);
+  }
 
   // Load persistent settings & sessions before running app
   await SettingsService.instance.loadSettings();
@@ -27,7 +44,7 @@ void main() async {
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
-        title: 'NexusFX',
+        title: title,
       );
 
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -40,11 +57,18 @@ void main() async {
     }
   }
 
-  runApp(const NexusFxApp());
+  runApp(NexusFxApp(title: title));
 }
 
 class NexusFxApp extends StatelessWidget {
-  const NexusFxApp({super.key});
+  final String title;
+  final List<NexusTool>? customTools;
+
+  const NexusFxApp({
+    super.key,
+    this.title = 'NexusFX',
+    this.customTools,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -52,10 +76,13 @@ class NexusFxApp extends StatelessWidget {
       listenable: SettingsService.instance,
       builder: (context, _) {
         return MaterialApp(
-          title: 'NexusFX',
+          title: title,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.darkTheme,
-          home: const MainScreen(),
+          home: MainScreen(
+            appTitle: title,
+            customTools: customTools,
+          ),
         );
       },
     );

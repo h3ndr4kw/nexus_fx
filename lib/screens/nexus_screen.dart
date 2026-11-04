@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/session_models.dart';
@@ -10,8 +9,14 @@ import '../services/settings_service.dart';
 import '../widgets/ssh_tab_view.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/interactive_runbook_sidebar.dart';
+import '../controllers/terminal_tab_controller.dart';
+import '../controllers/broadcast_coordinator.dart';
 import '../widgets/floating_send_progress_dialog.dart';
+import '../widgets/radar_pulse_indicator.dart';
 import 'sessions_screen.dart';
+
+export '../controllers/broadcast_coordinator.dart' show BroadcastTarget;
+export '../widgets/radar_pulse_indicator.dart';
 
 class SshConnectionConfig {
   final String host;
@@ -61,60 +66,78 @@ class NexusScreen extends StatefulWidget {
   State<NexusScreen> createState() => NexusScreenState();
 }
 
-enum BroadcastTarget {
-  all,
-  left,
-  right,
-  custom,
-}
-
 class NexusScreenState extends State<NexusScreen> {
   final SshService _sshService = SshService.instance;
-  final List<SshConnection> _tabs = [];
+  late final TerminalTabController _tabController = TerminalTabController();
+  late final BroadcastCoordinator _broadcastCoordinator = BroadcastCoordinator();
+
+  TerminalTabController get tabController => _tabController;
+  BroadcastCoordinator get broadcastCoordinator => _broadcastCoordinator;
+
   final ScrollController _tabScrollController = ScrollController();
-  int _activeTab = 0;
-
-  bool _isSplitView = false;
-  final List<SshConnection> _rightTabs = [];
   final ScrollController _rightTabScrollController = ScrollController();
-  int _activeRightTab = 0;
   bool _isDraggingTab = false;
-  bool _lastActivePaneIsRight = false;
+
+  List<SshConnection> get _tabs => _tabController.tabs;
+  List<SshConnection> get _rightTabs => _tabController.rightTabs;
+  int get _activeTab => _tabController.activeTab;
+  set _activeTab(int val) => _tabController.setActiveTab(val);
+  int get _activeRightTab => _tabController.activeRightTab;
+  set _activeRightTab(int val) => _tabController.setActiveRightTab(val);
+  bool get _isSplitView => _tabController.isSplitView;
+  set _isSplitView(bool val) => _tabController.setSplitView(val);
+  bool get _lastActivePaneIsRight => _tabController.lastActivePaneIsRight;
+  set _lastActivePaneIsRight(bool val) => _tabController.setLastActivePaneIsRight(val);
+
+  BroadcastTarget get _broadcastTarget => _broadcastCoordinator.target;
+  set _broadcastTarget(BroadcastTarget val) => _broadcastCoordinator.setTarget(val, leftTabs: _tabs, rightTabs: _rightTabs);
+  Set<String> get _selectedConnectionIds => _broadcastCoordinator.selectedConnectionIds;
+  bool get _isSendingCommands => _broadcastCoordinator.isSending;
+  bool get _isParallelMode => _broadcastCoordinator.isParallelMode;
+  List<String> get _commandHistory => _broadcastCoordinator.commandHistory;
 
   @visibleForTesting
-  int get activeTabIndex => _activeTab;
+  int get activeTabIndex => _tabController.activeTab;
 
   @visibleForTesting
-  int get activeRightTabIndex => _activeRightTab;
+  SshConnection? get activeConnection => _activeConnection;
+
+  SshConnection? get _activeConnection {
+    if (_isSplitView && _lastActivePaneIsRight) {
+      if (_activeRightTab >= 0 && _activeRightTab < _rightTabs.length) {
+        return _rightTabs[_activeRightTab];
+      }
+    }
+    if (_activeTab >= 0 && _activeTab < _tabs.length) {
+      return _tabs[_activeTab];
+    }
+    return null;
+  }
 
   @visibleForTesting
-  bool get lastActivePaneIsRight => _lastActivePaneIsRight;
+  int get activeRightTabIndex => _tabController.activeRightTab;
 
   @visibleForTesting
-  List<String> get tabLabels => _tabs.map((c) => c.currentLabel).toList();
+  bool get lastActivePaneIsRight => _tabController.lastActivePaneIsRight;
 
   @visibleForTesting
-  List<String> get rightTabLabels => _rightTabs.map((c) => c.currentLabel).toList();
+  List<String> get tabLabels => _tabController.tabLabels;
 
   @visibleForTesting
-  List<SshConnection> get tabs => List.unmodifiable(_tabs);
+  List<String> get rightTabLabels => _tabController.rightTabLabels;
 
   @visibleForTesting
-  List<SshConnection> get rightTabs => List.unmodifiable(_rightTabs);
+  List<SshConnection> get tabs => _tabController.tabs;
+
+  @visibleForTesting
+  List<SshConnection> get rightTabs => _tabController.rightTabs;
 
   bool _showCommandPane = false;
   bool _isRightSidebarVisible = false;
   final GlobalKey<InteractiveRunbookSidebarState> _sidebarKey =
       GlobalKey<InteractiveRunbookSidebarState>();
-  BroadcastTarget _broadcastTarget = BroadcastTarget.all;
-  final Set<String> _selectedConnectionIds = {};
   final TextEditingController _commandInputController = TextEditingController();
   final FocusNode _commandFocusNode = FocusNode();
-  bool _isSendingCommands = false;
-  final bool _isParallelMode = true;
-  final List<String> _commandHistory = [];
-  int _historyIndex = -1;
-  String _commandDraft = '';
 
   bool _isRunbookSending = false;
   bool _isRunbookCancelled = false;
@@ -151,24 +174,17 @@ class NexusScreenState extends State<NexusScreen> {
         }
       }
     };
-    final isTargetRight = isRightPane;
-    final targetList = isTargetRight ? _rightTabs : _tabs;
     setState(() {
-      targetList.add(conn);
-      if (isTargetRight) {
-        _activeRightTab = targetList.length - 1;
-      } else {
-        _activeTab = targetList.length - 1;
-      }
-      if (_broadcastTarget == BroadcastTarget.all ||
-          (_broadcastTarget == BroadcastTarget.left && !isTargetRight) ||
-          (_broadcastTarget == BroadcastTarget.right && isTargetRight)) {
-        _selectedConnectionIds.add(conn.id);
-      }
+      _tabController.addTab(conn, isRightPane: isRightPane);
+      _broadcastCoordinator.handleNewConnection(conn, isRightPane: isRightPane);
     });
   }
 
   void _addTabToRight(SshConnection conn) => _addTab(conn, isRightPane: true);
+
+  @visibleForTesting
+  void addConnectionForTesting(SshConnection conn, {bool isRightPane = false}) =>
+      _addTab(conn, isRightPane: isRightPane);
 
   Future<void> connectSessionProfile(SessionProfile profile, {bool toRightPane = false}) async {
     final route = SessionManagerService.instance.resolveSshRoute(profile);
@@ -197,45 +213,39 @@ class NexusScreenState extends State<NexusScreen> {
   }
 
   @visibleForTesting
-  List<String> get commandHistory => List.unmodifiable(_commandHistory);
+  List<String> get commandHistory => _broadcastCoordinator.commandHistory;
 
   @visibleForTesting
-  BroadcastTarget get broadcastTarget => _broadcastTarget;
+  BroadcastTarget get broadcastTarget => _broadcastCoordinator.target;
 
   @visibleForTesting
-  Set<String> get selectedConnectionIds => Set.unmodifiable(_selectedConnectionIds);
+  Set<String> get selectedConnectionIds => _broadcastCoordinator.selectedConnectionIds;
 
   @visibleForTesting
   void setBroadcastTargetForTesting(BroadcastTarget target) {
     setState(() {
-      _broadcastTarget = target;
-      if (target == BroadcastTarget.all) {
-        _selectedConnectionIds.clear();
-        _selectedConnectionIds.addAll(
-          [..._tabs, ..._rightTabs].where((c) => c.isConnected).map((c) => c.id),
-        );
-      } else if (target == BroadcastTarget.left) {
-        _selectedConnectionIds.clear();
-        _selectedConnectionIds.addAll(
-          _tabs.where((c) => c.isConnected).map((c) => c.id),
-        );
-      } else if (target == BroadcastTarget.right) {
-        _selectedConnectionIds.clear();
-        _selectedConnectionIds.addAll(
-          _rightTabs.where((c) => c.isConnected).map((c) => c.id),
-        );
-      }
+      _broadcastCoordinator.setTarget(
+        target,
+        leftTabs: _tabs,
+        rightTabs: _rightTabs,
+      );
     });
   }
 
   @override
   void initState() {
     super.initState();
+    _tabController.addListener(_onControllersChanged);
+    _broadcastCoordinator.addListener(_onControllersChanged);
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
     _commandFocusNode.onKeyEvent = _handleCommandInputKey;
     if (widget.initialHost != null) {
       _openSshTab(widget.initialHost!, widget.initialLabel ?? widget.initialHost!);
     }
+  }
+
+  void _onControllersChanged() {
+    if (mounted) setState(() {});
   }
 
   void toggleCommandPane() {
@@ -642,21 +652,7 @@ class NexusScreenState extends State<NexusScreen> {
     };
 
     final isTargetRight = isRightPane ?? _isSplitView;
-    final targetList = isTargetRight ? _rightTabs : _tabs;
-
-    setState(() {
-      targetList.add(conn);
-      if (isTargetRight) {
-        _activeRightTab = targetList.length - 1;
-      } else {
-        _activeTab = targetList.length - 1;
-      }
-      if (_broadcastTarget == BroadcastTarget.all ||
-          (_broadcastTarget == BroadcastTarget.left && !isTargetRight) ||
-          (_broadcastTarget == BroadcastTarget.right && isTargetRight)) {
-        _selectedConnectionIds.add(conn.id);
-      }
-    });
+    _addTab(conn, isRightPane: isTargetRight);
     return conn;
   }
 
@@ -679,26 +675,8 @@ class NexusScreenState extends State<NexusScreen> {
     _sshService.removeConnection(conn.id, graceful: true);
 
     setState(() {
-      targetList.removeAt(index);
-      if (isRightPane) {
-        if (_rightTabs.isEmpty) {
-          _activeRightTab = 0;
-        } else if (index < _activeRightTab) {
-          _activeRightTab--;
-        } else if (_activeRightTab >= _rightTabs.length) {
-          _activeRightTab = _rightTabs.length - 1;
-        }
-      } else {
-        if (_tabs.isEmpty) {
-          _activeTab = 0;
-        } else if (index < _activeTab) {
-          _activeTab--;
-        } else if (_activeTab >= _tabs.length) {
-          _activeTab = _tabs.length - 1;
-        }
-      }
-
-      _selectedConnectionIds.remove(conn.id);
+      _tabController.closeTabAt(index, isRightPane: isRightPane);
+      _broadcastCoordinator.removeConnection(conn.id);
       _updateBroadcastTargetFromSelection();
 
       if (_tabs.isEmpty && _rightTabs.isEmpty) {
@@ -717,14 +695,9 @@ class NexusScreenState extends State<NexusScreen> {
       _sshService.removeConnection(conn.id, graceful: true);
     }
     setState(() {
-      _tabs.clear();
-      _rightTabs.clear();
-      _selectedConnectionIds.clear();
-      _broadcastTarget = BroadcastTarget.all;
-      _activeTab = 0;
-      _activeRightTab = 0;
-      _isSplitView = false;
-      _lastActivePaneIsRight = false;
+      _tabController.closeAllTabs();
+      _broadcastCoordinator.clearSelection();
+      _broadcastCoordinator.setTarget(BroadcastTarget.all, leftTabs: [], rightTabs: []);
       _showCommandPane = false;
     });
   }
@@ -768,15 +741,7 @@ class NexusScreenState extends State<NexusScreen> {
     final index = _tabs.indexWhere((c) => c.id == conn.id);
     if (index == -1) return;
     setState(() {
-      _tabs.removeAt(index);
-      if (_tabs.isEmpty) {
-        _activeTab = 0;
-      } else if (_activeTab >= _tabs.length) {
-        _activeTab = _tabs.length - 1;
-      }
-      _rightTabs.add(conn);
-      _activeRightTab = _rightTabs.length - 1;
-      _isSplitView = true;
+      _tabController.moveTabBetweenPanes(index, fromRightPane: false);
     });
   }
 
@@ -784,16 +749,10 @@ class NexusScreenState extends State<NexusScreen> {
     final index = _rightTabs.indexWhere((c) => c.id == conn.id);
     if (index == -1) return;
     setState(() {
-      _rightTabs.removeAt(index);
+      _tabController.moveTabBetweenPanes(index, fromRightPane: true);
       if (_rightTabs.isEmpty) {
-        _activeRightTab = 0;
-        _isSplitView = false;
-        _broadcastTarget = BroadcastTarget.all;
-      } else if (_activeRightTab >= _rightTabs.length) {
-        _activeRightTab = _rightTabs.length - 1;
+        _broadcastCoordinator.setTarget(BroadcastTarget.all, leftTabs: _tabs, rightTabs: _rightTabs);
       }
-      _tabs.add(conn);
-      _activeTab = _tabs.length - 1;
     });
   }
 
@@ -1104,10 +1063,14 @@ class NexusScreenState extends State<NexusScreen> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    _tabController.removeListener(_onControllersChanged);
+    _broadcastCoordinator.removeListener(_onControllersChanged);
     _tabScrollController.dispose();
     _rightTabScrollController.dispose();
     _commandInputController.dispose();
     _commandFocusNode.dispose();
+    _tabController.dispose();
+    _broadcastCoordinator.dispose();
     super.dispose();
   }
 
@@ -1207,18 +1170,12 @@ class NexusScreenState extends State<NexusScreen> {
     final selection = _commandInputController.selection;
 
     if (up) {
-      // If multiline and cursor is not on the first line, allow normal cursor movement
       if (text.contains('\n') && selection.baseOffset > text.indexOf('\n')) {
         return false;
       }
 
-      if (_historyIndex == -1) {
-        _commandDraft = text;
-      }
-
-      if (_historyIndex + 1 < _commandHistory.length) {
-        _historyIndex++;
-        final cmd = _commandHistory[_commandHistory.length - 1 - _historyIndex];
+      final cmd = _broadcastCoordinator.navigateHistoryUp(text);
+      if (cmd != null) {
         _commandInputController.value = TextEditingValue(
           text: cmd,
           selection: TextSelection.collapsed(offset: cmd.length),
@@ -1227,90 +1184,47 @@ class NexusScreenState extends State<NexusScreen> {
       }
       return false;
     } else {
-      // Down arrow
-      if (_historyIndex == -1) {
-        return false;
-      }
-
-      // If multiline and cursor is not on the last line, allow normal cursor movement
       if (text.contains('\n') && selection.baseOffset <= text.lastIndexOf('\n')) {
         return false;
       }
 
-      _historyIndex--;
-      if (_historyIndex >= 0) {
-        final cmd = _commandHistory[_commandHistory.length - 1 - _historyIndex];
+      final cmd = _broadcastCoordinator.navigateHistoryDown();
+      if (cmd != null) {
         _commandInputController.value = TextEditingValue(
           text: cmd,
           selection: TextSelection.collapsed(offset: cmd.length),
         );
-      } else {
-        _commandInputController.value = TextEditingValue(
-          text: _commandDraft,
-          selection: TextSelection.collapsed(offset: _commandDraft.length),
-        );
+        return true;
       }
-      return true;
+      return false;
     }
   }
 
   void _selectPresetTarget(BroadcastTarget target) {
     setState(() {
-      _broadcastTarget = target;
-      _selectedConnectionIds.clear();
-      switch (target) {
-        case BroadcastTarget.all:
-          _selectedConnectionIds.addAll(
-            [..._tabs, ..._rightTabs].map((c) => c.id),
-          );
-          break;
-        case BroadcastTarget.left:
-          _selectedConnectionIds.addAll(
-            _tabs.map((c) => c.id),
-          );
-          break;
-        case BroadcastTarget.right:
-          _selectedConnectionIds.addAll(
-            _rightTabs.map((c) => c.id),
-          );
-          break;
-        case BroadcastTarget.custom:
-          break;
-      }
+      _broadcastCoordinator.selectPresetTarget(
+        target,
+        leftTabs: _tabs,
+        rightTabs: _rightTabs,
+      );
     });
   }
 
   void _toggleConnectionSelection(String id) {
     setState(() {
-      if (_selectedConnectionIds.contains(id)) {
-        _selectedConnectionIds.remove(id);
-      } else {
-        _selectedConnectionIds.add(id);
-      }
-      _updateBroadcastTargetFromSelection();
+      _broadcastCoordinator.toggleSelection(id);
+      _broadcastCoordinator.updateBroadcastTargetFromSelection(
+        leftTabs: _tabs,
+        rightTabs: _rightTabs,
+      );
     });
   }
 
   void _updateBroadcastTargetFromSelection() {
-    final allIds = [..._tabs, ..._rightTabs].map((c) => c.id).toSet();
-    final leftIds = _tabs.map((c) => c.id).toSet();
-    final rightIds = _rightTabs.map((c) => c.id).toSet();
-
-    if (_selectedConnectionIds.isNotEmpty &&
-        _selectedConnectionIds.length == allIds.length &&
-        _selectedConnectionIds.containsAll(allIds)) {
-      _broadcastTarget = BroadcastTarget.all;
-    } else if (_selectedConnectionIds.isNotEmpty &&
-        _selectedConnectionIds.length == leftIds.length &&
-        _selectedConnectionIds.containsAll(leftIds)) {
-      _broadcastTarget = BroadcastTarget.left;
-    } else if (_selectedConnectionIds.isNotEmpty &&
-        _selectedConnectionIds.length == rightIds.length &&
-        _selectedConnectionIds.containsAll(rightIds)) {
-      _broadcastTarget = BroadcastTarget.right;
-    } else {
-      _broadcastTarget = BroadcastTarget.custom;
-    }
+    _broadcastCoordinator.updateBroadcastTargetFromSelection(
+      leftTabs: _tabs,
+      rightTabs: _rightTabs,
+    );
   }
 
   int get _allConnectedCount => [
@@ -1326,32 +1240,11 @@ class NexusScreenState extends State<NexusScreen> {
   Future<void> _sendBroadcastCommand() async {
     final rawText = _commandInputController.text;
 
-    final List<SshConnection> targetConnections;
-    if (_broadcastTarget == BroadcastTarget.custom) {
-      targetConnections = [..._tabs, ..._rightTabs]
-          .where((c) => c.isConnected && _selectedConnectionIds.contains(c.id))
-          .toList();
-    } else if (!_isSplitView) {
-      targetConnections = _tabs.where((c) => c.isConnected).toList();
-    } else {
-      switch (_broadcastTarget) {
-        case BroadcastTarget.left:
-          targetConnections = _tabs.where((c) => c.isConnected).toList();
-          break;
-        case BroadcastTarget.right:
-          targetConnections = _rightTabs.where((c) => c.isConnected).toList();
-          break;
-        case BroadcastTarget.all:
-          targetConnections = [
-            ..._tabs,
-            ..._rightTabs,
-          ].where((c) => c.isConnected).toList();
-          break;
-        case BroadcastTarget.custom:
-          targetConnections = [];
-          break;
-      }
-    }
+    final targetConnections = _broadcastCoordinator.resolveTargetConnections(
+      leftTabs: _tabs,
+      rightTabs: _rightTabs,
+      isSplitView: _isSplitView,
+    );
 
     if (targetConnections.isEmpty) {
       final targetName = _broadcastTarget == BroadcastTarget.left
@@ -1371,54 +1264,13 @@ class NexusScreenState extends State<NexusScreen> {
       return;
     }
 
-    final isBlank = rawText.trim().isEmpty;
-    final lines = isBlank
-        ? ['']
-        : rawText
-            .split(RegExp(r'\r?\n'))
-            .where((line) => line.trim().isNotEmpty)
-            .toList();
+    await _broadcastCoordinator.executeBroadcast(
+      targetConnections: targetConnections,
+      rawText: rawText,
+    );
 
-    if (lines.isEmpty) return;
-
-    if (!isBlank) {
-      if (_commandHistory.isEmpty || _commandHistory.last != rawText) {
-        _commandHistory.add(rawText);
-      }
-    }
-    _historyIndex = -1;
-    _commandDraft = '';
-
-    setState(() {
-      _isSendingCommands = true;
-    });
-
-    try {
-      for (int i = 0; i < lines.length; i++) {
-        final line = lines[i];
-        // Send line to all target connections and wait for each to complete
-        if (_isParallelMode) {
-          await Future.wait(
-            targetConnections.map(
-              (conn) => conn.sendCommandAndWaitForPrompt(command: line),
-            ),
-          );
-        } else {
-          for (final conn in targetConnections) {
-            await conn.sendCommandAndWaitForPrompt(command: line);
-          }
-        }
-      }
-
-      if (mounted) {
-        _commandInputController.clear();
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSendingCommands = false;
-        });
-      }
+    if (mounted) {
+      _commandInputController.clear();
     }
   }
 
@@ -2463,6 +2315,30 @@ class NexusScreenState extends State<NexusScreen> {
     );
   }
 
+  Widget _buildEnvironmentBadge(SessionEnvironment env) {
+    return Container(
+      key: ValueKey('tab_env_badge_${env.name}'),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: env.color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(
+          color: env.color.withValues(alpha: 0.4),
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        env.label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: env.color,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabItem(
     SshConnection conn,
     int index,
@@ -2569,6 +2445,8 @@ class NexusScreenState extends State<NexusScreen> {
                 );
               },
             ),
+            const SizedBox(width: 6),
+            _buildEnvironmentBadge(conn.environment),
             const SizedBox(width: 8),
             InkWell(
               canRequestFocus: false,
@@ -3129,6 +3007,44 @@ class NexusScreenState extends State<NexusScreen> {
                 ),
         ),
 
+        // Production Guardrail Warning Banner
+        if (_activeConnection?.environment.isProduction == true)
+          Container(
+            key: const ValueKey('prod_guardrail_banner'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFEF4444).withValues(alpha: 0.2),
+                  const Color(0xFFEF4444).withValues(alpha: 0.05),
+                ],
+              ),
+              border: const Border(
+                bottom: BorderSide(
+                  color: Color(0xFFEF4444),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFEF4444)),
+                SizedBox(width: 6),
+                Text(
+                  'PRODUCTION ENVIRONMENT — EXECUTE COMMANDS WITH CAUTION',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // Terminal view
         Expanded(
           child: Stack(
@@ -3504,403 +3420,5 @@ class _TabDragData {
   final bool fromRightPane;
 
   const _TabDragData({required this.connection, required this.fromRightPane});
-}
-
-/// Radar pulse expanding ripple beacon for active session tabs (ping-slow)
-class RadarPulseIndicator extends StatefulWidget {
-  final Color? color;
-  final double size;
-  final NexusPulseStyle? style;
-  final NexusPulseColor? pulseColor;
-
-  const RadarPulseIndicator({
-    super.key,
-    this.color,
-    this.size = 7.5,
-    this.style,
-    this.pulseColor,
-  });
-
-  @override
-  State<RadarPulseIndicator> createState() => _RadarPulseIndicatorState();
-}
-
-class _RadarPulseIndicatorState extends State<RadarPulseIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat();
-    } else {
-      _controller.value = 1.0;
-    }
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.linear);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activeStyle = widget.style ?? SettingsService.instance.nexusPulseStyle;
-    final activeColor = widget.pulseColor ?? SettingsService.instance.nexusPulseColor;
-    return Container(
-      width: 18,
-      height: 18,
-      margin: const EdgeInsets.only(right: 6),
-      alignment: Alignment.center,
-      child: AnimatedBuilder(
-        animation: _animation,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _RadarPulsePainter(
-              progress: _animation.value,
-              color: widget.color ?? activeColor.primary,
-              dotSize: widget.size,
-              style: activeStyle,
-              palette: activeColor,
-            ),
-            size: const Size(18, 18),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _RadarPulsePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  final double dotSize;
-  final NexusPulseStyle style;
-  final NexusPulseColor palette;
-
-  _RadarPulsePainter({
-    required this.progress,
-    required this.color,
-    required this.dotSize,
-    required this.style,
-    required this.palette,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = size.width / 2;
-
-    switch (style) {
-      case NexusPulseStyle.neonSonarWave:
-        _paintNeonSonarWave(canvas, center, maxRadius);
-        break;
-      case NexusPulseStyle.breathingGlowCore:
-        _paintBreathingGlowCore(canvas, center, maxRadius);
-        break;
-      case NexusPulseStyle.telemetryHeartbeat:
-        _paintTelemetryHeartbeat(canvas, center, maxRadius);
-        break;
-      case NexusPulseStyle.classicRadar:
-        _paintClassicRadar(canvas, center, maxRadius);
-        break;
-    }
-  }
-
-  void _paintNeonSonarWave(Canvas canvas, Offset center, double maxRadius) {
-    final primary = palette.primary;
-    final secondary = palette.secondary;
-    final baseRadius = dotSize / 2;
-
-    // Ring 1 (phase 0)
-    final t1 = progress;
-    final r1 = baseRadius + (t1 * (maxRadius - baseRadius));
-    final op1 = ((1.0 - t1) * 0.85).clamp(0.0, 1.0);
-    final color1 = Color.lerp(primary, secondary, t1)!;
-    final ringPaint1 = Paint()
-      ..color = color1.withValues(alpha: op1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    canvas.drawCircle(center, r1, ringPaint1);
-
-    // Ring 2 (phase 0.5 offset)
-    final t2 = (progress + 0.5) % 1.0;
-    final r2 = baseRadius + (t2 * (maxRadius - baseRadius));
-    final op2 = ((1.0 - t2) * 0.85).clamp(0.0, 1.0);
-    final color2 = Color.lerp(primary, secondary, t2)!;
-    final ringPaint2 = Paint()
-      ..color = color2.withValues(alpha: op2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    canvas.drawCircle(center, r2, ringPaint2);
-
-    // Center Core: primary with subtle secondary inner ring
-    final corePaint = Paint()
-      ..color = primary
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, baseRadius, corePaint);
-
-    final innerHighlight = Paint()
-      ..color = secondary.withValues(alpha: 0.6)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, baseRadius * 0.45, innerHighlight);
-  }
-
-  void _paintBreathingGlowCore(Canvas canvas, Offset center, double maxRadius) {
-    final darkColor = palette.dark;
-    final accentColor = palette.accent;
-
-    // Smooth sinusoidal breath (0.0 -> 1.0 -> 0.0)
-    final breath = 0.5 + 0.5 * math.sin((progress * 2 * math.pi) - (math.pi / 2));
-    final coreRadius = (dotSize / 2) * (0.85 + (0.35 * breath));
-    final dynamicColor = Color.lerp(darkColor, accentColor, breath)!;
-
-    // Outer soft aura / halo bloom
-    final haloRadius = coreRadius + (breath * (maxRadius - coreRadius));
-    final haloPaint = Paint()
-      ..color = dynamicColor.withValues(alpha: 0.18 + (0.18 * breath))
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, haloRadius, haloPaint);
-
-    // Secondary subtle aura ring
-    final auraRingPaint = Paint()
-      ..color = dynamicColor.withValues(alpha: (0.45 * (1.0 - breath)).clamp(0.0, 1.0))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    canvas.drawCircle(center, haloRadius * 0.9, auraRingPaint);
-
-    // Glowing Core Dot
-    final corePaint = Paint()
-      ..color = dynamicColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, coreRadius, corePaint);
-  }
-
-  void _paintTelemetryHeartbeat(Canvas canvas, Offset center, double maxRadius) {
-    final primary = palette.primary;
-    final secondary = palette.secondary;
-    final baseRadius = dotSize / 2;
-
-    double coreRadius = baseRadius;
-    Color coreColor = primary;
-
-    if (progress < 0.22) {
-      // Beat 1: First burst
-      final t = progress / 0.22;
-      coreRadius = baseRadius * (1.0 + (0.28 * math.sin(t * math.pi)));
-      final waveRadius = baseRadius + (t * (maxRadius * 0.7 - baseRadius));
-      final ringPaint = Paint()
-        ..color = primary.withValues(alpha: (1.0 - t) * 0.75)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4;
-      canvas.drawCircle(center, waveRadius, ringPaint);
-    } else if (progress >= 0.22 && progress < 0.58) {
-      // Beat 2: Larger secondary burst with secondary shift
-      final t = (progress - 0.22) / 0.36;
-      coreRadius = baseRadius * (1.0 + (0.35 * math.sin(t * math.pi)));
-      coreColor = Color.lerp(primary, secondary, t)!;
-      final waveRadius = baseRadius + (t * (maxRadius - baseRadius));
-      final ringPaint = Paint()
-        ..color = secondary.withValues(alpha: (1.0 - t) * 0.9)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6;
-      canvas.drawCircle(center, waveRadius, ringPaint);
-    } else {
-      // Rest period
-      coreRadius = baseRadius;
-      coreColor = primary;
-    }
-
-    final corePaint = Paint()
-      ..color = coreColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, coreRadius, corePaint);
-  }
-
-  void _paintClassicRadar(Canvas canvas, Offset center, double maxRadius) {
-    final ringRadius = (dotSize / 2) + (progress * (maxRadius - (dotSize / 2)));
-    final ringOpacity = (1.0 - progress).clamp(0.0, 1.0) * 0.7;
-    final ringPaint = Paint()
-      ..color = color.withValues(alpha: ringOpacity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, ringRadius, ringPaint);
-
-    final dotPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, dotSize / 2, dotPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarPulsePainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.dotSize != dotSize ||
-        oldDelegate.style != style ||
-        oldDelegate.palette != palette;
-  }
-}
-
-/// Breathing amber glow on safety broadcast badge (warning-pulse)
-class BreathingAmberBadge extends StatefulWidget {
-  final int count;
-
-  const BreathingAmberBadge({
-    super.key,
-    required this.count,
-  });
-
-  @override
-  State<BreathingAmberBadge> createState() => _BreathingAmberBadgeState();
-}
-
-class _BreathingAmberBadgeState extends State<BreathingAmberBadge>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.value = 1.0;
-    }
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = AppTheme.activePalette;
-    final warningColor = palette.warningColor;
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        final glowOpacity = 0.25 + (_animation.value * 0.55);
-        final borderOpacity = 0.45 + (_animation.value * 0.45);
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-          decoration: BoxDecoration(
-            color: warningColor.withValues(alpha: 0.12 + (_animation.value * 0.08)),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: warningColor.withValues(alpha: borderOpacity),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: warningColor.withValues(alpha: glowOpacity * 0.4),
-                blurRadius: 8 + (_animation.value * 4),
-                spreadRadius: _animation.value * 1.5,
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: warningColor,
-                size: 13,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Simultaneous execution: ${widget.count} hosts',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontFamily: 'Courier New',
-                  fontWeight: FontWeight.bold,
-                  color: warningColor,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Cyan pulse dot indicator for parallel execution mode
-class CyanPulseDot extends StatefulWidget {
-  const CyanPulseDot({super.key});
-
-  @override
-  State<CyanPulseDot> createState() => _CyanPulseDotState();
-}
-
-class _CyanPulseDotState extends State<CyanPulseDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.value = 1.0;
-    }
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        final glow = 0.3 + (_animation.value * 0.6);
-        return Container(
-          width: 6,
-          height: 6,
-          margin: const EdgeInsets.only(right: 5),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppTheme.primaryColor.withValues(alpha: glow),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryColor.withValues(alpha: glow * 0.6),
-                blurRadius: 4,
-                spreadRadius: _animation.value * 1.2,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }
 

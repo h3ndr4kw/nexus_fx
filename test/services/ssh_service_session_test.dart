@@ -230,5 +230,65 @@ void main() {
       expect(() => conn.write('\x7f'), returnsNormally);
       expect(writtenData, '\x7f');
     });
+
+    test('isShellPrompt accurately detects various modern shell prompts and complex escape sequences', () {
+      final conn = SshConnection(
+        id: 'sess_prompt_test',
+        host: '10.0.0.1',
+        label: 'TEST',
+      );
+
+      // Standard Unix / Root / Windows / Routers
+      expect(conn.isShellPrompt('user@host:~\$ '), isTrue);
+      expect(conn.isShellPrompt('root@server:~# '), isTrue);
+      expect(conn.isShellPrompt('PS C:\\Dev\\projects> '), isTrue);
+      expect(conn.isShellPrompt('C:\\Users\\Admin>'), isTrue);
+      expect(conn.isShellPrompt('Router# '), isTrue);
+      expect(conn.isShellPrompt('[admin@MikroTik] > '), isTrue);
+
+      // OSC titles and Bracketed Paste
+      expect(conn.isShellPrompt('\x1b]0;user@host: ~\x07user@host:~\$ '), isTrue);
+      expect(conn.isShellPrompt('user@host:~\$ \x1b]0;user@host: ~\x07'), isTrue);
+      expect(conn.isShellPrompt('\x1b[?2004huser@host:~\$ '), isTrue);
+
+      // Starship & Powerlevel10k & Oh-My-Zsh prompts
+      expect(conn.isShellPrompt('user on main via \u{e718} v18.0.0 \n❯ '), isTrue);
+      expect(conn.isShellPrompt('\x1b[38;5;2m~/myproject\x1b[0m \x1b[38;5;4m▶\x1b[0m '), isTrue);
+      expect(conn.isShellPrompt('\x1b[01;32m➜\x1b[00m \x1b[01;34mrepo\x1b[00m \x1b[01;31mgit:(main)\x1b[00m '), isTrue);
+      expect(conn.isShellPrompt('\x1b[01;32m➜\x1b[00m \x1b[01;34m~/\x1b[00m '), isTrue);
+
+      // Shell Integration (FTCS / OSC 133)
+      expect(conn.isShellPrompt('\x1b]133;A\x1b\\user@host:~\$ \x1b]133;B\x1b\\'), isTrue);
+
+      // Password and non-prompts should return false
+      expect(conn.isShellPrompt('user@host password: '), isFalse);
+      expect(conn.isShellPrompt('Password for admin:'), isFalse);
+      expect(conn.isShellPrompt('Enter passphrase: '), isFalse);
+      expect(conn.isShellPrompt('Running apt-get update...'), isFalse);
+    });
+
+    test('sendCommandAndWaitForPrompt on local shell finishes immediately without 20s hang', () async {
+      final localProfile = SessionProfile(
+        id: 'sess_local_cmd',
+        name: 'LOCAL',
+        protocol: SessionProtocol.local,
+        modifiedAt: DateTime.now(),
+      );
+
+      final conn = SshConnection.fromSessionProfile(
+        localProfile,
+        route: ResolvedSshRoute(targetSession: localProfile),
+      );
+      conn.setConnectedForTesting(true);
+
+      final stopwatch = Stopwatch()..start();
+      final result = await conn.sendCommandAndWaitForPrompt(
+        command: 'echo "hello from nxnb"',
+      );
+      stopwatch.stop();
+
+      expect(result, isTrue);
+      expect(stopwatch.elapsedMilliseconds, lessThan(500));
+    });
   });
 }

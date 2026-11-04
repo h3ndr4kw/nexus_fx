@@ -100,6 +100,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   late final TextEditingController _scrollbackController;
 
   SessionProtocol _protocol = SessionProtocol.ssh;
+  SessionEnvironment _environment = SessionEnvironment.dev;
   AuthMethod _authMethod = AuthMethod.password;
   JumpHostMode _jumpHostMode = JumpHostMode.direct;
   String? _selectedJumpSessionId;
@@ -116,6 +117,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     final s = widget.initialSession;
     _parentFolderId = s?.parentId ?? widget.parentFolderId;
     _protocol = s?.protocol ?? SessionProtocol.ssh;
+    _environment = s?.environment ?? SessionEnvironment.dev;
     _authMethod = s?.authMethod ?? AuthMethod.password;
     _jumpHostMode = s?.jumpHostMode ?? JumpHostMode.direct;
     _selectedJumpSessionId = s?.jumpSessionId;
@@ -215,6 +217,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       parentId: parentId,
       name: name,
       protocol: _protocol,
+      environment: _environment,
       host: _hostController.text.trim(),
       port: int.tryParse(_portController.text.trim()) ?? 22,
       fallbackHost: _fallbackHostController.text.trim().isEmpty ? null : _fallbackHostController.text.trim(),
@@ -509,6 +512,34 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const SizedBox(
+                width: 110,
+                child: Text('Environment:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ),
+              Expanded(
+                child: FuzzySearchableDropdown<SessionEnvironment>(
+                  items: SessionEnvironment.values,
+                  selectedItem: _environment,
+                  itemLabel: (env) {
+                    switch (env) {
+                      case SessionEnvironment.dev:
+                        return 'DEV (Development / Sandbox)';
+                      case SessionEnvironment.staging:
+                        return 'STAGING (Pre-production / QA)';
+                      case SessionEnvironment.prod:
+                        return 'PROD (Production / Live Critical)';
+                    }
+                  },
+                  onChanged: (val) {
+                    if (val != null) setState(() => _environment = val);
+                  },
+                ),
+              ),
+            ],
+          ),
           if (_protocol == SessionProtocol.ssh) ...[
             const SizedBox(height: 10),
             _buildTextField('Host:', _hostController, hintText: '192.168.1.100 or domain'),
@@ -521,16 +552,19 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           _buildTextField('Description:', _descriptionController, maxLines: 2),
           const SizedBox(height: 16),
           _buildSectionHeader('Reconnect'),
-          CheckboxListTile(
-            title: const Text(
-              'Reconnect automatically if connection is terminated unexpectedly',
-              style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+          Material(
+            type: MaterialType.transparency,
+            child: CheckboxListTile(
+              title: const Text(
+                'Reconnect automatically if connection is terminated unexpectedly',
+                style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+              ),
+              value: _autoReconnect,
+              onChanged: (val) => setState(() => _autoReconnect = val ?? false),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
             ),
-            value: _autoReconnect,
-            onChanged: (val) => setState(() => _autoReconnect = val ?? false),
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            controlAffinity: ListTileControlAffinity.leading,
           ),
           if (_autoReconnect) ...[
             Row(
@@ -752,16 +786,19 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Session Logging'),
-        CheckboxListTile(
-          title: const Text(
-            'Automatically log terminal session output to file upon connection',
-            style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+        Material(
+          type: MaterialType.transparency,
+          child: CheckboxListTile(
+            title: const Text(
+              'Automatically log terminal session output to file upon connection',
+              style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+            ),
+            value: _enableLogging,
+            onChanged: (val) => setState(() => _enableLogging = val ?? false),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
           ),
-          value: _enableLogging,
-          onChanged: (val) => setState(() => _enableLogging = val ?? false),
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          controlAffinity: ListTileControlAffinity.leading,
         ),
       ],
     );

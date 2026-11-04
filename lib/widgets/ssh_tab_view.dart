@@ -175,7 +175,9 @@ class SshTabViewState extends State<SshTabView> {
 
   void _onSettingsChanged() {
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _fontSize = SettingsService.instance.nexusTerminalFontSize;
+      });
     }
   }
 
@@ -778,8 +780,10 @@ class SshTabViewState extends State<SshTabView> {
       palette: AppTheme.activePalette,
     );
 
-    return Stack(
-      children: [
+    return Container(
+      color: terminalTheme.background,
+      child: Stack(
+        children: [
         Listener(
           onPointerSignal: _handlePointerSignal,
           child: GestureDetector(
@@ -883,6 +887,7 @@ class SshTabViewState extends State<SshTabView> {
             ),
           ),
       ],
-    );
+    ),
+  );
   }
 }

@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/Rust-Native_FFI-black?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-49%20Passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/Tests-97%20Passed-brightgreen)](test/)
 
 ---
 

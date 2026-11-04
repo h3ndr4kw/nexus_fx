@@ -1,0 +1,70 @@
+name: NexusFX CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build & Test Windows Desktop
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cargo Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            native/sftp_engine/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Compile Native Rust SFTP Engine (FFI DLL)
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\build_native.ps1
+
+      - name: Static Code Analysis
+        run: flutter analyze
+
+      - name: Run Unit & Widget Tests
+        run: flutter test
+
+      - name: Build Windows Desktop Release Executable
+        run: flutter build windows --release
+
+      - name: Copy sftp_engine.dll to Release Bundle
+        run: |
+          Copy-Item -Path "native\sftp_engine\target\release\sftp_engine.dll" -Destination "build\windows\x64\runner\Release\" -Force
+
+      - name: Compress Release Bundle
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "nexus_fx-windows-x64.zip" -Force
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus_fx-windows-x64
+          path: nexus_fx-windows-x64.zip
+          retention-days: 14

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/nexus_tool.dart';
 import '../models/session_models.dart';
 import '../theme/app_theme.dart';
 import '../services/session_manager_service.dart';
@@ -12,6 +13,8 @@ enum CommandAction {
   toggleSplitView,
   setTheme,
   setFontSize,
+  openCustomTool,
+  executeCustomToolCommand,
 }
 
 class CommandItem {
@@ -22,6 +25,8 @@ class CommandItem {
   final String? badge;
   final Color? badgeColor;
   final SessionProfile? session;
+  final String? customToolId;
+  final VoidCallback? onCustomExecute;
 
   const CommandItem({
     required this.label,
@@ -31,17 +36,25 @@ class CommandItem {
     this.badge,
     this.badgeColor,
     this.session,
+    this.customToolId,
+    this.onCustomExecute,
   });
 }
 
 class CommandPalette extends StatefulWidget {
   final void Function(CommandItem item) onSelect;
   final bool sessionsOnly;
+  final List<NexusTool> customTools;
+  final NexusToolContext? toolContext;
+  final SessionManagerService? sessionManager;
 
   const CommandPalette({
     super.key,
     required this.onSelect,
     this.sessionsOnly = false,
+    this.customTools = const [],
+    this.toolContext,
+    this.sessionManager,
   });
 
   @override
@@ -71,7 +84,7 @@ class _CommandPaletteState extends State<CommandPalette> {
     final list = <CommandItem>[];
 
     // Sessions from SessionManagerService
-    final sessions = SessionManagerService.instance.sessions;
+    final sessions = (widget.sessionManager ?? SessionManagerService.instance).sessions;
     for (final s in sessions) {
       final isLocal = s.protocol == SessionProtocol.local;
       list.add(CommandItem(
@@ -110,6 +123,34 @@ class _CommandPaletteState extends State<CommandPalette> {
         icon: Icons.menu_book_outlined,
         action: CommandAction.toggleRunbookSidebar,
       ));
+
+      // Custom Tools & Plugin Commands
+      for (final tool in widget.customTools) {
+        list.add(CommandItem(
+          label: 'Open Tool: ${tool.title}',
+          subtitle: tool.subtitle ?? 'Switch to ${tool.title} workspace',
+          icon: tool.icon,
+          action: CommandAction.openCustomTool,
+          badge: 'TOOL',
+          badgeColor: AppTheme.accentPrimary,
+          customToolId: tool.id,
+        ));
+
+        if (widget.toolContext != null) {
+          for (final cmd in tool.buildCommands(widget.toolContext!)) {
+            list.add(CommandItem(
+              label: cmd.label,
+              subtitle: cmd.subtitle,
+              icon: cmd.icon,
+              action: CommandAction.executeCustomToolCommand,
+              badge: cmd.badge ?? tool.title.toUpperCase(),
+              badgeColor: cmd.badgeColor ?? AppTheme.accentPrimary,
+              customToolId: tool.id,
+              onCustomExecute: () => cmd.onExecute(widget.toolContext!),
+            ));
+          }
+        }
+      }
 
       // Theme commands
       for (final theme in AppThemeType.values) {

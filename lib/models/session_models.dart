@@ -1,9 +1,40 @@
-import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'ssh_tunnel_models.dart';
+import '../services/crypto_vault_service.dart';
 
 enum SessionProtocol {
   ssh,
   local,
+}
+
+enum SessionEnvironment {
+  dev,
+  staging,
+  prod;
+
+  String get label {
+    switch (this) {
+      case SessionEnvironment.dev:
+        return 'DEV';
+      case SessionEnvironment.staging:
+        return 'STAGING';
+      case SessionEnvironment.prod:
+        return 'PROD';
+    }
+  }
+
+  bool get isProduction => this == SessionEnvironment.prod;
+
+  Color get color {
+    switch (this) {
+      case SessionEnvironment.dev:
+        return const Color(0xFF06B6D4); // Cyan
+      case SessionEnvironment.staging:
+        return const Color(0xFFF59E0B); // Amber
+      case SessionEnvironment.prod:
+        return const Color(0xFFEF4444); // Crimson Red
+    }
+  }
 }
 
 enum AuthMethod {
@@ -17,27 +48,11 @@ enum JumpHostMode {
   customJumpHost,
 }
 
-/// Helper for reversible obfuscation so saved passwords are not raw plain text.
+/// Secure credential encoder/decoder delegating to AES-256 CryptoVaultService
+/// with seamless backward-compatible decoding of legacy XOR payloads.
 class _Obfuscator {
-  static const int _key = 0x5A;
-
-  static String encode(String raw) {
-    if (raw.isEmpty) return '';
-    final bytes = utf8.encode(raw);
-    final xored = bytes.map((b) => b ^ _key).toList();
-    return base64.encode(xored);
-  }
-
-  static String decode(String encoded) {
-    if (encoded.isEmpty) return '';
-    try {
-      final bytes = base64.decode(encoded);
-      final unxored = bytes.map((b) => b ^ _key).toList();
-      return utf8.decode(unxored);
-    } catch (_) {
-      return encoded;
-    }
-  }
+  static String encode(String raw) => CryptoVaultService.instance.encrypt(raw);
+  static String decode(String encoded) => CryptoVaultService.instance.decrypt(encoded);
 }
 
 class SessionFolder {
@@ -100,6 +115,7 @@ class SessionProfile {
   final String? parentId;
   final String name;
   final SessionProtocol protocol;
+  final SessionEnvironment environment;
 
   // Connection
   final String host;
@@ -145,6 +161,7 @@ class SessionProfile {
     this.parentId,
     required this.name,
     this.protocol = SessionProtocol.ssh,
+    this.environment = SessionEnvironment.dev,
     this.host = '',
     this.port = 22,
     this.fallbackHost,
@@ -179,6 +196,7 @@ class SessionProfile {
     bool clearParentId = false,
     String? name,
     SessionProtocol? protocol,
+    SessionEnvironment? environment,
     String? host,
     int? port,
     String? fallbackHost,
@@ -213,6 +231,7 @@ class SessionProfile {
       parentId: clearParentId ? null : (parentId ?? this.parentId),
       name: name ?? this.name,
       protocol: protocol ?? this.protocol,
+      environment: environment ?? this.environment,
       host: host ?? this.host,
       port: port ?? this.port,
       fallbackHost: clearFallbackHost ? null : (fallbackHost ?? this.fallbackHost),
@@ -248,6 +267,7 @@ class SessionProfile {
       'parentId': parentId,
       'name': name,
       'protocol': protocol.name,
+      'environment': environment.name,
       'host': host,
       'port': port,
       'fallbackHost': fallbackHost,
@@ -286,6 +306,12 @@ class SessionProfile {
         (e) => e.name == json['protocol'],
         orElse: () => SessionProtocol.ssh,
       ),
+      environment: json['environment'] != null
+          ? SessionEnvironment.values.firstWhere(
+              (e) => e.name == json['environment'],
+              orElse: () => SessionEnvironment.dev,
+            )
+          : SessionEnvironment.dev,
       host: json['host'] as String? ?? '',
       port: (json['port'] as num?)?.toInt() ?? 22,
       fallbackHost: json['fallbackHost'] as String?,

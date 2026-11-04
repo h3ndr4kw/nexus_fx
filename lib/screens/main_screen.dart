@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/file_explorer_models.dart';
+import '../models/nexus_tool.dart';
 import '../models/session_models.dart';
+import '../services/crypto_vault_service.dart';
+import '../services/nexus_tool_registry.dart';
 import '../services/session_manager_service.dart';
 import '../services/settings_service.dart';
 import '../services/window_state_service.dart';
@@ -29,11 +32,17 @@ enum AppTab {
 
 class MainScreen extends StatefulWidget {
   final SessionManagerService? sessionManager;
+  final NexusToolRegistry? toolRegistry;
+  final List<NexusTool>? customTools;
+  final String appTitle;
   final bool suppressStartupDialog;
 
   const MainScreen({
     super.key,
     this.sessionManager,
+    this.toolRegistry,
+    this.customTools,
+    this.appTitle = 'NexusFX',
     this.suppressStartupDialog = false,
   });
 
@@ -43,14 +52,21 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   late final SessionManagerService _sessionManager;
+  late final NexusToolRegistry _toolRegistry;
   AppTab _selectedTab = AppTab.sessions;
   AppTab _previousTab = AppTab.sessions;
+  String? _selectedCustomToolId;
+  String? _previousCustomToolId;
   bool _isSidebarVisible = true;
   bool _isRightSidebarVisible = false;
   final GlobalKey<NexusScreenState> _nexusKey = GlobalKey<NexusScreenState>();
   final FocusNode _sidebarFocusNode = FocusNode();
   int _sidebarIndex = 0;
   bool _isCommandPaletteOpen = false;
+
+  List<NexusTool> get _customTools => _toolRegistry.tools;
+  bool get _isNexusActive => _selectedCustomToolId == null && _selectedTab == AppTab.nexus;
+  bool get _isFileExplorerActive => _selectedCustomToolId == null && _selectedTab == AppTab.fileExplorer;
 
   static const List<AppTab> _sidebarTabs = [
     AppTab.sessions,
@@ -127,6 +143,11 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _sessionManager = widget.sessionManager ?? SessionManagerService.instance;
+    _toolRegistry = widget.toolRegistry ?? NexusToolRegistry.instance;
+    if (widget.customTools != null && widget.customTools!.isNotEmpty) {
+      _toolRegistry.registerAll(widget.customTools!);
+    }
+    _toolRegistry.addListener(_onToolsChanged);
     final savedLeftWidth = SettingsService.instance.leftSidebarWidth;
     if (savedLeftWidth >= _minCompactSidebarWidth && savedLeftWidth <= _maxSidebarWidth) {
       _sidebarWidth = savedLeftWidth;
@@ -142,8 +163,46 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _onToolsChanged() {
+    if (!mounted) return;
+    setState(() {
+      if (_selectedCustomToolId != null &&
+          _toolRegistry.getToolById(_selectedCustomToolId!) == null) {
+        _selectedCustomToolId = null;
+        _selectedTab = AppTab.sessions;
+      }
+    });
+  }
+
+  NexusToolContext _buildToolContext() {
+    return NexusToolContext(
+      sessionManager: _sessionManager,
+      settings: SettingsService.instance,
+      cryptoVault: CryptoVaultService.instance,
+      tabController: _nexusKey.currentState?.tabController,
+      broadcastCoordinator: _nexusKey.currentState?.broadcastCoordinator,
+      connectSessionInTerminal: (profile, {toRightPane = false}) {
+        _selectTab(AppTab.nexus, 1);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _nexusKey.currentState?.connectSessionProfile(profile, toRightPane: toRightPane);
+        });
+      },
+      openSessionInFileExplorer: _openSessionInFileExplorer,
+      navigateToTerminal: () => _selectTab(AppTab.nexus, 1),
+      navigateToSessions: () => _selectTab(AppTab.sessions, 0),
+      navigateToFileExplorer: () => _selectTab(AppTab.fileExplorer, 2),
+      navigateToTool: (toolId) {
+        final idx = _customTools.indexWhere((t) => t.id == toolId);
+        if (idx != -1) {
+          _selectCustomTool(_customTools[idx], _sidebarTabs.length + idx);
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _toolRegistry.removeListener(_onToolsChanged);
     _sashIdleTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _sidebarFocusNode.dispose();
@@ -184,7 +243,7 @@ class _MainScreenState extends State<MainScreen> {
 
     // Ctrl+Shift+B: Toggle Right Sidebar (Nexus Runbook)
     if (isCtrl && isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyB) {
-      if (_selectedTab == AppTab.nexus) {
+      if (_isNexusActive) {
         _toggleRightSidebar();
         return true;
       }
@@ -279,7 +338,7 @@ class _MainScreenState extends State<MainScreen> {
 
     // Ctrl+Shift+Space: Toggle Command Pane in Nexus
     if (isCtrl && isShift && !isAlt && isSpace) {
-      if (_selectedTab != AppTab.nexus) {
+      if (!_isNexusActive) {
         _selectTab(AppTab.nexus, 1);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.showCommandPane();
@@ -291,7 +350,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     // File Explorer Tab shortcuts: Ctrl+T (New Tab), Ctrl+W (Close Tab), Ctrl+Tab (Next/Prev Tab)
-    if (_selectedTab == AppTab.fileExplorer) {
+    if (_isFileExplorerActive) {
       if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyT) {
         _promptNewFileExplorerTab();
         return true;
@@ -331,13 +390,14 @@ class _MainScreenState extends State<MainScreen> {
           event.logicalKey == LogicalKeyboardKey.keyK;
       final isDown = event.logicalKey == LogicalKeyboardKey.arrowDown ||
           event.logicalKey == LogicalKeyboardKey.keyJ;
+      final totalSidebarItems = _sidebarTabs.length + _customTools.length;
 
-      if (!isCtrl && !isShift && !isAlt && (isUp || isDown)) {
+      if (!isCtrl && !isShift && !isAlt && (isUp || isDown) && totalSidebarItems > 0) {
         setState(() {
           if (isDown) {
-            _sidebarIndex = (_sidebarIndex + 1) % _sidebarTabs.length;
+            _sidebarIndex = (_sidebarIndex + 1) % totalSidebarItems;
           } else {
-            _sidebarIndex = (_sidebarIndex - 1 + _sidebarTabs.length) % _sidebarTabs.length;
+            _sidebarIndex = (_sidebarIndex - 1 + totalSidebarItems) % totalSidebarItems;
           }
         });
         return true;
@@ -347,7 +407,14 @@ class _MainScreenState extends State<MainScreen> {
           event.logicalKey == LogicalKeyboardKey.space ||
           event.logicalKey == LogicalKeyboardKey.arrowRight ||
           event.logicalKey == LogicalKeyboardKey.keyL) {
-        _selectTab(_sidebarTabs[_sidebarIndex], _sidebarIndex);
+        if (_sidebarIndex < _sidebarTabs.length) {
+          _selectTab(_sidebarTabs[_sidebarIndex], _sidebarIndex);
+        } else {
+          final toolIdx = _sidebarIndex - _sidebarTabs.length;
+          if (toolIdx >= 0 && toolIdx < _customTools.length) {
+            _selectCustomTool(_customTools[toolIdx], _sidebarIndex);
+          }
+        }
         _sidebarFocusNode.unfocus();
         return true;
       }
@@ -363,6 +430,8 @@ class _MainScreenState extends State<MainScreen> {
 
   void _selectTab(AppTab tab, int index) {
     setState(() {
+      _selectedCustomToolId = null;
+      _previousCustomToolId = null;
       _selectedTab = tab;
       _previousTab = tab;
       _sidebarIndex = index;
@@ -374,12 +443,26 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _selectCustomTool(NexusTool tool, int sidebarIndex) {
+    setState(() {
+      _selectedCustomToolId = tool.id;
+      _previousCustomToolId = tool.id;
+      if (_selectedTab == AppTab.settings) {
+        _selectedTab = _previousTab;
+      }
+      _sidebarIndex = sidebarIndex;
+    });
+  }
+
   void _toggleSettings() {
     setState(() {
       if (_selectedTab == AppTab.settings) {
         _selectedTab = _previousTab;
+        _selectedCustomToolId = _previousCustomToolId;
       } else {
         _previousTab = _selectedTab;
+        _previousCustomToolId = _selectedCustomToolId;
+        _selectedCustomToolId = null;
         _selectedTab = AppTab.settings;
       }
     });
@@ -395,7 +478,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _toggleRightSidebar() {
-    if (_selectedTab == AppTab.nexus) {
+    if (_isNexusActive) {
       _nexusKey.currentState?.toggleRightSidebar();
     }
   }
@@ -403,8 +486,13 @@ class _MainScreenState extends State<MainScreen> {
   void _focusSidebar() {
     setState(() {
       _isSidebarVisible = true;
-      final idx = _sidebarTabs.indexOf(_selectedTab);
-      _sidebarIndex = idx >= 0 ? idx : 0;
+      if (_selectedCustomToolId != null) {
+        final toolIdx = _customTools.indexWhere((t) => t.id == _selectedCustomToolId);
+        _sidebarIndex = toolIdx >= 0 ? _sidebarTabs.length + toolIdx : 0;
+      } else {
+        final idx = _sidebarTabs.indexOf(_selectedTab);
+        _sidebarIndex = idx >= 0 ? idx : 0;
+      }
     });
     _sidebarFocusNode.requestFocus();
   }
@@ -418,10 +506,10 @@ class _MainScreenState extends State<MainScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.bgSurface,
-        title: const Text('Exit NexusFX?'),
-        content: const Text(
-          'Are you sure you want to exit NexusFX? Any running terminal sessions will be terminated.',
-          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        title: Text('Exit ${widget.appTitle}?'),
+        content: Text(
+          'Are you sure you want to exit ${widget.appTitle}? Any running terminal sessions will be terminated.',
+          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
@@ -456,6 +544,9 @@ class _MainScreenState extends State<MainScreen> {
       barrierColor: Colors.transparent,
       builder: (ctx) => CommandPalette(
         sessionsOnly: sessionsOnly,
+        sessionManager: _sessionManager,
+        customTools: _customTools,
+        toolContext: _buildToolContext(),
         onSelect: _handleCommandAction,
       ),
     ).then((_) {
@@ -471,7 +562,7 @@ class _MainScreenState extends State<MainScreen> {
     switch (item.action) {
       case CommandAction.connectSession:
         if (item.session != null) {
-          setState(() => _selectedTab = AppTab.nexus);
+          _selectTab(AppTab.nexus, 1);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _nexusKey.currentState?.connectSessionProfile(item.session!);
           });
@@ -481,19 +572,19 @@ class _MainScreenState extends State<MainScreen> {
         _openStartupSessionsDialog();
         break;
       case CommandAction.toggleSplitView:
-        setState(() => _selectedTab = AppTab.nexus);
+        _selectTab(AppTab.nexus, 1);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleSplitView();
         });
         break;
       case CommandAction.toggleCommandPane:
-        setState(() => _selectedTab = AppTab.nexus);
+        _selectTab(AppTab.nexus, 1);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleCommandPane();
         });
         break;
       case CommandAction.toggleRunbookSidebar:
-        setState(() => _selectedTab = AppTab.nexus);
+        _selectTab(AppTab.nexus, 1);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleRightSidebar();
         });
@@ -501,6 +592,17 @@ class _MainScreenState extends State<MainScreen> {
       case CommandAction.setTheme:
         break;
       case CommandAction.setFontSize:
+        break;
+      case CommandAction.openCustomTool:
+        if (item.customToolId != null) {
+          final idx = _customTools.indexWhere((t) => t.id == item.customToolId);
+          if (idx != -1) {
+            _selectCustomTool(_customTools[idx], _sidebarTabs.length + idx);
+          }
+        }
+        break;
+      case CommandAction.executeCustomToolCommand:
+        item.onCustomExecute?.call();
         break;
     }
   }
@@ -514,7 +616,7 @@ class _MainScreenState extends State<MainScreen> {
         SettingsService.instance.setShowSessionDialogAtStartup(val);
       },
       onConnectSessions: (sessions, {openInRightSplit = false}) {
-        setState(() => _selectedTab = AppTab.nexus);
+        _selectTab(AppTab.nexus, 1);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           for (final s in sessions) {
             _nexusKey.currentState?.connectSessionProfile(s, toRightPane: openInRightSplit);
@@ -548,6 +650,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _openSftpTab(ExplorerNodeTarget target) {
     setState(() {
+      _selectedCustomToolId = null;
       _selectedTab = AppTab.fileExplorer;
       final newTab = _FileExplorerTab(
         id: 'fe_tab_${_nextFileExplorerTabId++}',
@@ -767,7 +870,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isNexusWithRightSidebar = _selectedTab == AppTab.nexus && _isRightSidebarVisible;
+    final isNexusWithRightSidebar = _isNexusActive && _isRightSidebarVisible;
 
     return Scaffold(
       backgroundColor: AppTheme.activePalette.background,
@@ -797,6 +900,18 @@ class _MainScreenState extends State<MainScreen> {
                               top: 3,
                               bottom: 3,
                             ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: _isMainWidgetSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: AppTheme.accentPrimary.withValues(alpha: 0.08),
+                                        blurRadius: 10,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
                             child: Listener(
                               behavior: HitTestBehavior.translucent,
                               onPointerDown: (_) => _onSelectMainWidget(),
@@ -806,7 +921,9 @@ class _MainScreenState extends State<MainScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                   side: BorderSide(
-                                    color: AppTheme.borderSubtle.withValues(alpha: 0.6),
+                                    color: _isMainWidgetSelected
+                                        ? AppTheme.accentPrimary.withValues(alpha: 0.45)
+                                        : AppTheme.borderSubtle.withValues(alpha: 0.6),
                                     width: 1,
                                   ),
                                 ),
@@ -833,9 +950,9 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           const Icon(Icons.bolt, size: 18, color: AppTheme.accentPrimary),
           const SizedBox(width: 6),
-          const Text(
-            'NexusFX',
-            style: TextStyle(
+          Text(
+            widget.appTitle,
+            style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
@@ -868,7 +985,7 @@ class _MainScreenState extends State<MainScreen> {
             isSidebarVisible: _isSidebarVisible,
             onTap: _toggleSidebar,
           ),
-          if (_selectedTab == AppTab.nexus) ...[
+          if (_isNexusActive) ...[
             const SizedBox(width: 4),
             RightSidebarToggleButton(
               isSidebarVisible: _isRightSidebarVisible,
@@ -889,6 +1006,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildSidebar() {
     final isCompact = _sidebarWidth <= 70;
+    final tools = _customTools;
     return MouseRegion(
       onHover: (_) => _onSidebarOrSashPointer(),
       child: Listener(
@@ -916,6 +1034,25 @@ class _MainScreenState extends State<MainScreen> {
                   _buildSidebarNavItem(AppTab.sessions, 'Sessions', Icons.dns_outlined, 0, isCompact),
                   _buildSidebarNavItem(AppTab.nexus, 'Nexus', Icons.terminal, 1, isCompact),
                   _buildSidebarNavItem(AppTab.fileExplorer, 'File Explorer', Icons.folder_open, 2, isCompact),
+                  if (tools.isNotEmpty) ...[
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 8 : 12,
+                        vertical: 6,
+                      ),
+                      child: Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: AppTheme.borderSubtle.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    for (int i = 0; i < tools.length; i++)
+                      _buildCustomToolSidebarItem(
+                        tools[i],
+                        _sidebarTabs.length + i,
+                        isCompact,
+                      ),
+                  ],
                   const Spacer(),
                 ],
               ),
@@ -933,7 +1070,41 @@ class _MainScreenState extends State<MainScreen> {
     int index,
     bool isCompact,
   ) {
-    final isSelected = _selectedTab == tab;
+    final isSelected = _selectedCustomToolId == null && _selectedTab == tab;
+    return _buildSidebarItemTile(
+      label: label,
+      icon: icon,
+      index: index,
+      isCompact: isCompact,
+      isSelected: isSelected,
+      onTap: () => _selectTab(tab, index),
+    );
+  }
+
+  Widget _buildCustomToolSidebarItem(
+    NexusTool tool,
+    int index,
+    bool isCompact,
+  ) {
+    final isSelected = _selectedTab != AppTab.settings && _selectedCustomToolId == tool.id;
+    return _buildSidebarItemTile(
+      label: tool.title,
+      icon: tool.icon,
+      index: index,
+      isCompact: isCompact,
+      isSelected: isSelected,
+      onTap: () => _selectCustomTool(tool, index),
+    );
+  }
+
+  Widget _buildSidebarItemTile({
+    required String label,
+    required IconData icon,
+    required int index,
+    required bool isCompact,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     final isFocused = _sidebarFocusNode.hasFocus && _sidebarIndex == index;
 
     final Widget content = isCompact
@@ -990,7 +1161,7 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     return InkWell(
-      onTap: () => _selectTab(tab, index),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: isCompact
           ? Tooltip(
@@ -1103,14 +1274,23 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildBodyContent() {
+    final tools = _customTools;
+    int stackIndex = _selectedTab.index;
+    if (_selectedTab != AppTab.settings && _selectedCustomToolId != null) {
+      final toolIdx = tools.indexWhere((t) => t.id == _selectedCustomToolId);
+      if (toolIdx != -1) {
+        stackIndex = 4 + toolIdx;
+      }
+    }
+
     return IndexedStack(
-      index: _selectedTab.index,
+      index: stackIndex,
       children: [
         SessionsScreen(
           sessionManager: _sessionManager,
-          isActive: _selectedTab == AppTab.sessions,
+          isActive: _selectedCustomToolId == null && _selectedTab == AppTab.sessions,
           onConnectSessions: (sessions, {openInRightSplit = false}) {
-            setState(() => _selectedTab = AppTab.nexus);
+            _selectTab(AppTab.nexus, 1);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               for (final s in sessions) {
                 _nexusKey.currentState?.connectSessionProfile(s, toRightPane: openInRightSplit);
@@ -1129,6 +1309,13 @@ class _MainScreenState extends State<MainScreen> {
         ),
         _buildFileExplorerPage(),
         _buildSettingsScreen(),
+        for (final tool in tools)
+          KeyedSubtree(
+            key: ValueKey('nexus_custom_tool_${tool.id}'),
+            child: Builder(
+              builder: (ctx) => tool.buildView(ctx, _buildToolContext()),
+            ),
+          ),
       ],
     );
   }
@@ -1385,6 +1572,13 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildSettingsScreen() {
     final settings = SettingsService.instance;
+    final availableFontSizes = const [
+      9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0, 22.0, 24.0, 28.0, 32.0,
+    ];
+    final fontSizes = availableFontSizes.contains(settings.nexusTerminalFontSize)
+        ? availableFontSizes
+        : ([...availableFontSizes, settings.nexusTerminalFontSize]..sort());
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1401,6 +1595,29 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               const SizedBox(
                 width: 140,
+                child: Text('Terminal Theme:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ),
+              SizedBox(
+                width: 280,
+                child: FuzzySearchableDropdown<NexusTerminalThemeMode>(
+                  items: NexusTerminalThemeMode.values,
+                  selectedItem: settings.nexusTerminalThemeMode,
+                  itemLabel: (t) => t.label,
+                  onChanged: (val) {
+                    if (val != null) {
+                      settings.setNexusTerminalThemeMode(val);
+                      setState(() {});
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const SizedBox(
+                width: 140,
                 child: Text('Terminal Font:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
               SizedBox(
@@ -1411,9 +1628,114 @@ class _MainScreenState extends State<MainScreen> {
                   itemLabel: (f) => f.label,
                   onChanged: (val) {
                     if (val != null) {
-                      setState(() => settings.setNexusTerminalFontFamily(val));
+                      settings.setNexusTerminalFontFamily(val);
+                      setState(() {});
                     }
                   },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 140,
+                child: Text('Terminal Font Size:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ),
+              SizedBox(
+                width: 280,
+                child: FuzzySearchableDropdown<double>(
+                  items: fontSizes,
+                  selectedItem: settings.nexusTerminalFontSize,
+                  itemLabel: (s) => '${s.toInt()} pt',
+                  onChanged: (val) {
+                    if (val != null) {
+                      settings.setNexusTerminalFontSize(val);
+                      setState(() {});
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Decrease font size (1 pt)',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: settings.nexusTerminalFontSize > 8.0
+                      ? () {
+                          final newSize = (settings.nexusTerminalFontSize - 1.0).clamp(8.0, 36.0);
+                          settings.setNexusTerminalFontSize(newSize);
+                          setState(() {});
+                        }
+                      : null,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppTheme.inputBorderColor),
+                    ),
+                    child: const Icon(Icons.remove, size: 14, color: AppTheme.textSecondary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: 'Increase font size (1 pt)',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: settings.nexusTerminalFontSize < 36.0
+                      ? () {
+                          final newSize = (settings.nexusTerminalFontSize + 1.0).clamp(8.0, 36.0);
+                          settings.setNexusTerminalFontSize(newSize);
+                          setState(() {});
+                        }
+                      : null,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppTheme.inputBorderColor),
+                    ),
+                    child: const Icon(Icons.add, size: 14, color: AppTheme.textSecondary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceColor,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppTheme.inputBorderColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.terminal, size: 15, color: AppTheme.accentPrimary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'nexus@terminal:~ \$',
+                      style: TextStyle(
+                        fontFamily: settings.nexusTerminalFontFamily.fontFamily,
+                        fontSize: settings.nexusTerminalFontSize.clamp(10.0, 18.0),
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '(${settings.nexusTerminalFontSize.toInt()} pt)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

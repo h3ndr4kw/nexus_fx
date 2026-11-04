@@ -40,6 +40,7 @@ class SshConnection {
   final SshLogService? logService;
   final DateTime? logTimestamp;
   final bool enableLogging;
+  final SessionEnvironment environment;
   bool isLocalShell;
   Process? _localProcess;
 
@@ -146,6 +147,7 @@ class SshConnection {
     bool? isOam,
     this.isLocalShell = false,
     this.enableLogging = true,
+    this.environment = SessionEnvironment.dev,
     this.logService,
     this.logTimestamp,
     TunnelMode? tunnelMode,
@@ -187,6 +189,7 @@ class SshConnection {
       logService: logService,
       enableLogging: shouldLog,
       logTimestamp: shouldLog ? DateTime.now() : null,
+      environment: profile.environment,
       tunnelMode: profile.tunnelMode,
     );
     return conn;
@@ -1228,7 +1231,28 @@ class SshConnection {
       return false;
     }
     final last = clean[clean.length - 1];
-    return last == r'$' || last == '#' || last == '>' || last == '%';
+    const promptChars = {
+      r'$', '#', '>', '%',
+      '❯', '➜', '▶', '⚡', '»', '›', 'λ',
+      ')',
+    };
+    if (promptChars.contains(last)) return true;
+
+    final lines = clean.split('\n');
+    final lastLine = lines.isNotEmpty ? lines.last.trim() : '';
+    if (lastLine.isEmpty) return false;
+
+    // Prompts starting with symbols like `➜  folder` or `❯  folder`
+    if (lastLine.startsWith('➜') ||
+        lastLine.startsWith('❯') ||
+        lastLine.startsWith('▶') ||
+        lastLine.startsWith('⚡')) {
+      return true;
+    }
+
+    // Regex matching prompts like `user@host:path$`, `(venv) [user@host ~]#`, `PS C:\path>`, `host>`
+    final promptRegex = RegExp(r'([@:][^@:\n]+[\$#>\%❯➜▶⚡»›\)])\s*$');
+    return promptRegex.hasMatch(lastLine);
   }
 
   bool _isHostKeyPrompt(String buffer) {
@@ -1253,7 +1277,19 @@ class SshConnection {
   }
 
   String stripAnsi(String text) {
-    return text.replaceAll(RegExp(r'\x1B\[[0-?]*[ -/]*[@-~]'), '');
+    var s = text;
+    // OSC (Operating System Command): \x1B] ... (\x07|\x1B\)
+    s = s.replaceAll(RegExp(r'\x1B\].*?(\x07|\x1B\\)', dotAll: true), '');
+    // DCS, SOS, PM, APC sequences
+    s = s.replaceAll(RegExp(r'\x1B[P^_].*?(\x07|\x1B\\)', dotAll: true), '');
+    // CSI (Control Sequence Introducer): \x1b[ ... [@-~]
+    s = s.replaceAll(RegExp(r'\x1B\[[0-?]*[ -/]*[@-~]'), '');
+    // 2-character escape sequences like \x1b(B, \x1b=, etc.
+    s = s.replaceAll(RegExp(r'\x1B[@-Z\\-_]'), '');
+    s = s.replaceAll(RegExp(r'\x1B[\(\)][0-B]'), '');
+    // Non-printable control characters except \r, \n, and \t
+    s = s.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '');
+    return s;
   }
 
   String _filterHopBanner(String text) {
@@ -1511,18 +1547,30 @@ class SshConnection {
 
   Future<bool> sendCommandAndWaitForPrompt({
     required String command,
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(seconds: 15),
   }) async {
     if (!_isConnected) return false;
+
+    final clean = command.trimRight();
+    recordLogCommand(clean);
+
+    if (isLocalShell) {
+      write('$clean\n');
+      // For local shells running on pipes without a pseudo-console,
+      // no interactive prompt is emitted. Small delay allows stdin flush.
+      await Future.delayed(const Duration(milliseconds: 60));
+      return true;
+    }
 
     final completer = Completer<bool>();
     final buffer = StringBuffer();
     StreamSubscription<String>? sub;
     Timer? timeoutTimer;
+    Timer? echoGraceTimer;
     bool hasSeenEchoOrOutput = false;
-    final sendTime = DateTime.now();
 
     Future<void> finish([bool result = true]) async {
+      echoGraceTimer?.cancel();
       sub?.cancel();
       timeoutTimer?.cancel();
       await _sessionLogger?.flush();
@@ -1531,26 +1579,36 @@ class SshConnection {
       }
     }
 
+    void checkPrompt() {
+      final text = buffer.toString();
+      if (_isShellPrompt(text)) {
+        finish(true);
+      }
+    }
+
     sub = outputStream.listen((chunk) {
       buffer.write(chunk);
       final text = buffer.toString();
 
       if (!hasSeenEchoOrOutput) {
-        if (text.contains('\n') ||
-            text.contains('\r') ||
-            DateTime.now().difference(sendTime).inMilliseconds >= 150) {
+        if (text.contains('\n') || text.contains('\r')) {
           hasSeenEchoOrOutput = true;
         }
       }
 
-      if (hasSeenEchoOrOutput && _isShellPrompt(text)) {
-        finish(true);
+      if (hasSeenEchoOrOutput) {
+        checkPrompt();
       }
     });
 
-    final clean = command.trimRight();
-    recordLogCommand(clean);
     write('$clean\n');
+
+    // If the command produced no output (or echo didn't contain a newline),
+    // allow prompt checking after a brief grace period (120ms).
+    echoGraceTimer = Timer(const Duration(milliseconds: 120), () {
+      hasSeenEchoOrOutput = true;
+      checkPrompt();
+    });
 
     timeoutTimer = Timer(timeout, () {
       finish(true);

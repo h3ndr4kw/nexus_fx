@@ -1514,7 +1514,41 @@ class _SessionsScreenState extends State<SessionsScreen> {
               color: isLocal ? const Color(0xFF64B5F6) : const Color(0xFFFF7043),
             ),
             const SizedBox(width: 8),
-            Expanded(flex: 3, child: Text(session.name, style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary))),
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      session.name,
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: session.environment.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(
+                        color: session.environment.color.withValues(alpha: 0.4),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Text(
+                      session.environment.label,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: session.environment.color,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(flex: 2, child: Text(isLocal ? '-' : session.host, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
             Expanded(flex: 2, child: Text(isLocal ? '-' : session.username, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
             Expanded(flex: 1, child: Text(isLocal ? 'LOCAL' : 'SSH', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary))),

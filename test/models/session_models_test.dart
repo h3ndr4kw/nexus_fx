@@ -1,10 +1,11 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/models/session_models.dart';
 import 'package:nexus_fx/models/ssh_tunnel_models.dart';
 
 void main() {
   group('Session models', () {
-    test('SessionProfile serializes and deserializes with obfuscated password and jump host fields', () {
+    test('SessionProfile serializes and deserializes with AES-256 encrypted password and jump host fields', () {
       final profile = SessionProfile(
         id: 'sess_1',
         parentId: 'folder_1',
@@ -22,6 +23,7 @@ void main() {
 
       final json = profile.toJson();
       expect(json['password'], isNot(equals('secret-password')));
+      expect(json['password'], startsWith('enc:v1:'));
 
       final restored = SessionProfile.fromJson(json);
       expect(restored.id, 'sess_1');
@@ -33,6 +35,61 @@ void main() {
       expect(restored.jumpSessionId, 'sess_jump_1');
       expect(restored.protocol, SessionProtocol.ssh);
       expect(restored.enableSessionLogging, isTrue);
+    });
+
+    test('SessionProfile deserializes legacy XOR 0x5A passwords seamlessly', () {
+      // Simulate a JSON file saved by an older version of NexusFX with XOR 0x5A
+      final legacyRawPassword = 'old-legacy-password-123';
+      final bytes = utf8.encode(legacyRawPassword);
+      final xored = bytes.map((b) => b ^ 0x5A).toList();
+      final legacyEncoded = base64.encode(xored);
+
+      final legacyJson = {
+        'id': 'sess_legacy',
+        'name': 'LEGACY_NODE',
+        'protocol': 'ssh',
+        'host': '10.20.30.40',
+        'port': 22,
+        'username': 'legacy-user',
+        'password': legacyEncoded,
+        'jumpHostMode': 'direct',
+        'tunnelMode': 'multiplexed',
+        'modifiedAt': DateTime.utc(2025, 1, 1).toIso8601String(),
+      };
+
+      final restored = SessionProfile.fromJson(legacyJson);
+      expect(restored.password, equals(legacyRawPassword));
+
+      // When saved again, it will be upgraded to AES-256 enc:v1 format
+      final upgradedJson = restored.toJson();
+      expect(upgradedJson['password'], startsWith('enc:v1:'));
+    });
+
+    test('SessionProfile handles SessionEnvironment dev, staging, and prod serialization', () {
+      final devProfile = SessionProfile(
+        id: 'sess_dev',
+        name: 'Dev Node',
+        protocol: SessionProtocol.ssh,
+        host: '127.0.0.1',
+        environment: SessionEnvironment.dev,
+        modifiedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(devProfile.environment, SessionEnvironment.dev);
+      expect(devProfile.environment.isProduction, isFalse);
+      expect(devProfile.toJson()['environment'], 'dev');
+
+      final prodProfile = devProfile.copyWith(environment: SessionEnvironment.prod);
+      expect(prodProfile.environment, SessionEnvironment.prod);
+      expect(prodProfile.environment.isProduction, isTrue);
+      expect(prodProfile.toJson()['environment'], 'prod');
+
+      final restoredProd = SessionProfile.fromJson(prodProfile.toJson());
+      expect(restoredProd.environment, SessionEnvironment.prod);
+
+      // Sesi lama tanpa field environment otomatis default ke dev
+      final oldJsonWithoutEnv = {'id': 's1', 'name': 'Old', 'protocol': 'ssh', 'host': '1.1.1.1', 'modifiedAt': '2026-01-01'};
+      final restoredOld = SessionProfile.fromJson(oldJsonWithoutEnv);
+      expect(restoredOld.environment, SessionEnvironment.dev);
     });
 
     test('SessionFolder serializes and deserializes correctly', () {

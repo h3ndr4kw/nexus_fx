@@ -105,6 +105,7 @@ enum NexusTerminalFontFamily {
 }
 
 enum NexusTerminalThemeMode {
+  antigravityDark('Antigravity Dark'),
   followAppTheme('Follow App Theme'),
   classicDark('Classic Dark'),
   highContrast('High Contrast'),
@@ -135,7 +136,7 @@ class SettingsService extends ChangeNotifier {
   bool _nexusCascadeExit = false;
   bool _nexusRunbookShowProgress = true;
   bool _nexusRunbookAutoClose = true;
-  int _nexusRunbookAutoCloseDelay = 2;
+  int _nexusRunbookAutoCloseDelay = 1;
   bool _showNodesTab = false;
   double _floatingCommandWidth = 50.0;
   double _rightSidebarWidth = 440.0;
@@ -153,10 +154,10 @@ class SettingsService extends ChangeNotifier {
   FileExplorerDensity _fileExplorerDensity = FileExplorerDensity.standard;
   FileExplorerFontFamily _fileExplorerFontFamily = FileExplorerFontFamily.monospace;
   FileExplorerIconTheme _fileExplorerIconTheme = FileExplorerIconTheme.smart;
-  NexusTerminalFontFamily _nexusTerminalFontFamily = NexusTerminalFontFamily.courierNew;
+  NexusTerminalFontFamily _nexusTerminalFontFamily = NexusTerminalFontFamily.jetbrainsMono;
   double _nexusTerminalFontSize = 14.0;
-  double _nexusTerminalLineHeight = 1.0;
-  NexusTerminalThemeMode _nexusTerminalThemeMode = NexusTerminalThemeMode.followAppTheme;
+  double _nexusTerminalLineHeight = 1.25;
+  NexusTerminalThemeMode _nexusTerminalThemeMode = NexusTerminalThemeMode.antigravityDark;
   Set<String> _pinnedTools = {'cluster_deployment'};
   bool _showSessionDialogAtStartup = true;
 
@@ -537,9 +538,11 @@ class SettingsService extends ChangeNotifier {
   }
 
   NexusTerminalThemeMode? _parseNexusTerminalThemeMode(String value) {
-    final v = value.trim().toLowerCase();
+    final v = value.trim().toLowerCase().replaceAll('_', '').replaceAll(' ', '');
     for (final t in NexusTerminalThemeMode.values) {
-      if (t.name.toLowerCase() == v || t.label.toLowerCase() == v) {
+      final tn = t.name.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+      final tl = t.label.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+      if (tn == v || tl == v) {
         return t;
       }
     }
@@ -828,7 +831,7 @@ class SettingsService extends ChangeNotifier {
   }
 
   Future<void> setNexusRunbookAutoCloseDelay(int seconds) async {
-    final clamped = seconds.clamp(1, 30);
+    final clamped = seconds.clamp(0, 30);
     if (_nexusRunbookAutoCloseDelay == clamped) return;
     _nexusRunbookAutoCloseDelay = clamped;
     notifyListeners();

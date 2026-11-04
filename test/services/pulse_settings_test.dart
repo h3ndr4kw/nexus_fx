@@ -63,6 +63,26 @@ void main() {
       expect(settings.nexusPulseColor, NexusPulseColor.emerald);
     });
 
+    test('SettingsService runbook auto close delay defaults to 1 and clamps to 0-30', () async {
+      final settings = SettingsService.instance;
+
+      expect(settings.nexusRunbookAutoClose, isTrue);
+
+      await settings.setNexusRunbookAutoCloseDelay(0);
+      expect(settings.nexusRunbookAutoCloseDelay, 0);
+      expect(settings.nexusRunbookAutoCloseDuration, Duration.zero);
+
+      await settings.setNexusRunbookAutoCloseDelay(50);
+      expect(settings.nexusRunbookAutoCloseDelay, 30);
+
+      await settings.setNexusRunbookAutoCloseDelay(-5);
+      expect(settings.nexusRunbookAutoCloseDelay, 0);
+
+      // Restore to snappy default of 1 second
+      await settings.setNexusRunbookAutoCloseDelay(1);
+      expect(settings.nexusRunbookAutoCloseDelay, 1);
+    });
+
     testWidgets('RadarPulseIndicator renders across all styles and colors', (tester) async {
       for (final style in NexusPulseStyle.values) {
         for (final color in NexusPulseColor.values) {

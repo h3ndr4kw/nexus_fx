@@ -134,17 +134,11 @@ class _FloatingSendProgressDialogState extends State<FloatingSendProgressDialog>
       return KeyEventResult.handled;
     }
 
-    final isDismissKey = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        event.logicalKey == LogicalKeyboardKey.escape ||
-        event.logicalKey == LogicalKeyboardKey.space;
-
     if (widget.isCompleted || widget.errorMessage != null) {
-      if (isDismissKey) {
-        _cancelAutoCloseTimer();
-        (widget.onClose ?? widget.onCancel)();
-        return KeyEventResult.handled;
-      }
+      // Any key press once execution is completed or has error immediately dismisses the dialog
+      _cancelAutoCloseTimer();
+      (widget.onClose ?? widget.onCancel)();
+      return KeyEventResult.handled;
     } else {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         _cancelAutoCloseTimer();

@@ -5,13 +5,13 @@ nexus_auto_session_logging: true
 nexus_cascade_exit: false
 nexus_runbook_show_progress: true
 nexus_runbook_auto_close: true
-nexus_runbook_auto_close_delay: 2
+nexus_runbook_auto_close_delay: 1
 show_nodes_tab: false
 nexus_pulse_style: "neonSonarWave"
 nexus_pulse_color: "emerald"
 floating_command_width: 50
 right_sidebar_width: 440
-left_sidebar_width: 200
+left_sidebar_width: 170
 app_theme: "antigravity"
 app_font_size: "medium"
 border_animation_duration: 8.0
@@ -34,9 +34,9 @@ update_remote_path: "/home/vmridwan/smart_e_he_updates"
 file_explorer_density: "standard"
 file_explorer_font_family: "monospace"
 file_explorer_icon_theme: "smart"
-nexus_terminal_font_family: "courierNew"
-nexus_terminal_font_size: 14.0
-nexus_terminal_line_height: 1.0
-nexus_terminal_theme_mode: "followAppTheme"
+nexus_terminal_font_family: "jetbrainsMono"
+nexus_terminal_font_size: 18.0
+nexus_terminal_line_height: 1.25
+nexus_terminal_theme_mode: "antigravityDark"
 pinned_tools:
   - "cluster_deployment"

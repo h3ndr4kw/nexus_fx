@@ -4,11 +4,39 @@ import '../services/settings_service.dart';
 import 'app_theme.dart';
 
 class TerminalThemeHelper {
+  static const TerminalTheme antigravityDark = TerminalTheme(
+    cursor: Color(0xFF60A5FA),
+    selection: Color(0x4760A5FA),
+    foreground: Color(0xFFE2E5EB),
+    background: Color(0xFF0D0E12),
+    black: Color(0xFF16181E),
+    red: Color(0xFFF87171),
+    green: Color(0xFF34D399),
+    yellow: Color(0xFFFBBF24),
+    blue: Color(0xFF60A5FA),
+    magenta: Color(0xFFC084FC),
+    cyan: Color(0xFF38BDF8),
+    white: Color(0xFFE2E5EB),
+    brightBlack: Color(0xFF5C6370),
+    brightRed: Color(0xFFFB7185),
+    brightGreen: Color(0xFF4ADE80),
+    brightYellow: Color(0xFFFDE047),
+    brightBlue: Color(0xFF93C5FD),
+    brightMagenta: Color(0xFFE879F9),
+    brightCyan: Color(0xFF67E8F9),
+    brightWhite: Color(0xFFFFFFFF),
+    searchHitBackground: Color(0xFF38BDF8),
+    searchHitBackgroundCurrent: Color(0xFF60A5FA),
+    searchHitForeground: Color(0xFF0D0E12),
+  );
+
   static TerminalTheme resolveTheme({
     required NexusTerminalThemeMode mode,
     required AppPalette palette,
   }) {
     switch (mode) {
+      case NexusTerminalThemeMode.antigravityDark:
+        return antigravityDark;
       case NexusTerminalThemeMode.classicDark:
         return TerminalThemes.defaultTheme;
       case NexusTerminalThemeMode.highContrast:
@@ -40,10 +68,13 @@ class TerminalThemeHelper {
           searchHitForeground: Color(0xFF000000),
         );
       case NexusTerminalThemeMode.followAppTheme:
+        if (palette.id == 'antigravity') {
+          return antigravityDark;
+        }
         return TerminalTheme(
           cursor: palette.primaryColor,
           selection: palette.primaryColor.withValues(alpha: 0.35),
-          foreground: palette.textColor,
+          foreground: palette.titleColor,
           background: palette.background,
           black: const Color(0xFF000000),
           red: palette.errorColor,
