@@ -15,6 +15,7 @@ class SshTabView extends StatefulWidget {
   final VoidCallback onClose;
   final bool isActive;
   final VoidCallback? onFocus;
+  final double bottomInset;
 
   const SshTabView({
     super.key,
@@ -22,6 +23,7 @@ class SshTabView extends StatefulWidget {
     required this.onClose,
     this.isActive = true,
     this.onFocus,
+    this.bottomInset = 0.0,
   });
 
   @override
@@ -823,7 +825,7 @@ class SshTabViewState extends State<SshTabView> {
                     height: settings.nexusTerminalLineHeight,
                     fontFamily: settings.nexusTerminalFontFamily.fontFamily,
                   ),
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.fromLTRB(8, 8, 8, 8 + widget.bottomInset),
                 ),
               ),
             ),

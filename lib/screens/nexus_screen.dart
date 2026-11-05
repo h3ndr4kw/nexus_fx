@@ -14,6 +14,8 @@ import '../controllers/broadcast_coordinator.dart';
 import '../widgets/floating_send_progress_dialog.dart';
 import '../widgets/radar_pulse_indicator.dart';
 import 'sessions_screen.dart';
+import '../widgets/fuzzy_searchable_dropdown.dart';
+import '../widgets/snippet_dialogs.dart';
 
 export '../controllers/broadcast_coordinator.dart' show BroadcastTarget;
 export '../widgets/radar_pulse_indicator.dart';
@@ -1124,6 +1126,11 @@ class NexusScreenState extends State<NexusScreen> {
       return KeyEventResult.handled;
     }
 
+    if (isControl && !isShift && event.logicalKey == LogicalKeyboardKey.keyK) {
+      _openSnippetPicker();
+      return KeyEventResult.handled;
+    }
+
     if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
       if (isShift) {
@@ -1200,15 +1207,7 @@ class NexusScreenState extends State<NexusScreen> {
     }
   }
 
-  void _selectPresetTarget(BroadcastTarget target) {
-    setState(() {
-      _broadcastCoordinator.selectPresetTarget(
-        target,
-        leftTabs: _tabs,
-        rightTabs: _rightTabs,
-      );
-    });
-  }
+  String _shortcutLabel(String key) => Platform.isMacOS ? '⌘$key' : 'Ctrl+$key';
 
   void _toggleConnectionSelection(String id) {
     setState(() {
@@ -1226,15 +1225,6 @@ class NexusScreenState extends State<NexusScreen> {
       rightTabs: _rightTabs,
     );
   }
-
-  int get _allConnectedCount => [
-        ..._tabs,
-        ..._rightTabs,
-      ].where((c) => c.isConnected).length;
-
-  int get _leftConnectedCount => _tabs.where((c) => c.isConnected).length;
-
-  int get _rightConnectedCount => _rightTabs.where((c) => c.isConnected).length;
 
 
   Future<void> _sendBroadcastCommand() async {
@@ -1264,6 +1254,17 @@ class NexusScreenState extends State<NexusScreen> {
       return;
     }
 
+    if (rawText.trim().isEmpty) return;
+
+    final dangerous = _findDestructiveLines(rawText);
+    if (dangerous.isNotEmpty) {
+      final confirmed = await _confirmDestructiveCommand(
+        lines: dangerous,
+        nodeCount: targetConnections.length,
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
     await _broadcastCoordinator.executeBroadcast(
       targetConnections: targetConnections,
       rawText: rawText,
@@ -1275,503 +1276,142 @@ class NexusScreenState extends State<NexusScreen> {
   }
 
 
-  // --- DevOps Multi-Exec Toolbar (Redesign from user reference) ---
-  Widget _buildDevopsToolbarCommandPane() {
-    final palette = AppTheme.activePalette;
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surfaceColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _isSendingCommands
-              ? palette.primaryColor
-              : palette.inputBorderColor,
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.6),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Row 1: Target Modes (Broadcast All, Selective Node) + Warning Badge + Quick Actions (Snippets, History, sudo)
-          Row(
-            children: [
-              // Segmented group: Broadcast All & Selective Node + Warning Badge
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: palette.background.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(7),
-                          border: Border.all(
-                            color: palette.inputBorderColor,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.all(2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Broadcast ALL button
-                            _buildBroadcastAllButton(),
-                            if (_isSplitView) ...[
-                              const SizedBox(width: 3),
-                              _buildTargetChip(
-                                label: 'LEFT ($_leftConnectedCount)',
-                                target: BroadcastTarget.left,
-                                count: _leftConnectedCount,
-                              ),
-                              const SizedBox(width: 3),
-                              _buildTargetChip(
-                                label: 'RIGHT ($_rightConnectedCount)',
-                                target: BroadcastTarget.right,
-                                count: _rightConnectedCount,
-                              ),
-                            ],
-                            const SizedBox(width: 3),
-                            // Selective Node dropdown
-                            _buildSelectiveNodeButton(),
-                          ],
-                        ),
-                      ),
-                      if (_selectedConnectionIds.length > 1) ...[
-                        const SizedBox(width: 8),
-                        BreathingAmberBadge(count: _selectedConnectionIds.length),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Quick Actions on Right
-              _buildSnippetsButton(),
-              const SizedBox(width: 5),
-              _buildHistoryButton(),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Row 2: Prompt >_, Command Input Box, Parallel Dropdown, Run Button
-          Container(
-            decoration: BoxDecoration(
-              color: palette.background,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: palette.inputBorderColor,
-                width: 1.2,
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Primary color prompt
-                Text(
-                  '>_',
-                  style: TextStyle(
-                    fontFamily: 'Courier New',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: palette.primaryColor,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Input TextField
-                Expanded(
-                  child: CallbackShortcuts(
-                    bindings: {
-                      const SingleActivator(LogicalKeyboardKey.enter): () {
-                        if (!_isSendingCommands) {
-                          _sendBroadcastCommand();
-                        }
-                      },
-                      const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
-                        if (!_isSendingCommands) {
-                          _sendBroadcastCommand();
-                        }
-                      },
-                    },
-                    child: TextField(
-                      controller: _commandInputController,
-                      focusNode: _commandFocusNode,
-                      minLines: 1,
-                      maxLines: 4,
-                      style: TextStyle(
-                        fontFamily: 'Courier New',
-                        fontSize: 12.5,
-                        color: palette.textColor,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'systemctl status nginx lines=50',
-                        hintStyle: TextStyle(
-                          fontSize: 11.5,
-                          color: palette.textColor.withValues(alpha: 0.4),
-                          fontFamily: 'Courier New',
-                        ),
-                        isDense: true,
-                        filled: false,
-                        fillColor: Colors.transparent,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 6,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Clear Button
-                _buildClearButton(),
-                const SizedBox(width: 8),
-                // Parallel Mode Indicator
-                _buildParallelBadge(),
-                const SizedBox(width: 8),
-                // Run Button
-                _buildRunButton(),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Row 3: Footer - TARGETS: chips
-          Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'TARGETS:',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontFamily: 'Courier New',
-                          fontWeight: FontWeight.bold,
-                          color: palette.textColor.withValues(alpha: 0.6),
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildDynamicConnectionChips(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  // --- Destructive Command Guardrails ---
+  static final List<RegExp> _destructivePatterns = [
+    RegExp(r'\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*)'),
+    RegExp(r'\b(reboot|shutdown|poweroff|halt)\b'),
+    RegExp(r'\binit\s+[06]\b'),
+    RegExp(r'\bmkfs(\.\w+)?\b'),
+    RegExp(r'\bdd\s+.*\bof=/dev/'),
+    RegExp(r'\bsystemctl\s+(stop|disable|mask|poweroff|reboot)\b'),
+    RegExp(r'\bkillall\b|\bpkill\b|\bkill\s+-9\b'),
+    RegExp(r'>\s*/dev/sd'),
+    RegExp(r':\(\)\s*\{'),
+  ];
+
+  List<String> _findDestructiveLines(String rawText) {
+    return rawText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .where((l) => _destructivePatterns.any((p) => p.hasMatch(l)))
+        .toList();
   }
 
-  Widget _buildBroadcastAllButton() {
+  Future<bool?> _confirmDestructiveCommand({
+    required List<String> lines,
+    required int nodeCount,
+  }) {
     final palette = AppTheme.activePalette;
-    final isSelected = _broadcastTarget == BroadcastTarget.all;
-    return InkWell(
-      onTap: () => _selectPresetTarget(BroadcastTarget.all),
-      borderRadius: BorderRadius.circular(5),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? palette.primaryColor.withValues(alpha: 0.18)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
-          border: isSelected
-              ? Border.all(color: palette.primaryColor, width: 1.2)
-              : Border.all(color: Colors.transparent),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceColor,
+        title: Row(
           children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Run potentially destructive command?',
+                style: TextStyle(color: palette.textColor, fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The following line(s) match destructive patterns and will be executed on $nodeCount node${nodeCount == 1 ? '' : 's'}:',
+              style: TextStyle(
+                color: palette.textColor.withValues(alpha: 0.8),
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(height: 8),
             Container(
-              width: 5,
-              height: 5,
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected
-                    ? palette.primaryColor
-                    : palette.textColor.withValues(alpha: 0.4),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: palette.primaryColor.withValues(alpha: 0.6),
-                          blurRadius: 4,
-                        ),
-                      ]
-                    : null,
+                color: palette.background,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
               ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              'Broadcast ALL ($_allConnectedCount)',
-              style: TextStyle(
-                fontSize: 10,
-                fontFamily: 'Courier New',
-                fontWeight: FontWeight.bold,
-                color: isSelected ? palette.primaryColor : palette.textColor.withValues(alpha: 0.7),
-                letterSpacing: 0.4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: lines
+                    .map((l) => Text(
+                          l,
+                          style: const TextStyle(
+                            fontFamily: 'Courier New',
+                            fontSize: 12,
+                            color: Colors.amber,
+                          ),
+                        ))
+                    .toList(),
               ),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Proceed & Execute'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSelectiveNodeButton() {
-    final palette = AppTheme.activePalette;
-    final isCustom = _broadcastTarget == BroadcastTarget.custom;
-    final allConns = [..._tabs, ..._rightTabs];
-
-    return PopupMenuButton<String>(
-      tooltip: 'Selective Node',
-      color: palette.surfaceColor,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: palette.inputBorderColor),
-      ),
-      padding: EdgeInsets.zero,
-      onSelected: (val) {
-        if (val == '__all__') {
-          _selectPresetTarget(BroadcastTarget.all);
-        } else if (val == '__left__') {
-          _selectPresetTarget(BroadcastTarget.left);
-        } else if (val == '__right__') {
-          _selectPresetTarget(BroadcastTarget.right);
-        } else {
-          _toggleConnectionSelection(val);
-        }
-      },
-      itemBuilder: (context) {
-        final items = <PopupMenuEntry<String>>[
-          PopupMenuItem<String>(
-            value: '__all__',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.select_all_rounded,
-                  size: 14,
-                  color: _broadcastTarget == BroadcastTarget.all
-                      ? palette.primaryColor
-                      : palette.textColor.withValues(alpha: 0.7),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'All Connected Nodes',
-                  style: TextStyle(
-                    fontFamily: 'Courier New',
-                    fontSize: 11,
-                    color: palette.textColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ];
-
-        if (_isSplitView) {
-          items.add(
-            PopupMenuItem<String>(
-              value: '__left__',
-              child: Text(
-                'Left Pane Nodes',
-                style: TextStyle(
-                  fontFamily: 'Courier New',
-                  fontSize: 11,
-                  color: palette.textColor,
-                ),
-              ),
-            ),
-          );
-          items.add(
-            PopupMenuItem<String>(
-              value: '__right__',
-              child: Text(
-                'Right Pane Nodes',
-                style: TextStyle(
-                  fontFamily: 'Courier New',
-                  fontSize: 11,
-                  color: palette.textColor,
-                ),
-              ),
-            ),
-          );
-        }
-
-        if (allConns.isNotEmpty) {
-          items.add(const PopupMenuDivider());
-          for (final conn in allConns) {
-            final isChecked = _selectedConnectionIds.contains(conn.id);
-            items.add(
-              PopupMenuItem<String>(
-                value: conn.id,
-                child: Row(
-                  children: [
-                    Icon(
-                      isChecked
-                          ? Icons.check_box_rounded
-                          : Icons.check_box_outline_blank_rounded,
-                      size: 14,
-                      color: isChecked
-                          ? palette.primaryColor
-                          : palette.textColor.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      conn.currentLabel.isNotEmpty
-                          ? conn.currentLabel
-                          : conn.currentHost,
-                      style: TextStyle(
-                        fontFamily: 'Courier New',
-                        fontSize: 11,
-                        color: palette.textColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-        }
-        return items;
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: isCustom
-              ? palette.primaryColor.withValues(alpha: 0.18)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
-          border: isCustom
-              ? Border.all(color: palette.primaryColor.withValues(alpha: 0.5), width: 1)
-              : Border.all(color: Colors.transparent),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Selective Node',
-              style: TextStyle(
-                fontSize: 10,
-                fontFamily: 'Courier New',
-                fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
-                color: isCustom ? palette.primaryColor : palette.textColor.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(width: 3),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 13,
-              color: isCustom ? palette.primaryColor : palette.textColor.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
-      ),
-    );
+  // --- Snippets & History Actions ---
+  Future<void> _openSnippetPicker() async {
+    final selected = await SnippetPickerModal.show(context);
+    if (selected != null && mounted) {
+      _commandInputController.value = TextEditingValue(
+        text: selected.fullScript,
+        selection: TextSelection.collapsed(offset: selected.fullScript.length),
+      );
+      _commandFocusNode.requestFocus();
+    }
   }
 
   Widget _buildSnippetsButton() {
     final palette = AppTheme.activePalette;
-    return PopupMenuButton<String>(
-      tooltip: 'Snippets (⌘K / Ctrl+K)',
-      color: palette.surfaceColor,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: palette.inputBorderColor),
-      ),
-      padding: EdgeInsets.zero,
-      onSelected: (snippet) {
-        _commandInputController.value = TextEditingValue(
-          text: snippet,
-          selection: TextSelection.collapsed(offset: snippet.length),
-        );
-        _commandFocusNode.requestFocus();
-      },
-      itemBuilder: (context) {
-        const snippets = [
-          'systemctl status nginx lines=50',
-          'systemctl restart nginx',
-          'systemctl status radiusd',
-          'tail -f /var/log/syslog',
-          'docker ps',
-          'df -h',
-          'free -m',
-          'uptime',
-        ];
-        return snippets.map((cmd) {
-          return PopupMenuItem<String>(
-            value: cmd,
-            child: Text(
-              cmd,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Courier New',
-                fontSize: 12,
-                color: palette.textColor,
-              ),
-            ),
-          );
-        }).toList();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: palette.background.withValues(alpha: 0.65),
+    return Tooltip(
+      message: 'Snippets (${_shortcutLabel('K')})',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _openSnippetPicker,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: palette.inputBorderColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.terminal_rounded,
-              size: 12,
-              color: palette.textColor.withValues(alpha: 0.7),
+          hoverColor: palette.primaryColor.withValues(alpha: 0.12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+            decoration: BoxDecoration(
+              color: palette.background.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: palette.inputBorderColor),
             ),
-            const SizedBox(width: 4),
-            Text(
-              'Snippets',
-              style: TextStyle(
-                fontSize: 10,
-                fontFamily: 'Courier New',
-                fontWeight: FontWeight.w600,
-                color: palette.textColor,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.terminal_rounded,
+                  size: 13,
+                  color: palette.textColor.withValues(alpha: 0.8),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Text(
-              '⌘K',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: palette.textColor.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1780,7 +1420,7 @@ class NexusScreenState extends State<NexusScreen> {
   Widget _buildHistoryButton() {
     final palette = AppTheme.activePalette;
     return PopupMenuButton<String>(
-      tooltip: 'History (^R / Ctrl+R)',
+      tooltip: 'Command History',
       color: palette.surfaceColor,
       elevation: 8,
       shape: RoundedRectangleBorder(
@@ -1798,341 +1438,391 @@ class NexusScreenState extends State<NexusScreen> {
       itemBuilder: (context) {
         if (_commandHistory.isEmpty) {
           return [
-            PopupMenuItem(
+            PopupMenuItem<String>(
               enabled: false,
               child: Text(
-                'No recent commands',
-                style: TextStyle(fontSize: 11, color: palette.textColor.withValues(alpha: 0.5)),
+                'No history yet',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'Courier New',
+                  color: palette.textColor.withValues(alpha: 0.5),
+                ),
               ),
             ),
           ];
         }
-        return _commandHistory.reversed.take(10).map((cmd) {
+        return _commandHistory.reversed.take(15).map((cmd) {
+          final lines = cmd
+              .split('\n')
+              .map((l) => l.trimRight())
+              .where((l) => l.isNotEmpty)
+              .toList();
+          final isMulti = lines.length > 1;
+          final firstLine = lines.isNotEmpty ? lines.first : cmd;
+
           return PopupMenuItem<String>(
             value: cmd,
-            child: Text(
-              cmd,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Courier New',
-                fontSize: 12,
-                color: palette.textColor,
+            child: SizedBox(
+              width: 320,
+              child: Row(
+                children: [
+                  Icon(
+                    isMulti ? Icons.article_outlined : Icons.terminal_rounded,
+                    size: 13,
+                    color: isMulti
+                        ? palette.primaryColor
+                        : palette.textColor.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      firstLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Courier New',
+                        fontSize: 11.5,
+                        color: palette.textColor,
+                      ),
+                    ),
+                  ),
+                  if (isMulti) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4.5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: palette.primaryColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: palette.primaryColor.withValues(alpha: 0.35),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Text(
+                        '${lines.length} lines',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'Courier New',
+                          fontWeight: FontWeight.bold,
+                          color: palette.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           );
         }).toList();
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: palette.background.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: palette.inputBorderColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.access_time_rounded,
-              size: 12,
-              color: palette.textColor.withValues(alpha: 0.7),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'History',
-              style: TextStyle(
-                fontSize: 10,
-                fontFamily: 'Courier New',
-                fontWeight: FontWeight.w600,
-                color: palette.textColor,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '^R',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: palette.textColor.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClearButton() {
-    final palette = AppTheme.activePalette;
-    return Tooltip(
-      message: 'Clear input',
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          key: const ValueKey('nexus_command_pane_clear_button'),
-          onTap: () {
-            _commandInputController.clear();
-            _commandFocusNode.requestFocus();
-          },
-          borderRadius: BorderRadius.circular(6),
-          hoverColor: palette.textColor.withValues(alpha: 0.1),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: palette.background.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: palette.inputBorderColor),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'Clear',
-              style: TextStyle(
-                fontSize: 11,
-                fontFamily: 'Courier New',
-                fontWeight: FontWeight.w600,
-                color: palette.textColor,
-              ),
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+          decoration: BoxDecoration(
+            color: palette.background.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: palette.inputBorderColor),
+          ),
+          child: Icon(
+            Icons.history_rounded,
+            size: 14,
+            color: palette.textColor.withValues(alpha: 0.7),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildParallelBadge() {
-    final palette = AppTheme.activePalette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: palette.background.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: palette.inputBorderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CyanPulseDot(),
-          Text(
-            'Parallel',
-            style: TextStyle(
-              fontSize: 11,
-              fontFamily: 'Courier New',
-              fontWeight: FontWeight.w600,
-              color: palette.textColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRunButton() {
-    final palette = AppTheme.activePalette;
-    final runTextColor = palette.primaryColor.computeLuminance() > 0.35
-        ? const Color(0xFF070B14)
-        : Colors.white;
-
-    return InkWell(
-      key: const ValueKey('nexus_command_pane_send_button'),
-      onTap: _isSendingCommands ? null : _sendBroadcastCommand,
-      borderRadius: BorderRadius.circular(6),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6.5),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              palette.primaryColor,
-              palette.primaryColor.withValues(alpha: 0.8),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: [
-            BoxShadow(
-              color: palette.primaryColor.withValues(alpha: 0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_isSendingCommands) ...[
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(runTextColor),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Running...',
-                style: TextStyle(
-                  color: runTextColor,
-                  fontSize: 11.5,
-                  fontFamily: 'Courier New',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ] else ...[
-              Text(
-                'Run',
-                style: TextStyle(
-                  color: runTextColor,
-                  fontSize: 11.5,
-                  fontFamily: 'Courier New',
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTargetChip({
-    required String label,
-    required BroadcastTarget target,
-    required int count,
-  }) {
-    final palette = AppTheme.activePalette;
-    final isSelected = _broadcastTarget == target;
-    return InkWell(
-      onTap: () => _selectPresetTarget(target),
-      borderRadius: BorderRadius.circular(5),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? palette.primaryColor.withValues(alpha: 0.18)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
-          border: isSelected
-              ? Border.all(color: palette.primaryColor, width: 1.2)
-              : Border.all(color: Colors.transparent),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 9.5,
-            fontFamily: 'Courier New',
-            fontWeight: FontWeight.bold,
-            color: isSelected ? palette.primaryColor : palette.textColor.withValues(alpha: 0.7),
-            letterSpacing: 0.4,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDynamicConnectionChips() {
+  // --- Node Picker with FuzzySearchableDropdown ---
+  Widget _buildNodePicker() {
     final palette = AppTheme.activePalette;
     final allConns = [..._tabs, ..._rightTabs];
-    if (allConns.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final selectedCount = _selectedConnectionIds.length;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: allConns.map((conn) {
-        final isSelected = _selectedConnectionIds.contains(conn.id);
-        final isConnected = conn.isConnected;
-        final isInRightPane = _rightTabs.any((c) => c.id == conn.id);
+    return Tooltip(
+      message: 'Select target nodes ($selectedCount active)',
+      child: FuzzySearchableDropdown<SshConnection>(
+        openUpward: true,
+        popupWidth: 280,
+        items: allConns,
+        selectedItem: null,
+        hintText: 'Search & toggle node...',
+        searchPlaceholder: 'Search node by name or host...',
+        itemLabel: (c) =>
+            c.currentLabel.isNotEmpty ? c.currentLabel : c.currentHost,
+        itemSubtitle: (c) =>
+            '${c.currentHost} • ${c.isConnected ? 'online' : 'offline'}',
+        searchTerms: (c) => [c.currentLabel, c.currentHost],
+        itemBadge: (c) => _selectedConnectionIds.contains(c.id)
+            ? Icon(Icons.check_circle_rounded,
+                size: 14, color: palette.primaryColor)
+            : const SizedBox.shrink(),
+        onChanged: (c) {
+          if (c != null) _toggleConnectionSelection(c.id);
+        },
+        customTrigger: (context, isOpen) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6.5),
+            decoration: BoxDecoration(
+              color: isOpen
+                  ? palette.primaryColor.withValues(alpha: 0.18)
+                  : palette.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isOpen
+                    ? palette.primaryColor
+                    : (selectedCount > 0
+                        ? palette.primaryColor.withValues(alpha: 0.5)
+                        : palette.inputBorderColor),
+                width: isOpen ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.dns_rounded,
+                  size: 15,
+                  color: selectedCount > 0
+                      ? palette.primaryColor
+                      : palette.textColor.withValues(alpha: 0.6),
+                ),
+                if (selectedCount > 0) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    '$selectedCount',
+                    style: TextStyle(
+                      fontFamily: 'Courier New',
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: palette.primaryColor,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 13,
+                  color: palette.textColor.withValues(alpha: 0.5),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-        return Padding(
-          padding: const EdgeInsets.only(right: 6.0),
-          child: Tooltip(
-            message:
-                '${conn.currentLabel} (${conn.currentHost})${isInRightPane ? ' • RIGHT' : ' • LEFT'}\nClick to toggle target selection',
-            waitDuration: const Duration(milliseconds: 400),
+  int get _targetNodeCount {
+    return _broadcastCoordinator.resolveTargetConnections(
+      leftTabs: _tabs,
+      rightTabs: _rightTabs,
+      isSplitView: _isSplitView,
+    ).length;
+  }
+
+  // --- Run Button (Vibrant Circular Arrow Button) ---
+  Widget _buildRunButton() {
+    final palette = AppTheme.activePalette;
+    const activeBlue = Color(0xFF2563EB);
+
+    return ListenableBuilder(
+      listenable: _commandInputController,
+      builder: (context, _) {
+        final nodeCount = _targetNodeCount;
+        final hasText = _commandInputController.text.trim().isNotEmpty;
+        final canRun = !_isSendingCommands && hasText && nodeCount > 0;
+        final isActive = canRun || _isSendingCommands;
+
+        final tooltipMessage = _isSendingCommands
+            ? 'Executing...'
+            : (nodeCount == 0
+                ? 'No target node selected'
+                : (!hasText
+                    ? 'Enter command'
+                    : 'Run on $nodeCount node${nodeCount == 1 ? '' : 's'} (Enter)'));
+
+        return Tooltip(
+          message: tooltipMessage,
+          child: Material(
+            color: Colors.transparent,
             child: InkWell(
-              key: ValueKey('nexus_target_connection_chip_${conn.id}'),
-              onTap: () => _toggleConnectionSelection(conn.id),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+              onTap: canRun ? _sendBroadcastCommand : null,
+              borderRadius: BorderRadius.circular(20),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
-                  color: palette.background.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(6),
+                  shape: BoxShape.circle,
+                  color: isActive
+                      ? activeBlue
+                      : palette.textColor.withValues(alpha: 0.08),
                   border: Border.all(
-                    color: isSelected
-                        ? palette.primaryColor.withValues(alpha: 0.7)
-                        : palette.inputBorderColor,
+                    color: isActive
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : palette.textColor.withValues(alpha: 0.06),
                     width: 1,
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isConnected
-                            ? palette.successColor
-                            : palette.errorColor,
-                        boxShadow: isConnected
-                            ? [
-                                BoxShadow(
-                                  color: palette.successColor.withValues(alpha: 0.6),
-                                  blurRadius: 4,
-                                ),
-                              ]
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      conn.currentLabel.isNotEmpty
-                          ? conn.currentLabel
-                          : conn.currentHost,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontFamily: 'Courier New',
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                        color: isSelected
-                            ? (isConnected ? palette.successColor : palette.primaryColor)
-                            : palette.textColor.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    if (_isSplitView) ...[
-                      const SizedBox(width: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 3, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: palette.textColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: Text(
-                          isInRightPane ? 'R' : 'L',
-                          style: TextStyle(
-                            fontSize: 7.5,
-                            fontWeight: FontWeight.bold,
-                            color: palette.textColor.withValues(alpha: 0.6),
+                  boxShadow: isActive
+                      ? [
+                          BoxShadow(
+                            color: activeBlue.withValues(alpha: 0.45),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                      ),
-                    ],
-                  ],
+                        ]
+                      : null,
                 ),
+                alignment: Alignment.center,
+                child: _isSendingCommands
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 18,
+                        color: isActive
+                            ? Colors.white
+                            : palette.textColor.withValues(alpha: 0.3),
+                      ),
               ),
             ),
           ),
         );
-      }).toList(),
+      },
+    );
+  }
+
+  // --- DevOps Single-Row Command Pane (Double-Border Layered Inset Capsule) ---
+  Widget _buildDevopsToolbarCommandPane() {
+    final palette = AppTheme.activePalette;
+    return Container(
+      // LAPISAN 1: OUTER RING (Tipis & redup sebagai trench kedalaman)
+      decoration: BoxDecoration(
+        color: palette.background.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: _isSendingCommands
+              ? palette.primaryColor.withValues(alpha: 0.4)
+              : palette.textColor.withValues(alpha: 0.08),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.65),
+            blurRadius: 26,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(3.5), // Celah 3.5px antara border luar dan dalam
+      child: Container(
+        // LAPISAN 2: INNER SURFACE CAPSULE (Lebih tebal & lebih terang, efek mengambang)
+        decoration: BoxDecoration(
+          color: palette.surfaceColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: _isSendingCommands
+                ? palette.primaryColor
+                : palette.textColor.withValues(alpha: 0.22),
+            width: 1.3,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+            if (_isSendingCommands)
+              BoxShadow(
+                color: palette.primaryColor.withValues(alpha: 0.3),
+                blurRadius: 14,
+                spreadRadius: 1,
+              ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Node Picker on the left
+            _buildNodePicker(),
+            Container(
+              width: 1,
+              height: 18,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              color: palette.textColor.withValues(alpha: 0.12),
+            ),
+            // Command Input Box
+            Expanded(
+              child: CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.enter): () {
+                    if (!_isSendingCommands) {
+                      _sendBroadcastCommand();
+                    }
+                  },
+                  const SingleActivator(
+                    LogicalKeyboardKey.numpadEnter,
+                  ): () {
+                    if (!_isSendingCommands) {
+                      _sendBroadcastCommand();
+                    }
+                  },
+                },
+                child: TextField(
+                  controller: _commandInputController,
+                  focusNode: _commandFocusNode,
+                  minLines: 1,
+                  maxLines: 4,
+                  style: TextStyle(
+                    fontFamily: 'Courier New',
+                    fontSize: 12.5,
+                    color: palette.textColor,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: false,
+                    fillColor: Colors.transparent,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    hintText: 'Enter command to broadcast...',
+                    hintStyle: TextStyle(
+                      fontFamily: 'Courier New',
+                      fontSize: 12,
+                      color: palette.textColor.withValues(alpha: 0.35),
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Quick Actions (Snippets & History)
+            _buildSnippetsButton(),
+            const SizedBox(width: 4),
+            _buildHistoryButton(),
+            const SizedBox(width: 8),
+            // Run Button
+            _buildRunButton(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -3080,6 +2770,7 @@ class NexusScreenState extends State<NexusScreen> {
                                           isActive: !_lastActivePaneIsRight && i == _activeTab,
                                           onFocus: () => _lastActivePaneIsRight = false,
                                           onClose: () => _closeTab(i, isRightPane: false),
+                                          bottomInset: _showCommandPane ? 68.0 : 0.0,
                                         ),
                                     ],
                                   );
@@ -3131,6 +2822,7 @@ class NexusScreenState extends State<NexusScreen> {
                                           isActive: _lastActivePaneIsRight && i == _activeRightTab,
                                           onFocus: () => _lastActivePaneIsRight = true,
                                           onClose: () => _closeTab(i, isRightPane: true),
+                                          bottomInset: _showCommandPane ? 68.0 : 0.0,
                                         ),
                                     ],
                                   );
@@ -3166,6 +2858,7 @@ class NexusScreenState extends State<NexusScreen> {
                             isActive: i == _activeTab,
                             onFocus: () => _lastActivePaneIsRight = false,
                             onClose: () => _closeTab(i, isRightPane: false),
+                            bottomInset: _showCommandPane ? 68.0 : 0.0,
                           ),
                       ],
                     );

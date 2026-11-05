@@ -104,6 +104,9 @@ class FuzzySearchableDropdown<T> extends StatefulWidget {
   final String searchPlaceholder;
   final bool isClearable;
   final double maxHeight;
+  final bool? openUpward;
+  final double? popupWidth;
+  final Widget Function(BuildContext context, bool isOpen)? customTrigger;
 
   const FuzzySearchableDropdown({
     super.key,
@@ -119,6 +122,9 @@ class FuzzySearchableDropdown<T> extends StatefulWidget {
     this.searchPlaceholder = 'Type to search with fuzzy logic...',
     this.isClearable = false,
     this.maxHeight = 360,
+    this.openUpward,
+    this.popupWidth,
+    this.customTrigger,
   });
 
   @override
@@ -165,6 +171,17 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
   OverlayEntry _createOverlayEntry() {
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+
+    final spaceBelow = screenHeight - (position.dy + size.height);
+    final spaceAbove = position.dy;
+
+    final openUp = widget.openUpward ??
+        (spaceBelow < widget.maxHeight && spaceAbove > spaceBelow);
+    final availableHeight = (openUp ? (spaceAbove - 16) : (spaceBelow - 16))
+        .clamp(100.0, widget.maxHeight);
 
     return OverlayEntry(
       builder: (ctx) {
@@ -180,17 +197,21 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
             ),
             // Popup container
             Positioned(
-              width: size.width,
+              width: widget.popupWidth ?? size.width,
               child: CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
-                offset: Offset(0, size.height + 4),
+                followerAnchor:
+                    openUp ? Alignment.bottomLeft : Alignment.topLeft,
+                targetAnchor:
+                    openUp ? Alignment.topLeft : Alignment.bottomLeft,
+                offset: Offset(0, openUp ? -4 : 4),
                 child: Material(
                   elevation: 12,
                   color: AppTheme.surfaceColor,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                    constraints: BoxConstraints(maxHeight: availableHeight),
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceColor,
                       borderRadius: BorderRadius.circular(10),
@@ -232,6 +253,17 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.customTrigger != null) {
+      return CompositedTransformTarget(
+        link: _layerLink,
+        child: InkWell(
+          onTap: _toggleDropdown,
+          borderRadius: BorderRadius.circular(8),
+          child: widget.customTrigger!(context, _isOpen),
+        ),
+      );
+    }
+
     final item = widget.selectedItem;
 
     return CompositedTransformTarget(
