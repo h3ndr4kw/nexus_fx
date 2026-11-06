@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dartssh2/dartssh2.dart';
 import '../models/file_explorer_models.dart';
+import 'ssh_service.dart';
 import 'ssh_tunnel_manager.dart';
 import 'rust_sftp_bridge.dart';
 
@@ -334,6 +335,7 @@ class FileExplorerService {
     final client = SSHClient(
       socket,
       username: username,
+      algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => password,
       onUserInfoRequest: (r) => r.prompts.map((_) => password).toList(),
       keepAliveInterval: const Duration(seconds: 15),
@@ -381,6 +383,7 @@ class FileExplorerService {
         jumpClient = SSHClient(
           jumpSocket,
           username: target.jumpUsername ?? '',
+          algorithms: SshAlgorithmHelper.buildAlgorithms(),
           onPasswordRequest: () => target.jumpPassword ?? '',
         );
         await jumpClient.authenticated;
@@ -388,6 +391,10 @@ class FileExplorerService {
         client = SSHClient(
           channel,
           username: target.username,
+          algorithms: SshAlgorithmHelper.buildAlgorithms(
+            sshMacs: target.sshMacs,
+            customSshOptions: target.customSshOptions,
+          ),
           onPasswordRequest: () => target.password,
         );
         await client.authenticated;
@@ -400,6 +407,10 @@ class FileExplorerService {
         client = SSHClient(
           socket,
           username: target.username,
+          algorithms: SshAlgorithmHelper.buildAlgorithms(
+            sshMacs: target.sshMacs,
+            customSshOptions: target.customSshOptions,
+          ),
           onPasswordRequest: () => target.password,
         );
         await client.authenticated;

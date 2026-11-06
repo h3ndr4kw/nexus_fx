@@ -6,6 +6,7 @@ import 'package:nexus_fx/models/session_models.dart';
 import 'package:nexus_fx/screens/sessions_screen.dart';
 import 'package:nexus_fx/services/session_manager_service.dart';
 import 'package:nexus_fx/theme/app_theme.dart';
+import 'package:nexus_fx/widgets/session_properties_dialog.dart';
 
 void main() {
   late Directory tempDir;
@@ -242,5 +243,51 @@ void main() {
 
     // Search query is cleared, default items visible again
     expect(find.text('LOCAL'), findsNWidgets(2));
+  });
+
+  testWidgets('SessionPropertiesDialog shows MAC Algorithm dropdown and Custom SSH Options and saves them', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 800));
+    SessionPropertiesResult? result;
+
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.darkTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => ElevatedButton(
+            onPressed: () async {
+              result = await SessionPropertiesDialog.show(
+                ctx,
+                sessionManager: service,
+                initialSession: SessionProfile(
+                  id: 's_10_89',
+                  name: 'Jump_10_89',
+                  protocol: SessionProtocol.ssh,
+                  host: '10.89.100.11',
+                  username: '21339656',
+                  sshMacs: 'hmac-sha1',
+                  customSshOptions: '-o MACs=hmac-sha1',
+                  modifiedAt: DateTime.now(),
+                ),
+              );
+            },
+            child: const Text('Open Dialog'),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('Open Dialog'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MAC Algorithm:'), findsOneWidget);
+    expect(find.text('Custom SSH Options:'), findsOneWidget);
+    expect(find.text('-o MACs=hmac-sha1'), findsOneWidget);
+
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(result!.savedSession.sshMacs, 'hmac-sha1');
+    expect(result!.savedSession.customSshOptions, '-o MACs=hmac-sha1');
   });
 }

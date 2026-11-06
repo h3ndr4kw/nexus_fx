@@ -109,5 +109,37 @@ void main() {
       expect(restored.name, 'TSEL_PS');
       expect(restored.description, 'Telkomsel PS nodes');
     });
+
+    test('SessionProfile serializes and deserializes sshMacs and customSshOptions', () {
+      final profile = SessionProfile(
+        id: 'sess_mac',
+        name: 'LEGACY_MAC_HOST',
+        protocol: SessionProtocol.ssh,
+        host: '10.89.100.11',
+        username: '21339656',
+        sshMacs: 'hmac-sha1',
+        customSshOptions: '-o MACs=hmac-sha1 -o KexAlgorithms=+diffie-hellman-group1-sha1',
+        modifiedAt: DateTime.utc(2026, 11, 6),
+      );
+
+      final json = profile.toJson();
+      expect(json['sshMacs'], 'hmac-sha1');
+      expect(json['customSshOptions'], '-o MACs=hmac-sha1 -o KexAlgorithms=+diffie-hellman-group1-sha1');
+
+      final restored = SessionProfile.fromJson(json);
+      expect(restored.sshMacs, 'hmac-sha1');
+      expect(restored.customSshOptions, '-o MACs=hmac-sha1 -o KexAlgorithms=+diffie-hellman-group1-sha1');
+
+      final legacyJson = {
+        'id': 's_old',
+        'name': 'Old',
+        'protocol': 'ssh',
+        'host': '1.2.3.4',
+        'modifiedAt': '2026-01-01',
+      };
+      final restoredOld = SessionProfile.fromJson(legacyJson);
+      expect(restoredOld.sshMacs, 'auto');
+      expect(restoredOld.customSshOptions, '');
+    });
   });
 }

@@ -26,6 +26,8 @@ class ExplorerNodeTarget {
   final String? jumpUsername;
   final String? jumpPassword;
   final String? sessionId;
+  final String sshMacs;
+  final String customSshOptions;
 
   const ExplorerNodeTarget({
     required this.type,
@@ -43,6 +45,8 @@ class ExplorerNodeTarget {
     this.jumpUsername,
     this.jumpPassword,
     this.sessionId,
+    this.sshMacs = 'auto',
+    this.customSshOptions = '',
   });
 
   bool get isLocal => type == ExplorerTargetType.local;
@@ -82,6 +86,8 @@ class ExplorerNodeTarget {
       jumpUsername: route?.jumpUsername,
       jumpPassword: route?.jumpPassword,
       sessionId: profile.id,
+      sshMacs: profile.sshMacs,
+      customSshOptions: profile.customSshOptions,
     );
   }
 
@@ -96,6 +102,8 @@ class ExplorerNodeTarget {
     String? siteName,
     bool? isOam,
     String? feHostname,
+    String? sshMacs,
+    String? customSshOptions,
   }) {
     return ExplorerNodeTarget(
       type: type ?? this.type,
@@ -108,6 +116,8 @@ class ExplorerNodeTarget {
       siteName: siteName ?? this.siteName,
       isOam: isOam ?? this.isOam,
       feHostname: feHostname ?? this.feHostname,
+      sshMacs: sshMacs ?? this.sshMacs,
+      customSshOptions: customSshOptions ?? this.customSshOptions,
     );
   }
 }

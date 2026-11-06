@@ -290,5 +290,147 @@ void main() {
       expect(result, isTrue);
       expect(stopwatch.elapsedMilliseconds, lessThan(500));
     });
+
+    test('SshAlgorithmHelper includes legacy algorithms by default for out-of-the-box compatibility', () {
+      final algos = SshAlgorithmHelper.buildAlgorithms();
+      final macNames = algos.mac.map((m) => m.name).toList();
+      final kexNames = algos.kex.map((k) => k.name).toList();
+      final hostkeyNames = algos.hostkey.map((h) => h.name).toList();
+      final cipherNames = algos.cipher.map((c) => c.name).toList();
+
+      expect(macNames, containsAll(['hmac-sha1', 'hmac-md5', 'hmac-sha2-256-96', 'hmac-sha2-512-96']));
+      expect(kexNames, containsAll([
+        'diffie-hellman-group-exchange-sha1',
+        'diffie-hellman-group14-sha1',
+        'diffie-hellman-group1-sha1',
+      ]));
+      expect(hostkeyNames, contains('ssh-rsa'));
+      expect(cipherNames, containsAll(['aes256-cbc', 'aes192-cbc', 'aes128-cbc']));
+    });
+
+    test('SshAlgorithmHelper prioritizes hmac-sha1 and non-AEAD ciphers when sshMacs or -o MACs=hmac-sha1 is specified', () {
+      final algosFromDropdown = SshAlgorithmHelper.buildAlgorithms(sshMacs: 'hmac-sha1');
+      expect(algosFromDropdown.mac.first.name, 'hmac-sha1');
+      expect(algosFromDropdown.cipher.first.isAead, isFalse);
+
+      final algosFromCustomOpt = SshAlgorithmHelper.buildAlgorithms(
+        customSshOptions: '-o MACs=hmac-sha1',
+      );
+      expect(algosFromCustomOpt.mac.map((m) => m.name).toList(), ['hmac-sha1']);
+      expect(algosFromCustomOpt.cipher.first.isAead, isFalse);
+
+      final cliFlags = SshAlgorithmHelper.buildCliOptionFlags(
+        sshMacs: 'hmac-sha1',
+        customSshOptions: '-o KexAlgorithms=+diffie-hellman-group1-sha1',
+      );
+      expect(cliFlags, contains('-o MACs=hmac-sha1'));
+      expect(cliFlags, contains('-o KexAlgorithms=+diffie-hellman-group1-sha1'));
+    });
+
+    test('SshConnection.fromSessionProfile preserves sshMacs and customSshOptions', () {
+      final profile = SessionProfile(
+        id: 'sess_10_89',
+        name: 'NODE_10_89',
+        protocol: SessionProtocol.ssh,
+        host: '10.89.100.11',
+        username: '21339656',
+        sshMacs: 'hmac-sha1',
+        customSshOptions: '-o MACs=hmac-sha1',
+        modifiedAt: DateTime.now(),
+      );
+
+      final conn = SshConnection.fromSessionProfile(
+        profile,
+        route: ResolvedSshRoute(targetSession: profile),
+      );
+
+      expect(conn.sshMacs, 'hmac-sha1');
+      expect(conn.customSshOptions, '-o MACs=hmac-sha1');
+    });
+
+    test('terminal zoom/resize preserves line integrity and cursor position without corrupting prompt redraws', () {
+      const f5Prompt = '21339656@(DPS1-01-F5)(cfg-sync Standalone)(/S1-green-P::Active)(/Common)(tmos)# ';
+      final conn = SshConnection(
+        id: 'sess_zoom_test',
+        host: '10.89.100.11',
+        label: 'DPS1-01-F5',
+      );
+      addTearDown(conn.dispose);
+
+      // Initial terminal viewport (e.g. 120x30)
+      conn.terminal.resize(120, 30);
+      conn.simulateOutputForTesting('Last login: Fri Nov  6 11:17:05 2026 from 10.59.221.21\r\n');
+      conn.simulateOutputForTesting(f5Prompt);
+
+      expect(conn.terminal.buffer.cursorY, 1);
+      expect(conn.terminal.buffer.cursorX, f5Prompt.length);
+
+      // Simulate user zooming in (viewport shrinks below 80 columns, e.g. 60x20),
+      // then zooming out (viewport grows to 140x35), while remote shell (tmos)
+      // redraws the prompt on SIGWINCH using relative cursor movement (\x1b[80D\x1b[K).
+      conn.terminal.resize(60, 20);
+      conn.terminal.resize(100, 25);
+      conn.simulateOutputForTesting('\x1b[80D\x1b[K$f5Prompt');
+      conn.terminal.resize(140, 35);
+      conn.simulateOutputForTesting('\x1b[80D\x1b[K$f5Prompt');
+
+      // Cursor must remain on row 1 (second line) and line 1 must contain a single clean prompt
+      expect(conn.terminal.buffer.cursorY, 1);
+      final line1Text = conn.terminal.buffer.lines[conn.terminal.buffer.absoluteCursorY].getText().trimRight();
+      expect(line1Text, f5Prompt.trimRight());
+    });
+
+    test('rapid terminal resize events debounce remote PTY resize notifications', () async {
+      final resizedDimensions = <String>[];
+      final conn = SshConnection(
+        id: 'sess_debounce_test',
+        host: '10.89.100.11',
+        label: 'DPS1-01-F5',
+      );
+      addTearDown(conn.dispose);
+      conn.onPtyResizeForTesting = (w, h) {
+        resizedDimensions.add('${w}x$h');
+      };
+
+      // Simulate rapid zoom steps (e.g. Ctrl+Shift+Scroll or repeated Ctrl++ / Ctrl+-)
+      conn.terminal.resize(110, 32);
+      conn.terminal.resize(100, 29);
+      conn.terminal.resize(92, 27);
+      conn.terminal.resize(85, 25);
+
+      // Immediately after synchronous layout resizes, remote PTY is not flooded yet
+      expect(resizedDimensions, isEmpty);
+
+      // After debounce window settles, only the final settled dimension is sent
+      await Future.delayed(SshConnection.ptyResizeDebounce + const Duration(milliseconds: 100));
+      expect(resizedDimensions, ['85x25']);
+    });
+
+    test('zoom key presses spaced ~300ms apart still send a single remote PTY resize', () async {
+      final resizedDimensions = <String>[];
+      final conn = SshConnection(
+        id: 'sess_debounce_spaced_test',
+        host: '10.89.100.11',
+        label: 'DPS1-01-F5',
+      );
+      addTearDown(conn.dispose);
+      conn.onPtyResizeForTesting = (w, h) {
+        resizedDimensions.add('${w}x$h');
+      };
+
+      // Each Ctrl++ / Ctrl+- press triggers a layout resize; user presses ~300ms apart
+      conn.terminal.resize(110, 32);
+      await Future.delayed(const Duration(milliseconds: 300));
+      conn.terminal.resize(100, 29);
+      await Future.delayed(const Duration(milliseconds: 300));
+      conn.terminal.resize(92, 27);
+      await Future.delayed(const Duration(milliseconds: 300));
+      conn.terminal.resize(100, 29);
+
+      expect(resizedDimensions, isEmpty);
+
+      await Future.delayed(SshConnection.ptyResizeDebounce + const Duration(milliseconds: 100));
+      expect(resizedDimensions, ['100x29']);
+    });
   });
 }

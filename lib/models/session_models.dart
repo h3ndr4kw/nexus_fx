@@ -121,6 +121,8 @@ class SessionProfile {
   final String host;
   final int port;
   final String? fallbackHost;
+  final String sshMacs;
+  final String customSshOptions;
   final String description;
   final bool autoReconnect;
   final int reconnectIntervalSec;
@@ -165,6 +167,8 @@ class SessionProfile {
     this.host = '',
     this.port = 22,
     this.fallbackHost,
+    this.sshMacs = 'auto',
+    this.customSshOptions = '',
     this.description = '',
     this.autoReconnect = false,
     this.reconnectIntervalSec = 30,
@@ -201,6 +205,8 @@ class SessionProfile {
     int? port,
     String? fallbackHost,
     bool clearFallbackHost = false,
+    String? sshMacs,
+    String? customSshOptions,
     String? description,
     bool? autoReconnect,
     int? reconnectIntervalSec,
@@ -235,6 +241,8 @@ class SessionProfile {
       host: host ?? this.host,
       port: port ?? this.port,
       fallbackHost: clearFallbackHost ? null : (fallbackHost ?? this.fallbackHost),
+      sshMacs: sshMacs ?? this.sshMacs,
+      customSshOptions: customSshOptions ?? this.customSshOptions,
       description: description ?? this.description,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       reconnectIntervalSec: reconnectIntervalSec ?? this.reconnectIntervalSec,
@@ -271,6 +279,8 @@ class SessionProfile {
       'host': host,
       'port': port,
       'fallbackHost': fallbackHost,
+      'sshMacs': sshMacs,
+      'customSshOptions': customSshOptions,
       'description': description,
       'autoReconnect': autoReconnect,
       'reconnectIntervalSec': reconnectIntervalSec,
@@ -315,6 +325,8 @@ class SessionProfile {
       host: json['host'] as String? ?? '',
       port: (json['port'] as num?)?.toInt() ?? 22,
       fallbackHost: json['fallbackHost'] as String?,
+      sshMacs: json['sshMacs'] as String? ?? 'auto',
+      customSshOptions: json['customSshOptions'] as String? ?? '',
       description: json['description'] as String? ?? '',
       autoReconnect: json['autoReconnect'] as bool? ?? false,
       reconnectIntervalSec: (json['reconnectIntervalSec'] as num?)?.toInt() ?? 30,

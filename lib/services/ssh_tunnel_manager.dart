@@ -3,6 +3,7 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import '../models/network_manager_config.dart';
 import '../models/ssh_tunnel_models.dart';
+import 'ssh_service.dart';
 
 /// Manages SSH master jump host connections and multiplexed port forwarding channels.
 ///
@@ -136,6 +137,7 @@ class SshTunnelManager {
     final client = SSHClient(
       socket,
       username: config.username,
+      algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => config.password,
       onUserInfoRequest: (r) => r.prompts.map((_) => config.password).toList(),
       keepAliveInterval: const Duration(seconds: 15),
@@ -399,6 +401,7 @@ class SshTunnelManager {
     final client = SSHClient(
       socket,
       username: username,
+      algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => password,
       onUserInfoRequest: (r) => r.prompts.map((_) => password).toList(),
       keepAliveInterval: const Duration(seconds: 15),

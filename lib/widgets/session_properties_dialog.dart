@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/session_models.dart';
 import '../models/ssh_tunnel_models.dart';
 import '../services/session_manager_service.dart';
+import '../services/ssh_service.dart';
 import '../theme/app_theme.dart';
 import 'fuzzy_searchable_dropdown.dart';
 
@@ -80,6 +81,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   late final TextEditingController _hostController;
   late final TextEditingController _portController;
   late final TextEditingController _fallbackHostController;
+  late final TextEditingController _customSshOptionsController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _reconnectIntervalController;
   late final TextEditingController _reconnectLimitController;
@@ -101,6 +103,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
 
   SessionProtocol _protocol = SessionProtocol.ssh;
   SessionEnvironment _environment = SessionEnvironment.dev;
+  String _sshMacs = 'auto';
   AuthMethod _authMethod = AuthMethod.password;
   JumpHostMode _jumpHostMode = JumpHostMode.direct;
   String? _selectedJumpSessionId;
@@ -118,6 +121,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _parentFolderId = s?.parentId ?? widget.parentFolderId;
     _protocol = s?.protocol ?? SessionProtocol.ssh;
     _environment = s?.environment ?? SessionEnvironment.dev;
+    _sshMacs = s?.sshMacs ?? 'auto';
     _authMethod = s?.authMethod ?? AuthMethod.password;
     _jumpHostMode = s?.jumpHostMode ?? JumpHostMode.direct;
     _selectedJumpSessionId = s?.jumpSessionId;
@@ -129,6 +133,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _hostController = TextEditingController(text: s?.host ?? '');
     _portController = TextEditingController(text: (s?.port ?? 22).toString());
     _fallbackHostController = TextEditingController(text: s?.fallbackHost ?? '');
+    _customSshOptionsController = TextEditingController(text: s?.customSshOptions ?? '');
     _descriptionController = TextEditingController(text: s?.description ?? '');
     _reconnectIntervalController = TextEditingController(text: (s?.reconnectIntervalSec ?? 30).toString());
     _reconnectLimitController = TextEditingController(text: (s?.reconnectLimitMin ?? 0).toString());
@@ -155,6 +160,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _hostController.dispose();
     _portController.dispose();
     _fallbackHostController.dispose();
+    _customSshOptionsController.dispose();
     _descriptionController.dispose();
     _reconnectIntervalController.dispose();
     _reconnectLimitController.dispose();
@@ -221,6 +227,8 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       host: _hostController.text.trim(),
       port: int.tryParse(_portController.text.trim()) ?? 22,
       fallbackHost: _fallbackHostController.text.trim().isEmpty ? null : _fallbackHostController.text.trim(),
+      sshMacs: _sshMacs,
+      customSshOptions: _customSshOptionsController.text.trim(),
       description: _descriptionController.text.trim(),
       autoReconnect: _autoReconnect,
       reconnectIntervalSec: int.tryParse(_reconnectIntervalController.text.trim()) ?? 30,
@@ -547,6 +555,33 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
             _buildTextField('Port Number:', _portController, width: 100),
             const SizedBox(height: 10),
             _buildTextField('Fallback Host:', _fallbackHostController, hintText: 'Optional secondary IP/host'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 110,
+                  child: Text('MAC Algorithm:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                ),
+                Expanded(
+                  child: FuzzySearchableDropdown<String>(
+                    items: SshAlgorithmHelper.availableMacOptions,
+                    selectedItem: SshAlgorithmHelper.availableMacOptions.contains(_sshMacs)
+                        ? _sshMacs
+                        : 'auto',
+                    itemLabel: (mac) => mac == 'auto' ? 'Auto (Modern + Legacy Compatible)' : mac,
+                    onChanged: (val) {
+                      if (val != null) setState(() => _sshMacs = val);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildTextField(
+              'Custom SSH Options:',
+              _customSshOptionsController,
+              hintText: 'e.g. -o MACs=hmac-sha1 -o KexAlgorithms=+diffie-hellman-group1-sha1',
+            ),
           ],
           const SizedBox(height: 10),
           _buildTextField('Description:', _descriptionController, maxLines: 2),
