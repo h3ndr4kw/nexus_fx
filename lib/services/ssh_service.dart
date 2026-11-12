@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -255,6 +256,10 @@ class SshConnection {
 
   SshSessionLogger? _sessionLogger;
   File? _logFile;
+
+  /// Set when session logging stopped because of an I/O error (e.g. disk
+  /// full). The SSH session itself keeps running.
+  final ValueNotifier<SshLogFailure?> logFailure = ValueNotifier(null);
   File? get logFile => _logFile ?? _sessionLogger?.file;
 
   String _currentHost;
@@ -312,7 +317,23 @@ class SshConnection {
   @visibleForTesting
   void simulateOutputForTesting(String text) {
     _addOutput(text);
+    flushTerminalOutput();
   }
+
+  /// Like [simulateOutputForTesting] but leaves the output queued, as real
+  /// remote output is.
+  @visibleForTesting
+  void enqueueOutputForTesting(String text) => _addOutput(text);
+
+  @visibleForTesting
+  bool get isOutputPausedForTesting => _outputPaused;
+
+  @visibleForTesting
+  int get pendingTerminalCharsForTesting => _pendingChars;
+
+  /// Registers [source] so it is paused while the terminal is behind.
+  @visibleForTesting
+  Stream<T> trackOutputForTesting<T>(Stream<T> source) => _tracked(source);
 
   bool isShellPrompt(String buffer) => _isShellPrompt(buffer);
 
@@ -333,6 +354,27 @@ class SshConnection {
   final List<void Function()> _hopListeners = [];
   bool _suppressOutput = false;
   final StringBuffer _suppressedBuffer = StringBuffer();
+
+  // ---- Terminal output pipeline -------------------------------------------
+  // Remote output is queued and fed to xterm in time-boxed slices so a burst
+  // (e.g. `cat` of a big file) cannot monopolise the UI isolate. When the
+  // queue grows past [outputHighWaterChars] the SSH/process output streams are
+  // paused; dartssh2 then stops granting window, so the server stops sending
+  // until the terminal has caught up below [outputLowWaterChars].
+  static const int outputHighWaterChars = 1024 * 1024;
+  static const int outputLowWaterChars = 256 * 1024;
+  static const int _terminalSliceChars = 16 * 1024;
+  static const Duration _terminalSliceBudget = Duration(milliseconds: 8);
+
+  final ListQueue<String> _pendingChunks = ListQueue<String>();
+  int _pendingHeadOffset = 0;
+  int _pendingChars = 0;
+  Timer? _terminalDrainTimer;
+  final Stopwatch _syncWriteClock = Stopwatch()..start();
+  int _syncWindowStartUs = -1000000;
+  int _syncWindowChars = 0;
+  final List<StreamSubscription<dynamic>> _outputSubscriptions = [];
+  bool _outputPaused = false;
 
   late final Terminal terminal = Terminal(
     maxLines: 10000,
@@ -459,10 +501,12 @@ class SshConnection {
         isOam: isOam,
         timestamp: logTimestamp ?? DateTime.now(),
         sessionName: sessionName,
+        onFailure: _onLogFailure,
       );
       _logFile = _sessionLogger?.file;
     } catch (e) {
       debugPrint('Failed to initialize SSH logger: $e');
+      _onLogFailure(SshLogFailure(e, null));
     }
   }
 
@@ -487,11 +531,129 @@ class SshConnection {
   }
 
   void _addOutput(String data) {
-    terminal.write(data);
+    if (data.isEmpty) return;
+    _enqueueTerminal(data);
     if (!_outputController.isClosed) {
       _outputController.add(data);
     }
     recordLogOutput(data);
+  }
+
+  /// Shows [text] in the terminal only (not logged, not on [outputStream]),
+  /// in order with remote output that is still queued.
+  void writeLocal(String text) => _enqueueTerminal(text);
+
+  /// Synchronously writes all queued output to the terminal.
+  void flushTerminalOutput() {
+    _terminalDrainTimer?.cancel();
+    _terminalDrainTimer = null;
+    _drainTerminal(_pendingChars);
+  }
+
+  void _enqueueTerminal(String data) {
+    if (data.isEmpty || _isDisposed) return;
+    // Fast path for interactive use: with nothing queued, write small output
+    // straight away, up to one slice per ~frame. Anything beyond that (a
+    // burst) goes through the queue.
+    if (_pendingChars == 0) {
+      final nowUs = _syncWriteClock.elapsedMicroseconds;
+      if (nowUs - _syncWindowStartUs > 16000) {
+        _syncWindowStartUs = nowUs;
+        _syncWindowChars = 0;
+      }
+      if (_syncWindowChars + data.length <= _terminalSliceChars) {
+        _syncWindowChars += data.length;
+        terminal.write(data);
+        return;
+      }
+    }
+    _pendingChunks.add(data);
+    _pendingChars += data.length;
+    _terminalDrainTimer ??= Timer(Duration.zero, _drainTerminalTick);
+    if (!_outputPaused && _pendingChars > outputHighWaterChars) {
+      _setOutputPaused(true);
+    }
+  }
+
+  void _drainTerminalTick() {
+    _terminalDrainTimer = null;
+    if (_isDisposed) return;
+    final sw = Stopwatch()..start();
+    while (_pendingChars > 0 && sw.elapsed < _terminalSliceBudget) {
+      _drainTerminal(_terminalSliceChars);
+    }
+    if (_pendingChars > 0) {
+      // Yield to the event loop so frames and input get a turn.
+      _terminalDrainTimer = Timer(Duration.zero, _drainTerminalTick);
+    }
+  }
+
+  void _drainTerminal(int maxChars) {
+    if (_pendingChars == 0 || maxChars <= 0) return;
+    final out = StringBuffer();
+    var remaining = maxChars;
+    while (remaining > 0 && _pendingChunks.isNotEmpty) {
+      final head = _pendingChunks.first;
+      final available = head.length - _pendingHeadOffset;
+      if (available <= remaining) {
+        out.write(_pendingHeadOffset == 0
+            ? head
+            : head.substring(_pendingHeadOffset));
+        remaining -= available;
+        _pendingChunks.removeFirst();
+        _pendingHeadOffset = 0;
+      } else {
+        var end = _pendingHeadOffset + remaining;
+        // Never split a UTF-16 surrogate pair.
+        final unit = head.codeUnitAt(end - 1);
+        if (unit >= 0xD800 && unit <= 0xDBFF) end++;
+        out.write(head.substring(_pendingHeadOffset, end));
+        remaining -= end - _pendingHeadOffset;
+        _pendingHeadOffset = end;
+        if (_pendingHeadOffset >= head.length) {
+          _pendingChunks.removeFirst();
+          _pendingHeadOffset = 0;
+        }
+      }
+    }
+    _pendingChars -= out.length;
+    if (_pendingChars < 0) _pendingChars = 0;
+    terminal.write(out.toString());
+    if (_outputPaused && _pendingChars <= outputLowWaterChars) {
+      _setOutputPaused(false);
+    }
+  }
+
+  Stream<T> _tracked<T>(Stream<T> source) =>
+      _TrackedStream<T>(source, (sub) {
+        _outputSubscriptions.add(sub);
+        if (_outputPaused) sub.pause();
+      });
+
+  void _setOutputPaused(bool paused) {
+    if (_outputPaused == paused) return;
+    _outputPaused = paused;
+    for (final sub in _outputSubscriptions) {
+      paused ? sub.pause() : sub.resume();
+    }
+  }
+
+  void _releaseOutputSubscriptions() {
+    if (_outputPaused) {
+      for (final sub in _outputSubscriptions) {
+        sub.resume();
+      }
+    }
+    _outputPaused = false;
+    _outputSubscriptions.clear();
+  }
+
+  void _onLogFailure(SshLogFailure failure) {
+    debugPrint('SSH session log failed (${failure.path}): ${failure.error}');
+    if (_isDisposed) return;
+    logFailure.value = failure;
+    final where = failure.path != null ? ' (${failure.path})' : '';
+    _enqueueTerminal('\r\n\x1B[33m⚠ ${failure.message}$where\x1B[0m\r\n');
   }
 
   void _setConnectionState(bool state) {
@@ -566,7 +728,7 @@ class SshConnection {
           _isConnected = true;
           _setConnectionState(true);
           _addOutput('\r\n--- Local Shell Ready ($executable) ---\r\n\r\n');
-          _localProcess!.stdout.listen((bytes) {
+          _tracked(_localProcess!.stdout).listen((bytes) {
             final s = utf8.decode(bytes, allowMalformed: true);
             var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
             if (Platform.isWindows) {
@@ -574,7 +736,7 @@ class SshConnection {
             }
             _addOutput(normalized);
           });
-          _localProcess!.stderr.listen((bytes) {
+          _tracked(_localProcess!.stderr).listen((bytes) {
             final s = utf8.decode(bytes, allowMalformed: true);
             var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
             if (Platform.isWindows) {
@@ -780,7 +942,7 @@ class SshConnection {
         pty: _createPtyConfig(),
       );
 
-      _session!.stdout.listen(
+      _tracked(_session!.stdout).listen(
         (data) {
           final text = utf8.decode(data, allowMalformed: true);
           if (_suppressOutput) {
@@ -805,7 +967,7 @@ class SshConnection {
         },
       );
 
-      _session!.stderr.listen((data) {
+      _tracked(_session!.stderr).listen((data) {
         final text = utf8.decode(data, allowMalformed: true);
         if (_suppressOutput) {
           _suppressedBuffer.write(text);
@@ -991,7 +1153,7 @@ class SshConnection {
   }
 
   void _wireSession(SSHSession session) {
-    session.stdout.listen(
+    _tracked(session.stdout).listen(
       (data) {
         final text = utf8.decode(data, allowMalformed: true);
         _addOutput(text);
@@ -1011,7 +1173,7 @@ class SshConnection {
       },
     );
 
-    session.stderr.listen((data) {
+    _tracked(session.stderr).listen((data) {
       final text = utf8.decode(data, allowMalformed: true);
       _addOutput(text);
     });
@@ -1053,7 +1215,7 @@ class SshConnection {
         ),
       );
 
-      _session!.stdout.listen(
+      _tracked(_session!.stdout).listen(
         (data) {
           final text = utf8.decode(data, allowMalformed: true);
           if (_suppressOutput) {
@@ -1078,7 +1240,7 @@ class SshConnection {
         },
       );
 
-      _session!.stderr.listen((data) {
+      _tracked(_session!.stderr).listen((data) {
         final text = utf8.decode(data, allowMalformed: true);
         if (_suppressOutput) {
           _suppressedBuffer.write(text);
@@ -1346,7 +1508,7 @@ class SshConnection {
       _wasConnected = true;
       _setConnectionState(true);
 
-      _session!.stdout.listen(
+      _tracked(_session!.stdout).listen(
         (data) =>
             _addOutput(utf8.decode(data, allowMalformed: true)),
         onDone: () {
@@ -1364,7 +1526,7 @@ class SshConnection {
         },
       );
 
-      _session!.stderr.listen((data) {
+      _tracked(_session!.stderr).listen((data) {
         _addOutput(utf8.decode(data, allowMalformed: true));
       });
 
@@ -1392,10 +1554,7 @@ class SshConnection {
   }
 
   void _handleHopOutput(String text) {
-    _hopBuffer += text;
-    if (_hopBuffer.length > 4096) {
-      _hopBuffer = _hopBuffer.substring(_hopBuffer.length - 4096);
-    }
+    _hopBuffer = _keepTail(_hopBuffer, text, 4096);
     for (final listener in List<void Function()>.from(_hopListeners)) {
       listener();
     }
@@ -1555,6 +1714,14 @@ class SshConnection {
     return keptLines.join('\n');
   }
 
+  /// [previous] + [chunk], cut to its last [max] characters without copying
+  /// a large chunk first.
+  static String _keepTail(String previous, String chunk, int max) {
+    if (chunk.length >= max) return chunk.substring(chunk.length - max);
+    final joined = previous + chunk;
+    return joined.length > max ? joined.substring(joined.length - max) : joined;
+  }
+
   void _log(String message, {String? color}) {
     if (_outputController.isClosed) return;
     // Suppress informational messages
@@ -1612,7 +1779,7 @@ class SshConnection {
               _handleUserExit();
             }
           } else if (command == 'cls' || command == 'clear') {
-            terminal.write('\x1b[2J\x1b[H');
+            _enqueueTerminal('\x1b[2J\x1b[H');
           }
           _inputLineBuffer = '';
           buffer.write(Platform.isWindows ? '\r\n' : '\n');
@@ -1818,7 +1985,9 @@ class SshConnection {
     }
 
     final completer = Completer<bool>();
-    final buffer = StringBuffer();
+    // Prompt detection only looks at the end of the output; keeping just a
+    // tail avoids re-scanning everything a long command has printed.
+    var tail = '';
     StreamSubscription<String>? sub;
     Timer? timeoutTimer;
     Timer? echoGraceTimer;
@@ -1835,18 +2004,16 @@ class SshConnection {
     }
 
     void checkPrompt() {
-      final text = buffer.toString();
-      if (_isShellPrompt(text)) {
+      if (_isShellPrompt(tail)) {
         finish(true);
       }
     }
 
     sub = outputStream.listen((chunk) {
-      buffer.write(chunk);
-      final text = buffer.toString();
+      tail = _keepTail(tail, chunk, 4096);
 
       if (!hasSeenEchoOrOutput) {
-        if (text.contains('\n') || text.contains('\r')) {
+        if (chunk.contains('\n') || chunk.contains('\r')) {
           hasSeenEchoOrOutput = true;
         }
       }
@@ -1896,6 +2063,7 @@ class SshConnection {
       SshTunnelManager.instance.releaseLease(_leaseId!);
       _leaseId = null;
     }
+    _releaseOutputSubscriptions();
     closeLogger();
   }
 
@@ -1909,10 +2077,44 @@ class SshConnection {
     _resizeDebounceTimer?.cancel();
     _resizeDebounceTimer = null;
     disconnect();
+    _terminalDrainTimer?.cancel();
+    _terminalDrainTimer = null;
+    _pendingChunks.clear();
+    _pendingHeadOffset = 0;
+    _pendingChars = 0;
     _outputController.close();
     _connectionStateController.close();
     _labelController.close();
     terminalController.dispose();
+    logFailure.dispose();
+  }
+}
+
+/// Forwards to [_source] and reports every subscription to [_onListen].
+class _TrackedStream<T> extends Stream<T> {
+  final Stream<T> _source;
+  final void Function(StreamSubscription<T>) _onListen;
+
+  _TrackedStream(this._source, this._onListen);
+
+  @override
+  bool get isBroadcast => _source.isBroadcast;
+
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    final sub = _source.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+    _onListen(sub);
+    return sub;
   }
 }
 

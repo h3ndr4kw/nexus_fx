@@ -83,7 +83,7 @@ class SshTabViewState extends State<SshTabView> {
   }
 
   void _showSessionStoppedPrompt() {
-    _terminal.write(
+    widget.connection.writeLocal(
       '\r\n\x1b[90m────────────────────────────────────────────────────────────────────────────────\x1b[0m\r\n'
       '\x1b[31mSession stopped\x1b[0m\r\n'
       '    - Press \x1b[35m<Return>\x1b[0m to exit tab\r\n'
@@ -124,7 +124,7 @@ class SshTabViewState extends State<SshTabView> {
           '${dir.path}${Platform.pathSeparator}terminal_${safeHost}_$dateTimeStr.log');
       file.writeAsStringSync(text, flush: true);
 
-      _terminal.write(
+      widget.connection.writeLocal(
           '\r\n\x1b[32m✔ Terminal output saved to: ${file.path}\x1b[0m\r\n');
 
       if (mounted) {
@@ -138,8 +138,8 @@ class SshTabViewState extends State<SshTabView> {
         );
       }
     } catch (e) {
-      _terminal
-          .write('\r\n\x1b[31m✖ Failed to save terminal output: $e\x1b[0m\r\n');
+      widget.connection
+          .writeLocal('\r\n\x1b[31m✖ Failed to save terminal output: $e\x1b[0m\r\n');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -159,7 +159,7 @@ class SshTabViewState extends State<SshTabView> {
       _isConnecting = true;
       _error = null;
     });
-    _terminal.write(
+    widget.connection.writeLocal(
         '\r\n\x1b[33m[SYS] Restarting session to ${widget.connection.currentHost}...\x1b[0m\r\n');
     _connect();
   }
@@ -191,6 +191,8 @@ class SshTabViewState extends State<SshTabView> {
     _isFocused = _focusNode.hasFocus;
     _focusNode.addListener(_onFocusChange);
     _wasEverConnected = widget.connection.isConnected;
+
+    widget.connection.logFailure.addListener(_onLogFailure);
 
     _connectionSubscription =
         widget.connection.connectionState.listen((connected) {
@@ -228,9 +230,29 @@ class SshTabViewState extends State<SshTabView> {
     _connect();
   }
 
+  void _onLogFailure() {
+    final failure = widget.connection.logFailure.value;
+    if (failure == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(failure.isDiskFull
+            ? 'Disk full: session log for ${widget.connection.currentLabel} '
+                'stopped. The session is still running.'
+            : 'Session log stopped: ${failure.error}'),
+        backgroundColor: AppTheme.errorColor,
+        duration: const Duration(seconds: 8),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   void didUpdateWidget(SshTabView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.connection != oldWidget.connection) {
+      oldWidget.connection.logFailure.removeListener(_onLogFailure);
+      widget.connection.logFailure.addListener(_onLogFailure);
+    }
     if (widget.isActive &&
         (!oldWidget.isActive || widget.connection != oldWidget.connection)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -244,6 +266,11 @@ class SshTabViewState extends State<SshTabView> {
   @override
   void dispose() {
     SettingsService.instance.removeListener(_onSettingsChanged);
+    try {
+      widget.connection.logFailure.removeListener(_onLogFailure);
+    } catch (_) {
+      // The connection (and its notifier) may already be disposed.
+    }
     _focusNode.removeListener(_onFocusChange);
     _scrollController.dispose();
     _connectionSubscription?.cancel();
