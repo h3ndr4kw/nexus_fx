@@ -12,6 +12,7 @@ import '../services/nexus_tool_registry.dart';
 import '../services/session_manager_service.dart';
 import '../services/settings_service.dart';
 import '../services/transfer_manager.dart';
+import '../services/transfer_taskbar_progress.dart';
 import '../services/window_state_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/command_palette.dart';
@@ -157,6 +158,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     windowManager.addListener(this);
     TransferManager.instance.addListener(_syncPreventCloseForTransfers);
+    _taskbarProgress = TransferTaskbarProgress(TransferManager.instance);
 
     if (!widget.suppressStartupDialog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -211,6 +213,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     windowManager.removeListener(this);
     TransferManager.instance.removeListener(_syncPreventCloseForTransfers);
+    _taskbarProgress?.dispose();
     _sidebarFocusNode.dispose();
     _fileExplorerTabScrollController.dispose();
     for (final tab in _fileExplorerTabs) {
@@ -512,6 +515,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   // ==========================================
 
   bool _preventCloseForTransfers = false;
+  TransferTaskbarProgress? _taskbarProgress;
 
   /// Intercepts the window close button only while transfers are active, so
   /// normal closing is unaffected.

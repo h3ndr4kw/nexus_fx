@@ -302,13 +302,16 @@ class FileExplorerService {
     }
   }
 
+  /// Copies [srcPath] into [destDirPath], named [destName] if given (else
+  /// the source name).
   Future<void> copyLocal(
     String srcPath,
     String destDirPath, {
     void Function(int sentBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
-    final name = srcPath.split(Platform.pathSeparator).last;
+    final name = destName ?? srcPath.split(Platform.pathSeparator).last;
     final destPath = '$destDirPath${Platform.pathSeparator}$name';
     final isDir = await Directory(srcPath).exists();
     final agg = onProgress == null
@@ -336,6 +339,7 @@ class FileExplorerService {
     try {
       await for (final chunk in src.openRead()) {
         cancelToken?.throwIfCancelled();
+        if (cancelToken?.isPaused ?? false) await cancelToken!.waitIfPaused();
         sink.add(chunk);
         sent += chunk.length;
         onProgress?.call(sent, totalBytes);
@@ -395,8 +399,9 @@ class FileExplorerService {
     String destDirPath, {
     void Function(int sentBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
-    final name = srcPath.split(Platform.pathSeparator).last;
+    final name = destName ?? srcPath.split(Platform.pathSeparator).last;
     final destPath = '$destDirPath${Platform.pathSeparator}$name';
     try {
       // Same-volume rename: atomic and instant.
@@ -413,6 +418,7 @@ class FileExplorerService {
         destDirPath,
         onProgress: onProgress,
         cancelToken: cancelToken,
+        destName: destName,
       );
       await deleteLocal(srcPath);
     }
@@ -792,11 +798,12 @@ class FileExplorerService {
     String destDirPath, {
     void Function(int sentBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
     final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
         ? destDirPath.substring(0, destDirPath.length - 1)
         : destDirPath;
-    final name = srcPath.split('/').last;
+    final name = destName ?? srcPath.split('/').last;
     final targetPath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
 
     if (session.sftp != null) {
@@ -824,11 +831,12 @@ class FileExplorerService {
     String destDirPath, {
     void Function(int sentBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
     final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
         ? destDirPath.substring(0, destDirPath.length - 1)
         : destDirPath;
-    final name = srcPath.split('/').last;
+    final name = destName ?? srcPath.split('/').last;
     final targetPath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
 
     await _runWithRemoteProgress(
@@ -933,11 +941,13 @@ class FileExplorerService {
     String remoteDestDir, {
     void Function(int sentBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
     final agg = onProgress == null
         ? null
         : _ProgressAggregator(await _localSize(localPath), onProgress);
-    await _uploadLocalToRemote(localPath, session, remoteDestDir, agg, cancelToken);
+    await _uploadLocalToRemote(localPath, session, remoteDestDir, agg, cancelToken,
+        destName: destName);
   }
 
   Future<void> _uploadLocalToRemote(
@@ -945,13 +955,14 @@ class FileExplorerService {
     RemoteSession session,
     String remoteDestDir,
     _ProgressAggregator? agg,
-    TransferCancelToken? cancelToken,
-  ) async {
+    TransferCancelToken? cancelToken, {
+    String? destName,
+  }) async {
     cancelToken?.throwIfCancelled();
     final entity = FileSystemEntity.isFileSync(localPath)
         ? File(localPath)
         : Directory(localPath);
-    final name = localPath.split(Platform.pathSeparator).last;
+    final name = destName ?? localPath.split(Platform.pathSeparator).last;
     final cleanDest = remoteDestDir.endsWith('/') && remoteDestDir.length > 1
         ? remoteDestDir.substring(0, remoteDestDir.length - 1)
         : remoteDestDir;
@@ -994,8 +1005,9 @@ class FileExplorerService {
         );
         try {
           var sentBytes = 0;
-          final stream = entity.openRead().map((chunk) {
+          final stream = entity.openRead().asyncMap((chunk) async {
             cancelToken?.throwIfCancelled();
+            if (cancelToken?.isPaused ?? false) await cancelToken!.waitIfPaused();
             sentBytes += chunk.length;
             onProgress?.call(sentBytes, totalBytes);
             return Uint8List.fromList(chunk);
@@ -1065,6 +1077,7 @@ class FileExplorerService {
         var first = true;
         while (true) {
           cancelToken?.throwIfCancelled();
+          if (cancelToken?.isPaused ?? false) await cancelToken!.waitIfPaused();
           final chunk = await raf.read(chunkSize);
           if (chunk.isEmpty && !first) break;
           final redirect = first ? '>' : '>>';
@@ -1095,8 +1108,9 @@ class FileExplorerService {
       var ok = false;
       try {
         var sent = 0;
-        await ssh.stdin.addStream(file.openRead().map((chunk) {
+        await ssh.stdin.addStream(file.openRead().asyncMap((chunk) async {
           cancelToken?.throwIfCancelled();
+          if (cancelToken?.isPaused ?? false) await cancelToken!.waitIfPaused();
           sent += chunk.length;
           onProgress?.call(sent, totalBytes);
           return Uint8List.fromList(chunk);
@@ -1134,6 +1148,7 @@ class FileExplorerService {
     String localDestDir, {
     void Function(int receivedBytes, int totalBytes)? onProgress,
     TransferCancelToken? cancelToken,
+    String? destName,
   }) async {
     _ProgressAggregator? agg;
     if (onProgress != null) {
@@ -1153,6 +1168,7 @@ class FileExplorerService {
       localDestDir,
       agg,
       cancelToken,
+      destName: destName,
     );
   }
 
@@ -1162,10 +1178,11 @@ class FileExplorerService {
     bool isDir,
     String localDestDir,
     _ProgressAggregator? agg,
-    TransferCancelToken? cancelToken,
-  ) async {
+    TransferCancelToken? cancelToken, {
+    String? destName,
+  }) async {
     cancelToken?.throwIfCancelled();
-    final name = remotePath.split('/').last;
+    final name = destName ?? remotePath.split('/').last;
     final targetLocalPath = '$localDestDir${Platform.pathSeparator}$name';
 
     if (!isDir) {
@@ -1297,6 +1314,9 @@ class FileExplorerService {
       );
       await for (final chunk in guarded) {
         cancelToken?.throwIfCancelled();
+        // Halting here pauses the subscription: the idle timeout stops and
+        // SSH back-pressure holds the sender.
+        if (cancelToken?.isPaused ?? false) await cancelToken!.waitIfPaused();
         if (head.length < 4096) head.add(chunk);
         sink.add(chunk);
         received += chunk.length;
@@ -1778,18 +1798,78 @@ class ShellAccessDeniedException implements Exception {
   String toString() => message;
 }
 
-/// Cooperative cancellation for file transfers: loops poll
-/// [throwIfCancelled], and blocking operations (an SSH channel waiting on a
-/// stalled peer) register an [onCancel] hook that aborts them.
+/// Cooperative control for file transfers.
+///
+/// Cancel: loops poll [throwIfCancelled], and blocking operations (an SSH
+/// channel waiting on a stalled peer) register an [onCancel] hook that
+/// aborts them.
+///
+/// Pause: byte loops call [waitIfPaused] between chunks, which halts them
+/// (applying back-pressure to the source stream) until [resume]. Operations
+/// with no chunk loop (server-side `cp`/`mv`, the native engine) cannot stop
+/// mid-file; they halt at the next pause point instead.
 class TransferCancelToken {
   bool _cancelled = false;
   final List<void Function()> _hooks = [];
 
+  bool _paused = false;
+  Completer<void>? _resumed;
+  int _haltedLoops = 0;
+
+  /// Called whenever [isPaused] or [isHalted] changes.
+  void Function()? onPauseStateChanged;
+
   bool get isCancelled => _cancelled;
+
+  /// Pause was requested and not yet resumed.
+  bool get isPaused => _paused;
+
+  /// A transfer loop is actually stopped at a pause point right now (as
+  /// opposed to a pause that is still waiting for the current file).
+  bool get isHalted => _haltedLoops > 0;
+
+  void pause() {
+    if (_cancelled || _paused) return;
+    _paused = true;
+    _resumed = Completer<void>();
+    onPauseStateChanged?.call();
+  }
+
+  void resume() {
+    if (!_paused) return;
+    _paused = false;
+    _resumed?.complete();
+    _resumed = null;
+    onPauseStateChanged?.call();
+  }
+
+  /// Returns at once unless paused; otherwise waits for [resume] or
+  /// [cancel] (then throws [TransferCancelledException]).
+  Future<void> waitIfPaused() async {
+    throwIfCancelled();
+    if (!_paused) return;
+    _haltedLoops++;
+    onPauseStateChanged?.call();
+    try {
+      while (_paused && !_cancelled) {
+        await _resumed!.future;
+      }
+    } finally {
+      _haltedLoops--;
+      onPauseStateChanged?.call();
+    }
+    throwIfCancelled();
+  }
 
   void cancel() {
     if (_cancelled) return;
     _cancelled = true;
+    // Release loops halted on a pause so they can observe the cancel.
+    if (_paused) {
+      _paused = false;
+      _resumed?.complete();
+      _resumed = null;
+    }
     for (final hook in List.of(_hooks)) {
       try {
         hook();

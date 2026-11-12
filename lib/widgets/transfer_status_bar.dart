@@ -79,6 +79,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     final String text;
     final Color color;
     double? progress;
+    var paused = false;
 
     if (active.isEmpty) {
       // Only finished jobs left: show the latest outcome.
@@ -94,11 +95,17 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
       text = _activeLine(job);
       color = _kText;
       progress = job.status == TransferStatus.queued ? null : job.progress;
+      paused = job.isPaused;
     } else {
-      leading = _spinner();
-      text = '${active.length} transfers running'
+      final pausedCount = active.where((j) => j.isPaused).length;
+      leading = pausedCount == active.length
+          ? const Icon(Icons.pause_circle, size: 13, color: _kMuted)
+          : _spinner();
+      text = '${active.length} transfers'
+          '${pausedCount > 0 ? ' · $pausedCount paused' : ''}'
           '${queued > 0 ? ' · $queued queued' : ''}'
           ' · ${_pct(_manager.aggregateProgress ?? 0)}';
+      paused = pausedCount == active.length;
       color = _kText;
       progress = _manager.aggregateProgress;
     }
@@ -125,7 +132,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
               const SizedBox(width: 10),
               SizedBox(
                 width: 140,
-                child: _progressBar(progress),
+                child: _progressBar(progress, paused: paused),
               ),
             ],
             if (canToggle)
@@ -193,6 +200,8 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
           const SizedBox(width: 6),
           _textButton('Replace', () => resolve(ConflictChoice.replace),
               key: ValueKey('transfer_conflict_replace_${job.id}'), color: _kRed),
+          _textButton('Keep both', () => resolve(ConflictChoice.keepBoth),
+              key: ValueKey('transfer_conflict_keep_both_${job.id}'), color: _kCyan),
           _textButton('Skip', () => resolve(ConflictChoice.skip),
               key: ValueKey('transfer_conflict_skip_${job.id}'), color: _kGreen),
           _iconButton(
@@ -224,6 +233,12 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
               const Spacer(),
               if (hasFinished)
                 _textButton('Clear finished', _manager.clearFinished),
+              if (jobs.any(_manager.canPause))
+                _textButton('Pause all', _manager.pauseAll,
+                    key: const ValueKey('transfer_pause_all')),
+              if (jobs.any((j) => j.isPaused))
+                _textButton('Resume all', _manager.resumeAll,
+                    key: const ValueKey('transfer_resume_all'), color: _kCyan),
               if (hasActive)
                 _textButton('Cancel all', _manager.cancelAll,
                     key: const ValueKey('transfer_cancel_all'), color: _kRed),
@@ -271,7 +286,8 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
             SizedBox(
               width: 120,
               child: _progressBar(
-                  job.status == TransferStatus.queued ? null : job.progress),
+                  job.status == TransferStatus.queued ? null : job.progress,
+                  paused: job.isPaused),
             ),
           ],
           _jobAction(job),
@@ -283,19 +299,54 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
   /// Cancel for active jobs, dismiss for finished ones.
   Widget _jobAction(TransferJob job) {
     if (job.isActive) {
-      return _iconButton(
+      final cancel = _iconButton(
         key: ValueKey('transfer_cancel_${job.id}'),
         icon: Icons.close,
         tooltip: job.isCancelRequested ? 'Cancelling…' : 'Cancel transfer',
         color: _kRed,
         onPressed: job.isCancelRequested ? null : () => _manager.cancel(job),
       );
+      final Widget? pauseToggle = job.isPaused
+          ? _iconButton(
+              key: ValueKey('transfer_resume_${job.id}'),
+              icon: Icons.play_arrow,
+              tooltip: 'Resume',
+              color: _kCyan,
+              onPressed: () => _manager.resume(job),
+            )
+          : _manager.canPause(job)
+              ? _iconButton(
+                  key: ValueKey('transfer_pause_${job.id}'),
+                  icon: Icons.pause,
+                  tooltip: 'Pause',
+                  onPressed: () => _manager.pause(job),
+                )
+              : null;
+      if (pauseToggle == null) return cancel;
+      return Row(mainAxisSize: MainAxisSize.min, children: [pauseToggle, cancel]);
     }
-    return _iconButton(
+    final dismiss = _iconButton(
       key: ValueKey('transfer_dismiss_${job.id}'),
       icon: Icons.close,
       tooltip: 'Dismiss',
       onPressed: () => _manager.dismiss(job),
+    );
+    final retryCount = _manager.retryableItems(job).length;
+    if (retryCount == 0) return dismiss;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _iconButton(
+          key: ValueKey('transfer_retry_${job.id}'),
+          icon: Icons.refresh,
+          tooltip: retryCount == job.totalItems
+              ? 'Retry'
+              : 'Retry the $retryCount unfinished item(s)',
+          color: _kCyan,
+          onPressed: () => _manager.retry(job),
+        ),
+        dismiss,
+      ],
     );
   }
 
@@ -310,6 +361,12 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
 
   String _activeDetail(TransferJob job) {
     if (job.isCancelRequested) return 'Cancelling…';
+    if (job.isPaused) {
+      // Server-side cp/mv and the native engine cannot stop mid-file.
+      return job.isHalted
+          ? 'Paused · ${_pct(job.progress)}'
+          : 'Pausing after the current file (${job.currentFile})…';
+    }
     if (job.needsAttention) {
       return "Waiting for your decision: '${job.pendingConflict!.itemName}' already exists";
     }
@@ -353,6 +410,9 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     if (job.needsAttention) {
       return const Icon(Icons.warning_amber_rounded, size: 13, color: _kAmber);
     }
+    if (job.isPaused) {
+      return const Icon(Icons.pause_circle, size: 13, color: _kMuted);
+    }
     switch (job.status) {
       case TransferStatus.running:
         return _spinner();
@@ -373,8 +433,8 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
         child: CircularProgressIndicator(strokeWidth: 1.6, color: _kCyan),
       );
 
-  Widget _progressBar(double? value) => Semantics(
-        label: 'Transfer progress',
+  Widget _progressBar(double? value, {bool paused = false}) => Semantics(
+        label: paused ? 'Transfer progress (paused)' : 'Transfer progress',
         value: value == null ? 'waiting' : _pct(value),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(2),
@@ -382,7 +442,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
             value: value,
             minHeight: 4,
             backgroundColor: AppTheme.borderSubtle,
-            color: _kCyan,
+            color: paused ? _kMuted : _kCyan,
           ),
         ),
       );

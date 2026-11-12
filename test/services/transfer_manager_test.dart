@@ -218,6 +218,96 @@ void main() {
     expect(f.status, TransferStatus.running);
   });
 
+  test('retry re-runs only the unfinished items, for the same owner', () async {
+    var attempt = 0;
+    final retrying = TransferManager(
+      finishedLinger: null,
+      runner: (job, report) async {
+        attempt++;
+        for (final item in job.items) {
+          if (attempt == 1 && item.name == 'b') throw Exception('link dropped');
+          job.transferredPaths.add(item.path);
+        }
+      },
+    );
+    addTearDown(retrying.dispose);
+
+    final first = retrying.enqueue(
+      items: [_item('a'), _item('b'), _item('c')],
+      srcTarget: ExplorerNodeTarget.local,
+      srcDirPath: '/src',
+      destTarget: ExplorerNodeTarget.local,
+      destDirPath: '/dest',
+      isMove: true,
+      owner: 'tab-1',
+    );
+    await _settle();
+    await _settle();
+    expect(first.status, TransferStatus.failed);
+    expect(retrying.canRetry(first), isTrue);
+    expect(retrying.retryableItems(first).map((i) => i.name), ['b', 'c']);
+
+    final second = retrying.retry(first)!;
+    expect(retrying.jobs, [second], reason: 'the failed job is replaced');
+    expect(second.items.map((i) => i.name), ['b', 'c']);
+    expect(second.isMove, isTrue);
+    expect(second.owner, 'tab-1');
+    await _settle();
+    await _settle();
+
+    expect(second.status, TransferStatus.completed);
+    expect(retrying.canRetry(second), isFalse);
+    expect(retrying.retry(second), isNull);
+  });
+
+  test('retry is not offered when the only leftovers were skipped on purpose', () async {
+    final skipping = TransferManager(
+      finishedLinger: null,
+      runner: (job, report) async {
+        job.skippedPaths.add(job.items.first.path);
+        throw Exception('boom');
+      },
+    );
+    addTearDown(skipping.dispose);
+    final job = skipping.enqueue(
+      items: [_item('a')],
+      srcTarget: ExplorerNodeTarget.local,
+      srcDirPath: '/src',
+      destTarget: ExplorerNodeTarget.local,
+      destDirPath: '/dest',
+      isMove: false,
+    );
+    await _settle();
+    await _settle();
+    expect(job.status, TransferStatus.failed);
+    expect(skipping.canRetry(job), isFalse);
+  });
+
+  group('uniqueName', () {
+    test('numbers files before the extension', () {
+      expect(TransferManager.uniqueName('a.txt', false, {'a.txt'}), 'a (1).txt');
+      expect(
+        TransferManager.uniqueName('a.txt', false, {'a.txt', 'a (1).txt'}),
+        'a (2).txt',
+      );
+      expect(TransferManager.uniqueName('archive.tar.gz', false, {}), 'archive.tar (1).gz');
+    });
+
+    test('keeps dotfiles, extensionless names and folders whole', () {
+      expect(TransferManager.uniqueName('.bashrc', false, {}), '.bashrc (1)');
+      expect(TransferManager.uniqueName('Makefile', false, {}), 'Makefile (1)');
+      expect(TransferManager.uniqueName('v1.2', true, {}), 'v1.2 (1)');
+    });
+
+    test('compares through keyOf (case-insensitive targets)', () {
+      expect(
+        TransferManager.uniqueName('A.TXT', false, {'a (1).txt'},
+            keyOf: (n) => n.toLowerCase()),
+        'A (2).TXT',
+      );
+    });
+  });
+
   test('a failure is reported with a readable message and stays listed', () async {
     final failing = TransferManager(
       runner: (job, report) async => throw Exception('disk full'),
@@ -443,6 +533,63 @@ void main() {
         expect(job.status, TransferStatus.cancelled);
         expect(job.pendingConflict, isNull);
         expect(File('${dest.path}${sep}a.txt').readAsStringSync(), 'old');
+      });
+
+      test('Keep both copies a file under the next free name', () async {
+        final a = write(src, 'a.txt', 'new');
+        write(dest, 'a.txt', 'old');
+
+        final job = copy([a]);
+        expect((await conflictOf(job)).remainingItems, 0);
+        real.resolveConflict(job, ConflictChoice.keepBoth);
+        await done(job);
+
+        expect(job.status, TransferStatus.completed);
+        expect(File('${dest.path}${sep}a.txt').readAsStringSync(), 'old');
+        expect(File('${dest.path}${sep}a (1).txt').readAsStringSync(), 'new');
+      });
+
+      test('Keep both avoids names still to come in the same job', () async {
+        final a = write(src, 'a.txt', 'A');
+        final a1 = write(src, 'a (1).txt', 'A1');
+        write(dest, 'a.txt', 'old');
+
+        final job = copy([a, a1]);
+        await conflictOf(job);
+        real.resolveConflict(job, ConflictChoice.keepBoth);
+        await done(job);
+
+        expect(job.status, TransferStatus.completed);
+        expect(File('${dest.path}${sep}a.txt').readAsStringSync(), 'old');
+        expect(File('${dest.path}${sep}a (2).txt').readAsStringSync(), 'A');
+        expect(File('${dest.path}${sep}a (1).txt').readAsStringSync(), 'A1');
+      });
+
+      test('Keep both works for folders and for moves', () async {
+        final srcDir = Directory('${src.path}${sep}d')..createSync();
+        write(srcDir, 'x.txt', 'x');
+        Directory('${dest.path}${sep}d').createSync();
+        final b = write(src, 'b.txt', 'bee');
+        write(dest, 'b.txt', 'old');
+
+        final job = real.enqueue(
+          items: [entry(srcDir), entry(b)],
+          srcTarget: ExplorerNodeTarget.local,
+          srcDirPath: src.path,
+          destTarget: ExplorerNodeTarget.local,
+          destDirPath: dest.path,
+          isMove: true,
+        );
+        await conflictOf(job);
+        real.resolveConflict(job, ConflictChoice.keepBoth, applyToAll: true);
+        await done(job);
+
+        expect(job.status, TransferStatus.completed);
+        expect(File('${dest.path}${sep}d (1)${sep}x.txt').readAsStringSync(), 'x');
+        expect(File('${dest.path}${sep}b (1).txt').readAsStringSync(), 'bee');
+        expect(File('${dest.path}${sep}b.txt').readAsStringSync(), 'old');
+        expect(srcDir.existsSync(), isFalse);
+        expect(b.existsSync(), isFalse);
       });
 
       test('copying into the source folder skips instead of truncating', () async {

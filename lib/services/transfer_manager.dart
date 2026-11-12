@@ -16,6 +16,9 @@ enum ConflictChoice {
 
   /// Leave the destination untouched and move on to the next item.
   skip,
+
+  /// Transfer under a free name next to the existing one, e.g. `a (1).txt`.
+  keepBoth,
 }
 
 /// A destination name clash the job is waiting on the user to resolve. The
@@ -98,6 +101,24 @@ class TransferJob {
   bool get isCancelRequested => cancelToken.isCancelled;
   bool get needsAttention => isActive && pendingConflict != null;
 
+  /// Pause requested (the job may still be finishing a file that cannot be
+  /// paused mid-way; see [isHalted]).
+  bool get isPaused => isActive && cancelToken.isPaused;
+
+  /// The job's I/O is actually stopped.
+  bool get isHalted => cancelToken.isHalted;
+
+  DateTime? _pausedAt;
+  Duration _pausedTotal = Duration.zero;
+
+  /// Time spent transferring, excluding pauses.
+  Duration get activeElapsed {
+    if (startedAt == null) return Duration.zero;
+    final end = finishedAt ?? DateTime.now();
+    final pausedNow = _pausedAt == null ? Duration.zero : end.difference(_pausedAt!);
+    return end.difference(startedAt!) - _pausedTotal - pausedNow;
+  }
+
   String get title {
     final verb = isMove ? 'Moving' : 'Copying';
     return items.length == 1
@@ -112,12 +133,12 @@ class TransferJob {
   Duration? get eta {
     if (status != TransferStatus.running ||
         needsAttention ||
+        isPaused ||
         startedAt == null ||
         progress < 0.02) {
       return null;
     }
-    final elapsed = DateTime.now().difference(startedAt!);
-    return elapsed * ((1 - progress) / progress);
+    return activeElapsed * ((1 - progress) / progress);
   }
 
   /// One-line outcome for a finished job.
@@ -236,6 +257,7 @@ class TransferManager extends ChangeNotifier {
       owner: owner,
     );
     job.currentFile = items.isNotEmpty ? items.first.name : '';
+    job.cancelToken.onPauseStateChanged = _notify;
     _jobs.add(job);
 
     // Claim the lanes synchronously so FIFO order holds per remote host.
@@ -270,6 +292,43 @@ class TransferManager extends ChangeNotifier {
     _notify();
   }
 
+  bool canPause(TransferJob job) =>
+      job.status == TransferStatus.running &&
+      !job.isCancelRequested &&
+      !job.isPaused &&
+      !job.needsAttention;
+
+  /// Pauses a running job. Byte-streamed transfers stop within a chunk;
+  /// server-side copies/moves and the native engine stop after the current
+  /// file. A paused job keeps its place (slot / host lane) in the queue.
+  void pause(TransferJob job) {
+    if (!canPause(job)) return;
+    job._pausedAt = DateTime.now();
+    job.cancelToken.pause();
+  }
+
+  void resume(TransferJob job) {
+    if (!job.isPaused) return;
+    final pausedAt = job._pausedAt;
+    if (pausedAt != null) {
+      job._pausedTotal += DateTime.now().difference(pausedAt);
+      job._pausedAt = null;
+    }
+    job.cancelToken.resume();
+  }
+
+  void pauseAll() {
+    for (final job in activeJobs) {
+      pause(job);
+    }
+  }
+
+  void resumeAll() {
+    for (final job in activeJobs) {
+      resume(job);
+    }
+  }
+
   void cancelAll() {
     for (final job in activeJobs) {
       job.cancelToken.cancel();
@@ -282,6 +341,37 @@ class TransferManager extends ChangeNotifier {
     if (job.isActive) return;
     _lingerTimers.remove(job.id)?.cancel();
     if (_jobs.remove(job)) _notify();
+  }
+
+  /// Items of a finished job that neither transferred nor were skipped on
+  /// purpose: what [retry] would run again.
+  List<FileExplorerItem> retryableItems(TransferJob job) {
+    if (job.status != TransferStatus.failed &&
+        job.status != TransferStatus.cancelled) {
+      return const [];
+    }
+    final done = {...job.transferredPaths, ...job.skippedPaths};
+    return job.items.where((i) => !done.contains(i.path)).toList();
+  }
+
+  bool canRetry(TransferJob job) => retryableItems(job).isNotEmpty;
+
+  /// Replaces a failed/cancelled job with a new one for its unfinished items
+  /// (an item that broke mid-way runs again in full). Returns the new job, or
+  /// null if there is nothing to retry.
+  TransferJob? retry(TransferJob job) {
+    final remaining = retryableItems(job);
+    if (remaining.isEmpty) return null;
+    dismiss(job);
+    return enqueue(
+      items: remaining,
+      srcTarget: job.srcTarget,
+      srcDirPath: job.srcDirPath,
+      destTarget: job.destTarget,
+      destDirPath: job.destDirPath,
+      isMove: job.isMove,
+      owner: job.owner,
+    );
   }
 
   void clearFinished() {
@@ -414,6 +504,12 @@ class TransferManager extends ChangeNotifier {
       if (holdsSlot) _releaseSlot();
       job.pendingConflict = null;
       job.finishedAt = DateTime.now();
+      if (job._pausedAt != null) {
+        job._pausedTotal += job.finishedAt!.difference(job._pausedAt!);
+        job._pausedAt = null;
+      }
+      job.cancelToken.onPauseStateChanged = null;
+      job.cancelToken.resume();
       ownDone.complete();
       if (!_disposed) {
         _scheduleLinger(job);
@@ -492,6 +588,26 @@ class TransferManager extends ChangeNotifier {
   static String _nameKey(ExplorerNodeTarget t, String name) =>
       _caseInsensitive(t) ? name.toLowerCase() : name;
 
+  /// First free variant of [name] in the style `report (1).pdf`, checking
+  /// [taken] through [keyOf] (case folding etc.). Folders keep dots intact.
+  @visibleForTesting
+  static String uniqueName(
+    String name,
+    bool isDir,
+    Set<String> taken, {
+    String Function(String name)? keyOf,
+  }) {
+    final key = keyOf ?? (String n) => n;
+    final dot = isDir ? -1 : name.lastIndexOf('.');
+    final hasExt = dot > 0 && dot < name.length - 1;
+    final stem = hasExt ? name.substring(0, dot) : name;
+    final ext = hasExt ? name.substring(dot) : '';
+    for (var n = 1;; n++) {
+      final candidate = '$stem ($n)$ext';
+      if (!taken.contains(key(candidate))) return candidate;
+    }
+  }
+
   /// Destination path the service will write, built the same way it does.
   static String _destPathFor(ExplorerNodeTarget dest, String destDir, String name) {
     if (dest.isLocal) return '$destDir${Platform.pathSeparator}$name';
@@ -559,6 +675,8 @@ class TransferManager extends ChangeNotifier {
 
     for (var i = 0; i < total; i++) {
       token.throwIfCancelled();
+      // Also where non-streamed operations honour a pause.
+      if (token.isPaused) await token.waitIfPaused();
       final item = job.items[i];
 
       void onBytes(int sent, int size, {double offset = 0.0, double scale = 1.0}) {
@@ -594,6 +712,7 @@ class TransferManager extends ChangeNotifier {
 
       existing ??= await _listDestEntries(dest, destDir, destRemote);
       final existingIsDir = existing[_nameKey(dest, item.name)];
+      String? destName; // null keeps the source name
       if (existingIsDir != null) {
         final choice = await _askConflict(
           job,
@@ -606,36 +725,44 @@ class TransferManager extends ChangeNotifier {
           skip();
           continue;
         }
-        // Replace: clear the old entry first. Copying a folder onto an
-        // existing one would otherwise nest it (`cp -r`) or merge it.
-        token.throwIfCancelled();
-        if (dest.isLocal) {
-          await svc.deleteLocal(destPath);
+        if (choice == ConflictChoice.keepBoth) {
+          destName = uniqueName(item.name, item.isDir, {
+            ...existing.keys,
+            // Names still to come in this job must stay free too.
+            for (final later in job.items.skip(i + 1)) _nameKey(dest, later.name),
+          }, keyOf: (n) => _nameKey(dest, n));
         } else {
-          await svc.deleteRemote(await destRemote(), destPath, existingIsDir);
+          // Replace: clear the old entry first. Copying a folder onto an
+          // existing one would otherwise nest it (`cp -r`) or merge it.
+          token.throwIfCancelled();
+          if (dest.isLocal) {
+            await svc.deleteLocal(destPath);
+          } else {
+            await svc.deleteRemote(await destRemote(), destPath, existingIsDir);
+          }
         }
       }
 
       if (src.isLocal && dest.isLocal) {
         if (job.isMove) {
           await svc.moveLocal(item.path, destDir,
-              onProgress: onBytes, cancelToken: token);
+              onProgress: onBytes, cancelToken: token, destName: destName);
         } else {
           await svc.copyLocal(item.path, destDir,
-              onProgress: onBytes, cancelToken: token);
+              onProgress: onBytes, cancelToken: token, destName: destName);
         }
       } else if (isSameTarget && !src.isLocal) {
         final session = await srcRemote();
         if (job.isMove) {
           await svc.moveRemote(session, item.path, destDir,
-              onProgress: onBytes, cancelToken: token);
+              onProgress: onBytes, cancelToken: token, destName: destName);
         } else {
           await svc.copyRemote(session, item.path, destDir,
-              onProgress: onBytes, cancelToken: token);
+              onProgress: onBytes, cancelToken: token, destName: destName);
         }
       } else if (src.isLocal && !dest.isLocal) {
         await svc.uploadLocalToRemote(item.path, await destRemote(), destDir,
-            onProgress: onBytes, cancelToken: token);
+            onProgress: onBytes, cancelToken: token, destName: destName);
         if (job.isMove) {
           token.throwIfCancelled();
           await svc.deleteLocal(item.path);
@@ -643,7 +770,7 @@ class TransferManager extends ChangeNotifier {
       } else if (!src.isLocal && dest.isLocal) {
         final session = await srcRemote();
         await svc.downloadRemoteToLocal(session, item.path, item.isDir, destDir,
-            onProgress: onBytes, cancelToken: token);
+            onProgress: onBytes, cancelToken: token, destName: destName);
         if (job.isMove) {
           token.throwIfCancelled();
           await svc.deleteRemote(session, item.path, item.isDir);
@@ -659,7 +786,8 @@ class TransferManager extends ChangeNotifier {
           final staged = '${tempDir.path}${Platform.pathSeparator}${item.name}';
           await svc.uploadLocalToRemote(staged, await destRemote(), destDir,
               onProgress: (s, t) => onBytes(s, t, offset: 0.5, scale: 0.5),
-              cancelToken: token);
+              cancelToken: token,
+              destName: destName);
           if (job.isMove) {
             token.throwIfCancelled();
             await svc.deleteRemote(from, item.path, item.isDir);
@@ -670,6 +798,7 @@ class TransferManager extends ChangeNotifier {
       }
 
       job.transferredPaths.add(item.path);
+      existing[_nameKey(dest, destName ?? item.name)] = item.isDir;
       report(completedItems: i + 1, progress: (i + 1) / total, force: true);
     }
   }
