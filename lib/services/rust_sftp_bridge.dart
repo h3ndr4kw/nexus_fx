@@ -2,10 +2,17 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
-final class _SftpTransferConfigC extends Struct {
+import 'file_explorer_service.dart' show TransferCancelToken, TransferCancelledException;
+
+// ---------------------------------------------------------------------------
+// C ABI (native/sftp_engine/src/ffi.rs, API version 2)
+// ---------------------------------------------------------------------------
+
+final class _ConnectConfigC extends Struct {
   external Pointer<Utf8> host;
   @Uint16()
   external int port;
@@ -16,56 +23,145 @@ final class _SftpTransferConfigC extends Struct {
   external int jumpPort;
   external Pointer<Utf8> jumpUsername;
   external Pointer<Utf8> jumpPassword;
-  external Pointer<Utf8> localPath;
-  external Pointer<Utf8> remotePath;
 }
 
 typedef _NativeProgressCallback = Void Function(Int64 transferred, Int64 total);
 
-typedef _NexusIsAvailableC = Int32 Function();
-typedef _NexusIsAvailableDart = int Function();
+typedef _IntFnC = Int32 Function();
+typedef _IntFnDart = int Function();
 
-typedef _NexusTransferC = Int32 Function(
-  Pointer<_SftpTransferConfigC> config,
-  Pointer<NativeFunction<_NativeProgressCallback>> callback,
-  Pointer<Uint8> cancelFlag,
+typedef _ConnectC = Pointer<Void> Function(
+  Pointer<_ConnectConfigC> config,
+  Pointer<Utf8> errBuf,
+  IntPtr errLen,
+  Pointer<Int32> outCode,
 );
-typedef _NexusTransferDart = int Function(
-  Pointer<_SftpTransferConfigC> config,
-  Pointer<NativeFunction<_NativeProgressCallback>> callback,
-  Pointer<Uint8> cancelFlag,
+typedef _ConnectDart = Pointer<Void> Function(
+  Pointer<_ConnectConfigC> config,
+  Pointer<Utf8> errBuf,
+  int errLen,
+  Pointer<Int32> outCode,
 );
+
+typedef _TransferC = Int32 Function(
+  Pointer<Void> engine,
+  Pointer<Utf8> from,
+  Pointer<Utf8> to,
+  Pointer<NativeFunction<_NativeProgressCallback>> callback,
+  Pointer<Uint8> control,
+  Pointer<Utf8> errBuf,
+  IntPtr errLen,
+);
+typedef _TransferDart = int Function(
+  Pointer<Void> engine,
+  Pointer<Utf8> from,
+  Pointer<Utf8> to,
+  Pointer<NativeFunction<_NativeProgressCallback>> callback,
+  Pointer<Uint8> control,
+  Pointer<Utf8> errBuf,
+  int errLen,
+);
+
+typedef _DisconnectC = Void Function(Pointer<Void> engine);
+typedef _DisconnectDart = void Function(Pointer<Void> engine);
+
+const int _errBufLen = 1024;
+
+/// Error from the native engine. [code] matches `EngineError::code` in Rust.
+class RustSftpException implements Exception {
+  const RustSftpException(this.code, this.message);
+
+  static const int invalidArgs = -1;
+  static const int io = -2;
+  static const int auth = -3;
+  static const int connect = -4;
+  static const int sftpUnavailable = -5;
+  static const int cancelled = -6;
+  static const int workerDied = -98;
+  static const int panic = -99;
+
+  final int code;
+  final String message;
+
+  bool get isCancelled => code == cancelled;
+
+  /// The engine cannot talk to this target at all (as opposed to one file
+  /// failing), so falling back to the Dart client for the rest makes sense.
+  bool get isConnectionLevel =>
+      code == auth || code == connect || code == sftpUnavailable || code == workerDied || code == panic;
+
+  @override
+  String toString() => message;
+}
+
+/// Where and as whom to connect. Plain data so it can cross isolates.
+@immutable
+class RustSftpConnectParams {
+  const RustSftpConnectParams({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.password,
+    this.jumpHost,
+    this.jumpPort = 22,
+    this.jumpUsername,
+    this.jumpPassword,
+  });
+
+  final String host;
+  final int port;
+  final String username;
+  final String password;
+  final String? jumpHost;
+  final int jumpPort;
+  final String? jumpUsername;
+  final String? jumpPassword;
+}
+
+/// One SFTP connection the file explorer can push file transfers through.
+/// Implemented by [RustSftpConnection]; tests substitute fakes.
+abstract class NativeSftpLink {
+  bool get isClosed;
+
+  Future<void> download(
+    String remotePath,
+    String localPath, {
+    void Function(int transferred, int total)? onProgress,
+    TransferCancelToken? cancelToken,
+  });
+
+  Future<void> upload(
+    String localPath,
+    String remotePath, {
+    void Function(int transferred, int total)? onProgress,
+    TransferCancelToken? cancelToken,
+  });
+
+  Future<void> close();
+}
 
 class RustSftpBridge {
-  /// Threshold in bytes: exactly 500 MB
-  static const int kRustTransferThreshold = 500 * 1024 * 1024;
+  static const int expectedApiVersion = 2;
 
   static bool? _cachedIsAvailable;
   static String? _resolvedDllPath;
-
-  /// Check whether the file size qualifies for the high-speed Rust engine
-  static bool shouldUseRust(int byteSize) {
-    return byteSize >= kRustTransferThreshold;
-  }
 
   /// Locates the compiled sftp_engine.dll across build, execution, and development directories
   static String? resolveDllPath() {
     if (_resolvedDllPath != null && File(_resolvedDllPath!).existsSync()) {
       return _resolvedDllPath;
     }
-
+    final sep = Platform.pathSeparator;
+    final cwd = Directory.current.path;
     final candidatePaths = <String>[
-      // Release build output in project root
-      '${Directory.current.path}${Platform.pathSeparator}native${Platform.pathSeparator}sftp_engine${Platform.pathSeparator}target${Platform.pathSeparator}release${Platform.pathSeparator}sftp_engine.dll',
-      // Debug build output in project root
-      '${Directory.current.path}${Platform.pathSeparator}native${Platform.pathSeparator}sftp_engine${Platform.pathSeparator}target${Platform.pathSeparator}debug${Platform.pathSeparator}sftp_engine.dll',
-      // Runner directory beside executable (Windows production bundle)
-      '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}sftp_engine.dll',
-      // Runner release build directory
-      '${Directory.current.path}${Platform.pathSeparator}build${Platform.pathSeparator}windows${Platform.pathSeparator}x64${Platform.pathSeparator}runner${Platform.pathSeparator}Release${Platform.pathSeparator}sftp_engine.dll',
-      '${Directory.current.path}${Platform.pathSeparator}build${Platform.pathSeparator}windows${Platform.pathSeparator}x64${Platform.pathSeparator}runner${Platform.pathSeparator}Debug${Platform.pathSeparator}sftp_engine.dll',
+      // Beside the executable (installed bundle / flutter build output)
+      '${File(Platform.resolvedExecutable).parent.path}${sep}sftp_engine.dll',
+      // Cargo output when running from the nexus_fx project root
+      '$cwd${sep}native${sep}sftp_engine${sep}target${sep}release${sep}sftp_engine.dll',
+      '$cwd${sep}native${sep}sftp_engine${sep}target${sep}debug${sep}sftp_engine.dll',
+      '$cwd${sep}build${sep}windows${sep}x64${sep}runner${sep}Release${sep}sftp_engine.dll',
+      '$cwd${sep}build${sep}windows${sep}x64${sep}runner${sep}Debug${sep}sftp_engine.dll',
     ];
-
     for (final path in candidatePaths) {
       if (File(path).existsSync()) {
         _resolvedDllPath = path;
@@ -75,190 +171,392 @@ class RustSftpBridge {
     return null;
   }
 
-  /// Check whether the Rust native engine is available on the current system
+  /// True when a DLL with the expected C ABI can be loaded.
   static bool get isAvailable {
-    if (_cachedIsAvailable != null) {
-      return _cachedIsAvailable!;
-    }
-
+    final cached = _cachedIsAvailable;
+    if (cached != null) return cached;
     try {
       final dllPath = resolveDllPath();
-      if (dllPath == null) {
-        _cachedIsAvailable = false;
-        return false;
-      }
-
+      if (dllPath == null) return _cachedIsAvailable = false;
       final lib = DynamicLibrary.open(dllPath);
-      final isAvailableFn = lib
-          .lookup<NativeFunction<_NexusIsAvailableC>>('nexus_sftp_is_available')
-          .asFunction<_NexusIsAvailableDart>();
-      
-      final res = isAvailableFn();
-      _cachedIsAvailable = res == 1;
-      return _cachedIsAvailable!;
+      if (!lib.providesSymbol('nexus_sftp_api_version')) {
+        debugPrint('[RustSftpBridge] $dllPath is an old build (no API version); ignoring it');
+        return _cachedIsAvailable = false;
+      }
+      final version = lib.lookupFunction<_IntFnC, _IntFnDart>('nexus_sftp_api_version')();
+      if (version != expectedApiVersion) {
+        debugPrint('[RustSftpBridge] $dllPath has API v$version, need v$expectedApiVersion');
+        return _cachedIsAvailable = false;
+      }
+      return _cachedIsAvailable = true;
     } catch (e) {
       debugPrint('[RustSftpBridge] Failed to load native library: $e');
-      _cachedIsAvailable = false;
-      return false;
+      return _cachedIsAvailable = false;
     }
   }
 
-  /// Transfers a large file using the Rust engine on a background worker thread.
-  static Future<bool> transferFile({
-    required String host,
-    required int port,
-    required String username,
-    required String password,
-    String? jumpHost,
-    int jumpPort = 22,
-    String? jumpUsername,
-    String? jumpPassword,
-    required String localPath,
-    required String remotePath,
-    required bool isUpload,
-    void Function(int sentBytes, int totalBytes)? onProgress,
+  @visibleForTesting
+  static void resetCache() {
+    _cachedIsAvailable = null;
+    _resolvedDllPath = null;
+  }
+}
+
+/// A connection held by a dedicated worker isolate. All SSH crypto and file
+/// I/O happens in native code on that isolate's thread, never on the UI
+/// isolate. Transfers run one at a time, in call order.
+///
+/// Cancel and pause go through two bytes of native memory that the engine
+/// polls (every chunk, and every 100 ms while waiting), so both take effect
+/// mid-file. While paused the engine stops reading, which stops the SSH
+/// window and therefore the sender.
+class RustSftpConnection implements NativeSftpLink {
+  RustSftpConnection._(
+    this._isolate,
+    this._commands,
+    this._replies,
+    this._repliesPort,
+    this._exits,
+    this._exitPort,
+  );
+
+  final Isolate _isolate;
+  final SendPort _commands;
+  final Stream<dynamic> _replies;
+  final ReceivePort _repliesPort;
+  final Stream<dynamic> _exits;
+  final ReceivePort _exitPort;
+  final Map<int, _PendingOp> _pending = {};
+  int _nextId = 1;
+  Future<void> _tail = Future<void>.value();
+  bool _closed = false;
+  Completer<void>? _closing;
+
+  @override
+  bool get isClosed => _closed;
+
+  static Future<RustSftpConnection> connect(
+    RustSftpConnectParams params, {
+    Duration timeout = const Duration(seconds: 60),
   }) async {
-    final dllPath = resolveDllPath();
-    if (dllPath == null || !isAvailable) {
+    final dllPath = RustSftpBridge.resolveDllPath();
+    if (dllPath == null || !RustSftpBridge.isAvailable) {
       throw UnsupportedError('Rust SFTP engine dynamic library is not available');
     }
 
-    final receivePort = ReceivePort();
-    final workerParams = _WorkerTransferParams(
-      dllPath: dllPath,
-      host: host,
-      port: port,
-      username: username,
-      password: password,
-      jumpHost: jumpHost,
-      jumpPort: jumpPort,
-      jumpUsername: jumpUsername,
-      jumpPassword: jumpPassword,
-      localPath: localPath,
-      remotePath: remotePath,
-      isUpload: isUpload,
-      replyPort: receivePort.sendPort,
-    );
-
-    final completer = Completer<bool>();
-
-    late StreamSubscription sub;
-    sub = receivePort.listen((message) {
-      if (message is _ProgressMessage) {
-        onProgress?.call(message.transferred, message.total);
-      } else if (message is _ResultMessage) {
-        sub.cancel();
-        receivePort.close();
-        if (message.exitCode == 0) {
-          completer.complete(true);
-        } else {
-          completer.completeError(
-            Exception('Rust SFTP transfer failed with code: ${message.exitCode}'),
-          );
-        }
+    final replies = ReceivePort('sftp_engine.replies');
+    final exitPort = ReceivePort('sftp_engine.exit');
+    // Ports are single-subscription; the connection listens again later.
+    final replyStream = replies.asBroadcastStream();
+    final exitStream = exitPort.asBroadcastStream();
+    final errorPort = ReceivePort('sftp_engine.error');
+    final ready = Completer<SendPort>();
+    late final StreamSubscription<dynamic> errSub;
+    errSub = errorPort.listen((e) {
+      if (!ready.isCompleted) {
+        ready.completeError(RustSftpException(RustSftpException.workerDied, 'Native worker failed: $e'));
+      }
+    });
+    final exitSub = exitStream.listen((_) {
+      if (!ready.isCompleted) {
+        ready.completeError(const RustSftpException(RustSftpException.workerDied, 'Native worker exited while connecting'));
+      }
+    });
+    late final StreamSubscription<dynamic> replySub;
+    replySub = replyStream.listen((msg) {
+      if (msg is _Connected) {
+        ready.complete(msg.commands);
+      } else if (msg is _ConnectFailed) {
+        ready.completeError(RustSftpException(msg.code, msg.message));
       }
     });
 
-    await Isolate.spawn(_runNativeTransferWorker, workerParams);
-    return completer.future;
+    final isolate = await Isolate.spawn(
+      _workerMain,
+      _WorkerStart(dllPath, params, replies.sendPort),
+      onExit: exitPort.sendPort,
+      onError: errorPort.sendPort,
+      errorsAreFatal: true,
+      debugName: 'sftp_engine ${params.host}',
+    );
+
+    final SendPort commands;
+    try {
+      commands = await ready.future.timeout(timeout, onTimeout: () {
+        isolate.kill(priority: Isolate.immediate);
+        throw RustSftpException(RustSftpException.connect,
+            'Native engine: no connection to ${params.host} after ${timeout.inSeconds}s');
+      });
+    } catch (_) {
+      await replySub.cancel();
+      await exitSub.cancel();
+      await errSub.cancel();
+      replies.close();
+      exitPort.close();
+      errorPort.close();
+      rethrow;
+    } finally {
+      await errSub.cancel();
+      errorPort.close();
+    }
+    await replySub.cancel();
+    await exitSub.cancel();
+
+    final conn = RustSftpConnection._(
+        isolate, commands, replyStream, replies, exitStream, exitPort);
+    conn._listen();
+    return conn;
+  }
+
+  void _listen() {
+    _replies.listen((msg) {
+      if (msg is _Progress) {
+        _pending[msg.id]?.onProgress?.call(msg.transferred, msg.total);
+      } else if (msg is _Done) {
+        final op = _pending.remove(msg.id);
+        if (op == null) return;
+        if (msg.code == 0) {
+          op.done.complete();
+        } else {
+          op.done.completeError(RustSftpException(msg.code, msg.message));
+        }
+      } else if (msg is _Closed) {
+        _closing?.complete();
+      }
+    });
+    _exits.listen((_) => _onWorkerGone());
+  }
+
+  void _onWorkerGone() {
+    _closed = true;
+    for (final op in _pending.values) {
+      if (!op.done.isCompleted) {
+        op.done.completeError(const RustSftpException(
+            RustSftpException.workerDied, 'Native SFTP worker stopped unexpectedly'));
+      }
+    }
+    _pending.clear();
+    if (!(_closing?.isCompleted ?? true)) _closing!.complete();
+    _repliesPort.close();
+    _exitPort.close();
+  }
+
+  @override
+  Future<void> download(
+    String remotePath,
+    String localPath, {
+    void Function(int transferred, int total)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) =>
+      _enqueue(false, remotePath, localPath, onProgress, cancelToken);
+
+  @override
+  Future<void> upload(
+    String localPath,
+    String remotePath, {
+    void Function(int transferred, int total)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) =>
+      _enqueue(true, localPath, remotePath, onProgress, cancelToken);
+
+  Future<void> _enqueue(
+    bool upload,
+    String from,
+    String to,
+    void Function(int, int)? onProgress,
+    TransferCancelToken? token,
+  ) {
+    final run = _tail.then((_) => _run(upload, from, to, onProgress, token));
+    _tail = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<void> _run(
+    bool upload,
+    String from,
+    String to,
+    void Function(int, int)? onProgress,
+    TransferCancelToken? token,
+  ) async {
+    token?.throwIfCancelled();
+    if (_closed) {
+      throw const RustSftpException(RustSftpException.workerDied, 'Native SFTP connection is closed');
+    }
+
+    final control = calloc<Uint8>(2); // [cancel, pause]
+    void Function()? leaveHalt;
+    void syncPause() {
+      final paused = token?.isPaused ?? false;
+      control[1] = paused ? 1 : 0;
+      if (paused && leaveHalt == null) {
+        leaveHalt = token!.enterHalt();
+      } else if (!paused && leaveHalt != null) {
+        leaveHalt!();
+        leaveHalt = null;
+      }
+    }
+
+    final removePauseListener = token?.addPauseListener(syncPause);
+    final unregisterCancel = token?.onCancel(() => control[0] = 1);
+    syncPause();
+
+    final id = _nextId++;
+    final op = _PendingOp(onProgress);
+    _pending[id] = op;
+    try {
+      _commands.send(_Transfer(id, upload, from, to, control.address));
+      await op.done.future;
+    } on RustSftpException catch (e) {
+      if (e.isCancelled || (token?.isCancelled ?? false)) {
+        throw const TransferCancelledException();
+      }
+      rethrow;
+    } finally {
+      removePauseListener?.call();
+      unregisterCancel?.call();
+      leaveHalt?.call();
+      // The engine has returned (or its isolate is gone): nothing reads the
+      // control block any more.
+      calloc.free(control);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    final closing = _closing = Completer<void>();
+    // Let queued transfers finish first; the worker handles messages in order.
+    _commands.send(const _Close());
+    await closing.future.timeout(const Duration(seconds: 5), onTimeout: () {
+      _isolate.kill(priority: Isolate.immediate);
+    });
   }
 }
 
-class _ProgressMessage {
+class _PendingOp {
+  _PendingOp(this.onProgress);
+  final void Function(int, int)? onProgress;
+  final Completer<void> done = Completer<void>();
+}
+
+// ---------------------------------------------------------------------------
+// Worker isolate
+// ---------------------------------------------------------------------------
+
+class _WorkerStart {
+  const _WorkerStart(this.dllPath, this.params, this.replies);
+  final String dllPath;
+  final RustSftpConnectParams params;
+  final SendPort replies;
+}
+
+class _Connected {
+  const _Connected(this.commands);
+  final SendPort commands;
+}
+
+class _ConnectFailed {
+  const _ConnectFailed(this.code, this.message);
+  final int code;
+  final String message;
+}
+
+class _Transfer {
+  const _Transfer(this.id, this.upload, this.from, this.to, this.controlAddress);
+  final int id;
+  final bool upload;
+  final String from;
+  final String to;
+  final int controlAddress;
+}
+
+class _Progress {
+  const _Progress(this.id, this.transferred, this.total);
+  final int id;
   final int transferred;
   final int total;
-  _ProgressMessage(this.transferred, this.total);
 }
 
-class _ResultMessage {
-  final int exitCode;
-  _ResultMessage(this.exitCode);
+class _Done {
+  const _Done(this.id, this.code, this.message);
+  final int id;
+  final int code;
+  final String message;
 }
 
-class _WorkerTransferParams {
-  final String dllPath;
-  final String host;
-  final int port;
-  final String username;
-  final String password;
-  final String? jumpHost;
-  final int jumpPort;
-  final String? jumpUsername;
-  final String? jumpPassword;
-  final String localPath;
-  final String remotePath;
-  final bool isUpload;
-  final SendPort replyPort;
-
-  _WorkerTransferParams({
-    required this.dllPath,
-    required this.host,
-    required this.port,
-    required this.username,
-    required this.password,
-    this.jumpHost,
-    this.jumpPort = 22,
-    this.jumpUsername,
-    this.jumpPassword,
-    required this.localPath,
-    required this.remotePath,
-    required this.isUpload,
-    required this.replyPort,
-  });
+class _Close {
+  const _Close();
 }
 
-void _runNativeTransferWorker(_WorkerTransferParams params) {
-  final lib = DynamicLibrary.open(params.dllPath);
-  final fnName = params.isUpload ? 'nexus_sftp_upload' : 'nexus_sftp_download';
-  final transferFn = lib
-      .lookup<NativeFunction<_NexusTransferC>>(fnName)
-      .asFunction<_NexusTransferDart>();
+class _Closed {
+  const _Closed();
+}
 
-  final config = calloc<_SftpTransferConfigC>();
-  config.ref.host = params.host.toNativeUtf8();
-  config.ref.port = params.port;
-  config.ref.username = params.username.toNativeUtf8();
-  config.ref.password = params.password.toNativeUtf8();
+Pointer<Utf8> _str(String? s, Arena arena) =>
+    (s == null || s.isEmpty) ? nullptr : s.toNativeUtf8(allocator: arena);
 
-  if (params.jumpHost != null && params.jumpHost!.isNotEmpty) {
-    config.ref.jumpHost = params.jumpHost!.toNativeUtf8();
-    config.ref.jumpPort = params.jumpPort;
-    config.ref.jumpUsername = (params.jumpUsername ?? '').toNativeUtf8();
-    config.ref.jumpPassword = (params.jumpPassword ?? '').toNativeUtf8();
-  } else {
-    config.ref.jumpHost = nullptr;
-    config.ref.jumpPort = 22;
-    config.ref.jumpUsername = nullptr;
-    config.ref.jumpPassword = nullptr;
-  }
+void _workerMain(_WorkerStart start) {
+  final lib = DynamicLibrary.open(start.dllPath);
+  final connect = lib.lookupFunction<_ConnectC, _ConnectDart>('nexus_sftp_connect');
+  final download = lib.lookupFunction<_TransferC, _TransferDart>('nexus_sftp_engine_download');
+  final upload = lib.lookupFunction<_TransferC, _TransferDart>('nexus_sftp_engine_upload');
+  final disconnect = lib.lookupFunction<_DisconnectC, _DisconnectDart>('nexus_sftp_disconnect');
 
-  config.ref.localPath = params.localPath.toNativeUtf8();
-  config.ref.remotePath = params.remotePath.toNativeUtf8();
-
-  // Progress callback bridging to SendPort
-  final callback = NativeCallable<_NativeProgressCallback>.isolateLocal((int transferred, int total) {
-    params.replyPort.send(_ProgressMessage(transferred, total));
-  });
-
-  int result = -99;
-  try {
-    result = transferFn(config, callback.nativeFunction, nullptr);
-  } catch (e) {
-    debugPrint('[RustSftpBridge Worker] Exception during native call: $e');
-  } finally {
-    callback.close();
-    calloc.free(config.ref.host);
-    calloc.free(config.ref.username);
-    calloc.free(config.ref.password);
-    if (config.ref.jumpHost != nullptr) {
-      calloc.free(config.ref.jumpHost);
-      calloc.free(config.ref.jumpUsername);
-      calloc.free(config.ref.jumpPassword);
+  final p = start.params;
+  final engine = using((arena) {
+    final cfg = arena<_ConnectConfigC>();
+    cfg.ref
+      ..host = _str(p.host, arena)
+      ..port = p.port
+      ..username = p.username.toNativeUtf8(allocator: arena)
+      ..password = p.password.toNativeUtf8(allocator: arena)
+      ..jumpHost = _str(p.jumpHost, arena)
+      ..jumpPort = p.jumpPort
+      ..jumpUsername = _str(p.jumpUsername, arena)
+      ..jumpPassword = _str(p.jumpPassword, arena);
+    final err = arena<Uint8>(_errBufLen).cast<Utf8>();
+    final code = arena<Int32>();
+    final handle = connect(cfg, err, _errBufLen, code);
+    if (handle == nullptr) {
+      start.replies.send(_ConnectFailed(code.value, err.toDartString()));
     }
-    calloc.free(config.ref.localPath);
-    calloc.free(config.ref.remotePath);
-    calloc.free(config);
-  }
+    return handle;
+  });
+  if (engine == nullptr) return; // isolate ends; main side already told
 
-  params.replyPort.send(_ResultMessage(result));
+  final commands = ReceivePort('sftp_engine.commands');
+  start.replies.send(_Connected(commands.sendPort));
+
+  commands.listen((msg) {
+    if (msg is _Transfer) {
+      final id = msg.id;
+      final callback = NativeCallable<_NativeProgressCallback>.isolateLocal(
+        (int transferred, int total) => start.replies.send(_Progress(id, transferred, total)),
+      );
+      try {
+        using((arena) {
+          final err = arena<Uint8>(_errBufLen).cast<Utf8>();
+          err.cast<Uint8>().value = 0;
+          final fn = msg.upload ? upload : download;
+          final code = fn(
+            engine,
+            msg.from.toNativeUtf8(allocator: arena),
+            msg.to.toNativeUtf8(allocator: arena),
+            callback.nativeFunction,
+            Pointer<Uint8>.fromAddress(msg.controlAddress),
+            err,
+            _errBufLen,
+          );
+          start.replies.send(_Done(id, code, code == 0 ? '' : err.toDartString()));
+        });
+      } finally {
+        callback.close();
+      }
+    } else if (msg is _Close) {
+      disconnect(engine);
+      start.replies.send(const _Closed());
+      commands.close();
+    }
+  });
 }

@@ -298,9 +298,10 @@ class TransferManager extends ChangeNotifier {
       !job.isPaused &&
       !job.needsAttention;
 
-  /// Pauses a running job. Byte-streamed transfers stop within a chunk;
-  /// server-side copies/moves and the native engine stop after the current
-  /// file. A paused job keeps its place (slot / host lane) in the queue.
+  /// Pauses a running job. Byte-streamed transfers (Dart client and the
+  /// native engine) stop within a chunk; server-side copies/moves stop after
+  /// the current file. A paused job keeps its place (slot / host lane) in the
+  /// queue.
   void pause(TransferJob job) {
     if (!canPause(job)) return;
     job._pausedAt = DateTime.now();

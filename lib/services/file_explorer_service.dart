@@ -181,6 +181,24 @@ class FileExplorerService {
   static FileExplorerService? _instance;
   final Map<String, RemoteSession> _cachedSessions = {};
 
+  // Native (Rust) SFTP engine: one connection per remote target, reused for
+  // every file and closed after [nativeIdleTimeout] without a transfer.
+  final Map<String, _NativeLinkEntry> _nativeLinks = {};
+  final Map<String, Future<NativeSftpLink?>> _nativeConnecting = {};
+
+  /// Targets the native engine could not connect to (auth method, ciphers,
+  /// no SFTP...). They use the Dart client until [closeAllSessions].
+  final Set<String> _nativeUnsupported = {};
+
+  Duration nativeIdleTimeout = const Duration(seconds: 60);
+
+  @visibleForTesting
+  Future<NativeSftpLink> Function(ExplorerNodeTarget target)? customNativeConnector;
+
+  /// Forces native engine availability on/off in tests.
+  @visibleForTesting
+  bool? nativeEngineAvailableOverride;
+
   String? Function(ExternalEditor editor)? customEditorPathResolver;
 
   @visibleForTesting
@@ -970,33 +988,17 @@ class FileExplorerService {
 
     if (entity is File) {
       final onProgress = agg?.forFile();
-      final totalBytes = await entity.length();
 
-      // Check if threshold qualifies for Rust native engine (>= 500 MB)
-      if (RustSftpBridge.shouldUseRust(totalBytes) &&
-          RustSftpBridge.isAvailable &&
-          session.target != null &&
-          session.target!.type != ExplorerTargetType.local) {
-        try {
-          final success = await RustSftpBridge.transferFile(
-            host: session.target!.host,
-            port: session.target!.port,
-            username: session.target!.username,
-            password: session.target!.password,
-            jumpHost: session.target!.jumpHost,
-            jumpPort: session.target!.jumpPort,
-            jumpUsername: session.target!.jumpUsername,
-            jumpPassword: session.target!.jumpPassword,
-            localPath: localPath,
-            remotePath: targetRemotePath,
-            isUpload: true,
-            onProgress: onProgress,
-          );
-          if (success) return;
-        } catch (e) {
-          debugPrint('[FileExplorerService] Rust native upload failed, falling back to Dart: $e');
-        }
+      if (await _tryNative(
+        session,
+        (link) => link.upload(localPath, targetRemotePath,
+            onProgress: onProgress, cancelToken: cancelToken),
+        what: 'upload of $localPath',
+      )) {
+        return;
       }
+
+      final totalBytes = await entity.length();
 
       if (session.sftp != null) {
         final rFile = await session.sftp!.open(
@@ -1190,39 +1192,21 @@ class FileExplorerService {
       final localFile = File(targetLocalPath);
       await localFile.parent.create(recursive: true);
 
+      if (await _tryNative(
+        session,
+        (link) => link.download(remotePath, targetLocalPath,
+            onProgress: onProgress, cancelToken: cancelToken),
+        what: 'download of $remotePath',
+      )) {
+        return;
+      }
+
       int totalBytes = -1;
       if (session.sftp != null) {
         try {
           final attrs = await session.sftp!.stat(remotePath);
           totalBytes = attrs.size ?? -1;
         } catch (_) {}
-      }
-
-      // Check if threshold qualifies for Rust native engine (>= 500 MB)
-      if (totalBytes > 0 &&
-          RustSftpBridge.shouldUseRust(totalBytes) &&
-          RustSftpBridge.isAvailable &&
-          session.target != null &&
-          session.target!.type != ExplorerTargetType.local) {
-        try {
-          final success = await RustSftpBridge.transferFile(
-            host: session.target!.host,
-            port: session.target!.port,
-            username: session.target!.username,
-            password: session.target!.password,
-            jumpHost: session.target!.jumpHost,
-            jumpPort: session.target!.jumpPort,
-            jumpUsername: session.target!.jumpUsername,
-            jumpPassword: session.target!.jumpPassword,
-            localPath: targetLocalPath,
-            remotePath: remotePath,
-            isUpload: false,
-            onProgress: onProgress,
-          );
-          if (success) return;
-        } catch (e) {
-          debugPrint('[FileExplorerService] Rust native download failed, falling back to Dart: $e');
-        }
       }
 
       if (session.sftp != null) {
@@ -1397,6 +1381,115 @@ class FileExplorerService {
       s.close();
     }
     _cachedSessions.clear();
+    // dispose() unregisters itself from the map, so iterate a copy.
+    for (final entry in List.of(_nativeLinks.values)) {
+      entry.dispose();
+    }
+    _nativeLinks.clear();
+    _nativeUnsupported.clear();
+  }
+
+  // ==========================================
+  // Native (Rust) transfer engine
+  // ==========================================
+
+  /// Whether [session]'s target can go through the native engine: it needs a
+  /// direct (or jump-host tunnelled) SSH login with an SFTP subsystem. FE
+  /// nodes reached by hopping through a cluster shell, and tmsh-only hosts,
+  /// stay on the Dart client.
+  bool _nativeEligible(RemoteSession session) {
+    final t = session.target;
+    if (t == null || t.isLocal || t.type == ExplorerTargetType.fe) return false;
+    if (session.sftp == null) return false;
+    if ((session.feHostname ?? '').isNotEmpty) return false;
+    if (_nativeUnsupported.contains(_sessionKey(t))) return false;
+    if (customNativeConnector != null) return true;
+    return nativeEngineAvailableOverride ?? RustSftpBridge.isAvailable;
+  }
+
+  Future<NativeSftpLink> _connectNative(ExplorerNodeTarget t) {
+    final custom = customNativeConnector;
+    if (custom != null) return custom(t);
+    return RustSftpConnection.connect(RustSftpConnectParams(
+      host: t.host,
+      port: t.port,
+      username: t.username,
+      password: t.password,
+      jumpHost: t.hasJumpHost ? t.jumpHost : null,
+      jumpPort: t.jumpPort,
+      jumpUsername: t.jumpUsername,
+      jumpPassword: t.jumpPassword,
+    ));
+  }
+
+  /// The cached native connection for [session], connecting on first use.
+  /// Returns null (and remembers the target as unsupported) if the engine
+  /// cannot connect.
+  Future<NativeSftpLink?> _nativeLinkFor(RemoteSession session) async {
+    final t = session.target!;
+    final key = _sessionKey(t);
+    final entry = _nativeLinks[key];
+    if (entry != null && !entry.link.isClosed) return entry.link;
+    if (entry != null) {
+      entry.dispose();
+      _nativeLinks.remove(key);
+    }
+    final pending = _nativeConnecting[key];
+    if (pending != null) return pending;
+
+    final future = () async {
+      try {
+        final link = await _connectNative(t);
+        _nativeLinks[key] = _NativeLinkEntry(link, nativeIdleTimeout, () {
+          if (identical(_nativeLinks[key]?.link, link)) _nativeLinks.remove(key);
+        });
+        return link;
+      } catch (e) {
+        debugPrint('[FileExplorerService] Native engine cannot connect to ${t.host}; '
+            'using the Dart client for this target: $e');
+        _nativeUnsupported.add(key);
+        return null;
+      } finally {
+        _nativeConnecting.remove(key);
+      }
+    }();
+    _nativeConnecting[key] = future;
+    return future;
+  }
+
+  /// Runs [op] through the native engine when possible. Returns true when the
+  /// file was transferred natively, false when the caller should use the
+  /// Dart client instead. Cancellation propagates as
+  /// [TransferCancelledException].
+  Future<bool> _tryNative(
+    RemoteSession session,
+    Future<void> Function(NativeSftpLink link) op, {
+    required String what,
+  }) async {
+    if (!_nativeEligible(session)) return false;
+    final link = await _nativeLinkFor(session);
+    if (link == null) return false;
+    final entry = _nativeLinks[_sessionKey(session.target!)];
+    entry?.begin();
+    try {
+      await op(link);
+      return true;
+    } on TransferCancelledException {
+      rethrow;
+    } on RustSftpException catch (e) {
+      if (e.isConnectionLevel) {
+        final key = _sessionKey(session.target!);
+        _nativeLinks.remove(key)?.dispose();
+        _nativeUnsupported.add(key);
+      }
+      debugPrint('[FileExplorerService] Native $what failed, retrying with the Dart client: $e');
+      return false;
+    } catch (e) {
+      debugPrint('[FileExplorerService] Native $what failed, retrying with the Dart client: $e');
+      return false;
+    } finally {
+      entry?.end();
+    }
   }
 
   @visibleForTesting
@@ -1760,6 +1853,43 @@ class FileExplorerService {
   }
 }
 
+/// A cached native connection that closes itself after [idle] with no
+/// transfer running.
+class _NativeLinkEntry {
+  _NativeLinkEntry(this.link, this.idle, this._onClosed) {
+    _scheduleIdleClose();
+  }
+
+  final NativeSftpLink link;
+  final Duration idle;
+  final void Function() _onClosed;
+  int _active = 0;
+  Timer? _idleTimer;
+
+  void begin() {
+    _active++;
+    _idleTimer?.cancel();
+    _idleTimer = null;
+  }
+
+  void end() {
+    if (_active > 0) _active--;
+    if (_active == 0) _scheduleIdleClose();
+  }
+
+  void _scheduleIdleClose() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(idle, dispose);
+  }
+
+  void dispose() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    _onClosed();
+    unawaited(link.close().catchError((_) {}));
+  }
+}
+
 /// Turns per-file progress callbacks into one cumulative progress stream
 /// across a whole directory tree, so the bar does not reset for every file.
 class _ProgressAggregator {
@@ -1805,12 +1935,14 @@ class ShellAccessDeniedException implements Exception {
 /// aborts them.
 ///
 /// Pause: byte loops call [waitIfPaused] between chunks, which halts them
-/// (applying back-pressure to the source stream) until [resume]. Operations
-/// with no chunk loop (server-side `cp`/`mv`, the native engine) cannot stop
-/// mid-file; they halt at the next pause point instead.
+/// (applying back-pressure to the source stream) until [resume]. The native
+/// engine follows [addPauseListener] and reports its own halt through
+/// [enterHalt]. Operations with no chunk loop (server-side `cp`/`mv`) cannot
+/// stop mid-file; they halt at the next pause point instead.
 class TransferCancelToken {
   bool _cancelled = false;
   final List<void Function()> _hooks = [];
+  final List<void Function()> _pauseListeners = [];
 
   bool _paused = false;
   Completer<void>? _resumed;
@@ -1832,7 +1964,7 @@ class TransferCancelToken {
     if (_cancelled || _paused) return;
     _paused = true;
     _resumed = Completer<void>();
-    onPauseStateChanged?.call();
+    _pauseRequestChanged();
   }
 
   void resume() {
@@ -1840,7 +1972,37 @@ class TransferCancelToken {
     _paused = false;
     _resumed?.complete();
     _resumed = null;
+    _pauseRequestChanged();
+  }
+
+  void _pauseRequestChanged() {
     onPauseStateChanged?.call();
+    for (final listener in List.of(_pauseListeners)) {
+      try {
+        listener();
+      } catch (_) {}
+    }
+  }
+
+  /// Calls [listener] whenever [isPaused] flips; returns an unregister
+  /// function. For transfers that do not run a Dart byte loop.
+  void Function() addPauseListener(void Function() listener) {
+    _pauseListeners.add(listener);
+    return () => _pauseListeners.remove(listener);
+  }
+
+  /// Marks the transfer as actually stopped (see [isHalted]) until the
+  /// returned function is called. Calling it more than once is harmless.
+  void Function() enterHalt() {
+    _haltedLoops++;
+    onPauseStateChanged?.call();
+    var left = false;
+    return () {
+      if (left) return;
+      left = true;
+      _haltedLoops--;
+      onPauseStateChanged?.call();
+    };
   }
 
   /// Returns at once unless paused; otherwise waits for [resume] or
