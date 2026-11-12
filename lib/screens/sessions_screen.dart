@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/session_models.dart';
+import '../services/session_import/imported_host.dart';
+import '../services/session_import/putty_sessions_reader.dart';
+import '../services/session_import/ssh_config_parser.dart';
 import '../services/session_manager_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/draggable_dialog.dart';
+import '../widgets/session_import_dialog.dart';
 import '../widgets/session_properties_dialog.dart';
 
 enum _ItemType { parent, folder, session }
@@ -485,6 +489,40 @@ class _SessionsScreenState extends State<SessionsScreen> {
     }
   }
 
+  Future<void> _importFromOpenSsh() async {
+    final path = SshConfigParser.defaultPath();
+    await _runImport('OpenSSH config', 'Imported from OpenSSH', await SshConfigParser.readFile(path));
+  }
+
+  Future<void> _importFromPutty() async {
+    await _runImport('PuTTY', 'Imported from PuTTY', await PuttySessionsReader.readRegistry());
+  }
+
+  Future<void> _runImport(String sourceLabel, String folderName, ImportScan scan) async {
+    if (!mounted) return;
+    final chosen = await SessionImportDialog.show(
+      context,
+      sourceLabel: sourceLabel,
+      scan: scan,
+      existing: _mgr.sessions,
+    );
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    final created = await SessionImporter.commit(
+      _mgr,
+      chosen,
+      folderName: folderName,
+      parentId: _currentFolderId,
+    );
+    if (!mounted || created.isEmpty) return;
+    _navigateToFolder(created.first.parentId);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text('Imported ${created.length} session${created.length == 1 ? '' : 's'} into "$folderName".'),
+        backgroundColor: AppTheme.statusSuccess,
+      ),
+    );
+  }
+
   Future<void> _createNewFolder({String? targetParentId}) async {
     final parent = targetParentId ?? _selectedFolderId ?? _currentFolderId;
     final nameCtrl = TextEditingController(text: 'New Folder');
@@ -718,6 +756,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
             onSelected: (val) {
               if (val == 'session') _createNewSession();
               if (val == 'folder') _createNewFolder();
+              if (val == 'import_openssh') _importFromOpenSsh();
+              if (val == 'import_putty') _importFromPutty();
             },
             itemBuilder: (ctx) => [
               const PopupMenuItem(
@@ -726,7 +766,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   children: [
                     Icon(Icons.add, size: 16, color: AppTheme.accentPrimary),
                     SizedBox(width: 8),
-                    Text('New Session (Ctrl+N)', style: TextStyle(fontSize: 12)),
+                    Flexible(child: Text('New Session (Ctrl+N)', style: TextStyle(fontSize: 12))),
                   ],
                 ),
               ),
@@ -736,10 +776,32 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   children: [
                     Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
                     SizedBox(width: 8),
-                    Text('New Folder (Ctrl+Shift+N)', style: TextStyle(fontSize: 12)),
+                    Flexible(child: Text('New Folder (Ctrl+Shift+N)', style: TextStyle(fontSize: 12))),
                   ],
                 ),
               ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'import_openssh',
+                child: Row(
+                  children: [
+                    Icon(Icons.download_outlined, size: 16, color: AppTheme.accentPrimary),
+                    SizedBox(width: 8),
+                    Flexible(child: Text('Import from OpenSSH config...', style: TextStyle(fontSize: 12))),
+                  ],
+                ),
+              ),
+              if (PuttySessionsReader.supported)
+                const PopupMenuItem(
+                  value: 'import_putty',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download_outlined, size: 16, color: AppTheme.accentPrimary),
+                      SizedBox(width: 8),
+                      Flexible(child: Text('Import from PuTTY...', style: TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ),
             ],
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
