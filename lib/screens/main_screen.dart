@@ -12,6 +12,7 @@ import '../services/nexus_tool_registry.dart';
 import '../services/session_manager_service.dart';
 import '../services/settings_service.dart';
 import '../services/transfer_manager.dart';
+import '../services/transfer_notifier.dart';
 import '../services/transfer_taskbar_progress.dart';
 import '../services/window_state_service.dart';
 import '../theme/app_theme.dart';
@@ -159,6 +160,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     windowManager.addListener(this);
     TransferManager.instance.addListener(_syncPreventCloseForTransfers);
     _taskbarProgress = TransferTaskbarProgress(TransferManager.instance);
+    _transferNotifier = TransferNotifier(
+      TransferManager.instance,
+      isEnabled: () => SettingsService.instance.transferNotifications,
+      appName: widget.appTitle,
+    );
 
     if (!widget.suppressStartupDialog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -214,6 +220,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     windowManager.removeListener(this);
     TransferManager.instance.removeListener(_syncPreventCloseForTransfers);
     _taskbarProgress?.dispose();
+    _transferNotifier?.dispose();
     _sidebarFocusNode.dispose();
     _fileExplorerTabScrollController.dispose();
     for (final tab in _fileExplorerTabs) {
@@ -516,6 +523,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   bool _preventCloseForTransfers = false;
   TransferTaskbarProgress? _taskbarProgress;
+  TransferNotifier? _transferNotifier;
 
   /// Intercepts the window close button only while transfers are active, so
   /// normal closing is unaffected.
@@ -1963,6 +1971,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             value: settings.showSessionDialogAtStartup,
             onChanged: (val) {
               setState(() => settings.setShowSessionDialogAtStartup(val ?? true));
+            },
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+          const SizedBox(height: 24),
+          _buildSettingsSection('File Transfers'),
+          CheckboxListTile(
+            key: const ValueKey('settings_transfer_notifications'),
+            title: const Text('Desktop notifications for file transfers',
+                style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
+            subtitle: Text(
+              'Only while ${widget.appTitle} is in the background: when a copy/move longer than 10 s finishes, any transfer fails, or a name conflict needs your decision.',
+              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+            ),
+            value: settings.transferNotifications,
+            onChanged: (val) {
+              setState(() => settings.setTransferNotifications(val ?? true));
             },
             dense: true,
             contentPadding: EdgeInsets.zero,

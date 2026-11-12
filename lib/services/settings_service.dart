@@ -149,6 +149,7 @@ class SettingsService extends ChangeNotifier {
   String _rememberedPassword = '';
   bool _autoCheckUpdates = true;
   bool _autoDownloadUpdates = false;
+  bool _transferNotifications = true;
   String _updateRemotePath = '/home/vmridwan/smart_e_he_updates';
   String? _customConfigPath;
   FileExplorerDensity _fileExplorerDensity = FileExplorerDensity.standard;
@@ -214,6 +215,10 @@ class SettingsService extends ChangeNotifier {
   String get rememberedPassword => _rememberedPassword;
   bool get autoCheckUpdates => _autoCheckUpdates;
   bool get autoDownloadUpdates => _autoDownloadUpdates;
+
+  /// Desktop notifications for file transfers that finish, fail or need a
+  /// decision while the window is in the background.
+  bool get transferNotifications => _transferNotifications;
   String get updateRemotePath => _updateRemotePath;
   FileExplorerDensity get fileExplorerDensity => _fileExplorerDensity;
   FileExplorerFontFamily get fileExplorerFontFamily => _fileExplorerFontFamily;
@@ -429,6 +434,10 @@ class SettingsService extends ChangeNotifier {
 
           if (yaml['auto_download_updates'] != null) {
             _autoDownloadUpdates = yaml['auto_download_updates'] == true;
+          }
+
+          if (yaml['transfer_notifications'] != null) {
+            _transferNotifications = yaml['transfer_notifications'] == true;
           }
 
           if (yaml['update_remote_path'] != null) {
@@ -909,6 +918,13 @@ class SettingsService extends ChangeNotifier {
     await _saveSettings();
   }
 
+  Future<void> setTransferNotifications(bool value) async {
+    if (_transferNotifications == value) return;
+    _transferNotifications = value;
+    notifyListeners();
+    await _saveSettings();
+  }
+
   Future<void> setUpdateRemotePath(String path) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty || _updateRemotePath == trimmed) return;
@@ -964,6 +980,7 @@ class SettingsService extends ChangeNotifier {
       }
       buffer.writeln('auto_check_updates: $_autoCheckUpdates');
       buffer.writeln('auto_download_updates: $_autoDownloadUpdates');
+      buffer.writeln('transfer_notifications: $_transferNotifications');
       buffer.writeln('update_remote_path: "$_updateRemotePath"');
       buffer.writeln('file_explorer_density: "${_fileExplorerDensity.name}"');
       buffer.writeln('file_explorer_font_family: "${_fileExplorerFontFamily.name}"');
