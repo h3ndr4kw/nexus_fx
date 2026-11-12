@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'file_explorer_service.dart' show TransferCancelToken, TransferCancelledException;
 
 // ---------------------------------------------------------------------------
-// C ABI (native/sftp_engine/src/ffi.rs, API version 2)
+// C ABI (native/sftp_engine/src/ffi.rs, API version 3)
 // ---------------------------------------------------------------------------
 
 final class _ConnectConfigC extends Struct {
@@ -23,6 +23,8 @@ final class _ConnectConfigC extends Struct {
   external int jumpPort;
   external Pointer<Utf8> jumpUsername;
   external Pointer<Utf8> jumpPassword;
+  external Pointer<Utf8> hostKeys;
+  external Pointer<Utf8> jumpHostKeys;
 }
 
 typedef _NativeProgressCallback = Void Function(Int64 transferred, Int64 total);
@@ -77,6 +79,7 @@ class RustSftpException implements Exception {
   static const int connect = -4;
   static const int sftpUnavailable = -5;
   static const int cancelled = -6;
+  static const int hostKey = -7;
   static const int workerDied = -98;
   static const int panic = -99;
 
@@ -88,7 +91,12 @@ class RustSftpException implements Exception {
   /// The engine cannot talk to this target at all (as opposed to one file
   /// failing), so falling back to the Dart client for the rest makes sense.
   bool get isConnectionLevel =>
-      code == auth || code == connect || code == sftpUnavailable || code == workerDied || code == panic;
+      code == auth ||
+      code == connect ||
+      code == sftpUnavailable ||
+      code == hostKey ||
+      code == workerDied ||
+      code == panic;
 
   @override
   String toString() => message;
@@ -106,6 +114,8 @@ class RustSftpConnectParams {
     this.jumpPort = 22,
     this.jumpUsername,
     this.jumpPassword,
+    this.hostKeys = const [],
+    this.jumpHostKeys = const [],
   });
 
   final String host;
@@ -116,6 +126,13 @@ class RustSftpConnectParams {
   final int jumpPort;
   final String? jumpUsername;
   final String? jumpPassword;
+
+  /// `SHA256:...` fingerprints the target may present. The engine refuses
+  /// any other key, and refuses everything when this is empty.
+  final List<String> hostKeys;
+
+  /// Same for the jump host.
+  final List<String> jumpHostKeys;
 }
 
 /// One SFTP connection the file explorer can push file transfers through.
@@ -141,7 +158,7 @@ abstract class NativeSftpLink {
 }
 
 class RustSftpBridge {
-  static const int expectedApiVersion = 2;
+  static const int expectedApiVersion = 3;
 
   static bool? _cachedIsAvailable;
   static String? _resolvedDllPath;
@@ -514,7 +531,9 @@ void _workerMain(_WorkerStart start) {
       ..jumpHost = _str(p.jumpHost, arena)
       ..jumpPort = p.jumpPort
       ..jumpUsername = _str(p.jumpUsername, arena)
-      ..jumpPassword = _str(p.jumpPassword, arena);
+      ..jumpPassword = _str(p.jumpPassword, arena)
+      ..hostKeys = _str(p.hostKeys.join('\n'), arena)
+      ..jumpHostKeys = _str(p.jumpHostKeys.join('\n'), arena);
     final err = arena<Uint8>(_errBufLen).cast<Utf8>();
     final code = arena<Int32>();
     final handle = connect(cfg, err, _errBufLen, code);

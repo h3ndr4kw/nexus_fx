@@ -12,6 +12,7 @@ import 'session_manager_service.dart';
 import 'ssh_log_service.dart';
 import 'ssh_tunnel_manager.dart';
 import 'settings_service.dart';
+import 'known_hosts_service.dart';
 
 class MasterConnectionException implements Exception {
   final Object cause;
@@ -1102,6 +1103,9 @@ class SshConnection {
               forwardChannel,
               targetUsername,
               targetPassword,
+              host: host,
+              port: port,
+              via: nmConfig.host,
             ));
 
       _session = await _client!.shell(
@@ -1134,11 +1138,15 @@ class SshConnection {
   Future<SSHClient> _defaultTargetClientFactory(
     SSHSocket socket,
     String username,
-    String password,
-  ) async {
+    String password, {
+    required String host,
+    required int port,
+    String? via,
+  }) async {
     final client = SSHClient(
       socket,
       username: username,
+      onVerifyHostKey: KnownHostsService.instance.handlerFor(host, port, via: via),
       algorithms: SshAlgorithmHelper.buildAlgorithms(
         sshMacs: sshMacs,
         customSshOptions: customSshOptions,
@@ -1201,6 +1209,7 @@ class SshConnection {
       _client = SSHClient(
         socket,
         username: nmConfig.username,
+        onVerifyHostKey: KnownHostsService.instance.handlerFor(nmConfig.host, nmConfig.port),
         algorithms: SshAlgorithmHelper.buildAlgorithms(),
         onPasswordRequest: () => nmConfig.password,
         onUserInfoRequest: (request) =>
@@ -1413,8 +1422,11 @@ class SshConnection {
       customSshOptions: customSshOptions,
     );
     final extraFlagsArg = extraFlags.isEmpty ? '' : '$extraFlags ';
+    // Host keys are checked: the jump host's known_hosts catches a changed
+    // key, and a first-time key is shown to the user (see below) instead of
+    // being accepted blindly.
     final sshCmd =
-        'ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes $extraFlagsArg$portArg$userPrefix$host\n';
+        'ssh -tt -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes $extraFlagsArg$portArg$userPrefix$host\n';
     write(sshCmd);
 
     final step1 = await _waitForHopCondition(
@@ -1432,6 +1444,13 @@ class SshConnection {
     }
 
     if (_isHostKeyPrompt(_hopBuffer)) {
+      final trusted = await _verifyHopHostKey(host, port, _hopBuffer);
+      if (!trusted) {
+        write('no\n');
+        _log('\r\n✖ Host key for $host was not accepted; connection cancelled.\r\n',
+            color: 'red');
+        return false;
+      }
       write('yes\n');
       _hopBuffer = '';
       final afterHostKey = await _waitForHopCondition(
@@ -1487,6 +1506,7 @@ class SshConnection {
       _client = SSHClient(
         socket,
         username: targetUsername,
+        onVerifyHostKey: KnownHostsService.instance.handlerFor(_currentHost, port),
         algorithms: SshAlgorithmHelper.buildAlgorithms(
           sshMacs: sshMacs,
           customSshOptions: customSshOptions,
@@ -1643,6 +1663,26 @@ class SshConnection {
     return clean.contains('are you sure you want to continue connecting');
   }
 
+  /// Asks the user about the key the remote `ssh` is showing in its
+  /// first-connection prompt. A prompt without a readable fingerprint is
+  /// refused rather than accepted blindly.
+  Future<bool> _verifyHopHostKey(String host, int port, String promptText) async {
+    final parsed = parseOpenSshHostKeyPrompt(stripAnsi(promptText));
+    if (parsed == null) {
+      _log('\r\n✖ Could not read the host key fingerprint for $host.\r\n', color: 'red');
+      return false;
+    }
+    return KnownHostsService.instance.verify(
+      host,
+      port,
+      parsed.keyType,
+      parsed.fingerprint,
+      // Hops can chain (NM -> cluster -> FE); the key is the one the
+      // previous hop's ssh sees.
+      via: 'ssh from a jump host',
+    );
+  }
+
   bool _isConnectionFailed(String buffer) {
     final clean = stripAnsi(buffer).toLowerCase();
     return clean.contains('connection timed out') ||
@@ -1656,6 +1696,8 @@ class SshConnection {
         clean.contains('unknown host') ||
         clean.contains('permission denied (publickey') ||
         clean.contains('permission denied, please try again') ||
+        clean.contains('host key verification failed') ||
+        clean.contains('remote host identification has changed') ||
         clean.contains('ssh: connect to host');
   }
 

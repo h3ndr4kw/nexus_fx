@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/models/file_explorer_models.dart';
 import 'package:nexus_fx/services/file_explorer_service.dart';
+import 'package:nexus_fx/services/known_hosts_service.dart';
 import 'package:nexus_fx/services/rust_sftp_bridge.dart';
 
 const _user = 'tester';
@@ -31,11 +32,14 @@ String? _skipReason() {
 }
 
 class _TestServer {
-  _TestServer._(this.process, this.port, this.root);
+  _TestServer._(this.process, this.port, this.root, this.fingerprint);
 
   final Process process;
   final int port;
   final Directory root;
+
+  /// `SHA256:...` of the server's host key, as printed by the fixture.
+  final String fingerprint;
 
   static Future<_TestServer> start({String auth = 'password', int throttle = 0}) async {
     final root = await Directory.systemTemp.createTemp('sftp_e2e_root_');
@@ -44,22 +48,32 @@ class _TestServer {
     final process = await Process.start('python', [
       '-I', script, '--root', root.path, '--auth', auth, '--throttle', '$throttle',
     ]);
+    String? fp;
     final portLine = await process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
+        .map((l) {
+          if (l.startsWith('FP ')) fp = l.substring(3).trim();
+          return l;
+        })
         .firstWhere((l) => l.startsWith('PORT '))
         .timeout(const Duration(seconds: 20));
     process.stderr
         .transform(utf8.decoder)
         .listen((l) => stderr.write('[sftp_test_server] $l'));
-    return _TestServer._(process, int.parse(portLine.substring(5).trim()), root);
+    return _TestServer._(process, int.parse(portLine.substring(5).trim()), root, fp!);
   }
 
-  RustSftpConnectParams params({String password = _password}) => RustSftpConnectParams(
+  RustSftpConnectParams params({
+    String password = _password,
+    List<String>? hostKeys,
+  }) =>
+      RustSftpConnectParams(
         host: '127.0.0.1',
         port: port,
         username: _user,
         password: password,
+        hostKeys: hostKeys ?? [fingerprint],
       );
 
   String remote(String name) => '/$name';
@@ -117,9 +131,16 @@ void main() {
 
     setUp(() async {
       local = await Directory.systemTemp.createTemp('sftp_e2e_local_');
+      // The Dart client asks about the fixture's fresh key; accept it for
+      // this session only, without touching the user's known_hosts.
+      KnownHostsService.instance.resetForTesting(
+        filePath: '${local.path}${Platform.pathSeparator}known_hosts.json',
+      );
+      KnownHostsService.instance.prompter = (_) async => HostKeyDecision.trustOnce;
     });
 
     tearDown(() async {
+      KnownHostsService.instance.resetForTesting();
       try {
         await local.delete(recursive: true);
       } catch (_) {}
@@ -223,6 +244,44 @@ void main() {
       expect(File(localPath('k.txt')).readAsStringSync(), 'kbd ok');
     }, timeout: const Timeout(Duration(minutes: 1)));
 
+    test('an untrusted host key is refused before authenticating', () async {
+      final server = await _TestServer.start();
+      addTearDown(server.stop);
+      for (final keys in [
+        <String>[],
+        ['SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      ]) {
+        await expectLater(
+          RustSftpConnection.connect(server.params(hostKeys: keys)),
+          throwsA(isA<RustSftpException>()
+              .having((e) => e.code, 'code', RustSftpException.hostKey)
+              .having((e) => e.message, 'message', contains(server.fingerprint))),
+        );
+      }
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('the Dart client rejects the host when the user cancels the prompt', () async {
+      final server = await _TestServer.start();
+      addTearDown(server.stop);
+      HostKeyPromptRequest? asked;
+      KnownHostsService.instance.prompter = (req) async {
+        asked = req;
+        return HostKeyDecision.reject;
+      };
+      final svc = FileExplorerService();
+      addTearDown(svc.closeAllSessions);
+      final target = ExplorerNodeTarget(
+        type: ExplorerTargetType.customSsh,
+        label: 'e2e',
+        port: server.port,
+        username: _user,
+        password: _password,
+      );
+      await expectLater(_quietly(() => svc.getOrConnectRemote(target)), throwsA(anything));
+      expect(asked?.fingerprint, server.fingerprint);
+      expect(asked?.status, HostKeyStatus.unknown);
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
     test('wrong password fails with an auth error', () async {
       final server = await _TestServer.start();
       addTearDown(server.stop);
@@ -244,8 +303,13 @@ void main() {
       var nativeConnects = 0;
       svc.customNativeConnector = (t) {
         nativeConnects++;
+        // Same as the real connector: hand over what the Dart session trusted.
         return RustSftpConnection.connect(RustSftpConnectParams(
-            host: t.host, port: t.port, username: t.username, password: t.password));
+            host: t.host,
+            port: t.port,
+            username: t.username,
+            password: t.password,
+            hostKeys: KnownHostsService.instance.fingerprintsFor(t.host, t.port)));
       };
 
       final target = ExplorerNodeTarget(

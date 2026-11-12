@@ -4,11 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'models/nexus_tool.dart';
 import 'screens/main_screen.dart';
+import 'services/known_hosts_service.dart';
 import 'services/nexus_tool_registry.dart';
 import 'services/session_manager_service.dart';
 import 'services/settings_service.dart';
 import 'services/window_state_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/host_key_dialog.dart';
+
+/// Lets services (such as the host key prompt) open dialogs without a
+/// widget context of their own.
+final GlobalKey<NavigatorState> nexusNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   await runNexusFxApp();
@@ -31,6 +37,12 @@ Future<void> runNexusFxApp({
   // Load persistent settings & sessions before running app
   await SettingsService.instance.loadSettings();
   await SessionManagerService.instance.loadSessions();
+  await KnownHostsService.instance.load();
+  KnownHostsService.instance.prompter = (request) async {
+    final context = nexusNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return HostKeyDecision.reject;
+    return showHostKeyDialog(context, request);
+  };
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     try {
@@ -76,6 +88,7 @@ class NexusFxApp extends StatelessWidget {
       listenable: SettingsService.instance,
       builder: (context, _) {
         return MaterialApp(
+          navigatorKey: nexusNavigatorKey,
           title: title,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.darkTheme,

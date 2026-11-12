@@ -1,10 +1,10 @@
 use std::future::Future;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use russh::client::{Handle, KeyboardInteractiveAuthResponse};
-use russh::keys::PublicKeyOrCertificate;
+use russh::keys::{HashAlg, PublicKeyOrCertificate};
 use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -17,17 +17,75 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 /// Upper bound for closing/removing a file after a failed or cancelled transfer.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 
-pub struct ClientHandler;
+/// Accepts the server only if its key is one the Dart side already trusts
+/// (Dart verifies, and prompts the user, before the native engine is used).
+/// With nothing trusted every key is rejected.
+pub struct ClientHandler {
+    trusted: Vec<String>,
+    /// Fingerprint of a key we rejected, for the error message.
+    rejected: Arc<Mutex<Option<String>>>,
+}
+
+impl ClientHandler {
+    fn new(trusted: &[&str]) -> (Self, Arc<Mutex<Option<String>>>) {
+        let rejected = Arc::new(Mutex::new(None));
+        let handler = ClientHandler {
+            trusted: trusted.iter().map(|s| s.to_string()).collect(),
+            rejected: rejected.clone(),
+        };
+        (handler, rejected)
+    }
+}
+
+/// OpenSSH-style `SHA256:<base64 without padding>`, the same string
+/// dartssh2 hands to `onVerifyHostKey`.
+pub fn fingerprint_of(key: &PublicKeyOrCertificate) -> String {
+    let data = match key {
+        PublicKeyOrCertificate::PublicKey { key, .. } => key.key_data().clone(),
+        PublicKeyOrCertificate::Certificate(cert) => cert.public_key().clone(),
+    };
+    data.fingerprint(HashAlg::Sha256).to_string()
+}
+
+/// Parses the newline-separated fingerprint list passed over FFI.
+pub fn parse_fingerprints(list: Option<&str>) -> Vec<&str> {
+    list.unwrap_or("")
+        .split(|c: char| c.is_ascii_control() || c == ',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect()
+}
 
 impl russh::client::Handler for ClientHandler {
     type Error = russh::Error;
 
-    // Same trust model as the Dart client (StrictHostKeyChecking=no).
     async fn check_server_key(
         &mut self,
-        _server_public_key: &PublicKeyOrCertificate,
+        server_public_key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
-        Ok(true)
+        let fp = fingerprint_of(server_public_key);
+        if self.trusted.iter().any(|t| t == &fp) {
+            return Ok(true);
+        }
+        if let Ok(mut slot) = self.rejected.lock() {
+            *slot = Some(fp);
+        }
+        Ok(false)
+    }
+}
+
+/// Turns a connect failure into [EngineError::HostKey] when it was our
+/// handler that refused the key.
+fn host_key_or(
+    err: EngineError,
+    rejected: &Arc<Mutex<Option<String>>>,
+    target: &str,
+) -> EngineError {
+    match rejected.lock().ok().and_then(|mut s| s.take()) {
+        Some(fp) => EngineError::HostKey(format!(
+            "Host key of {target} is not trusted (presented {fp})"
+        )),
+        None => err,
     }
 }
 
@@ -47,6 +105,7 @@ pub enum EngineError {
     SftpUnavailable(String),
     Io(String),
     Cancelled,
+    HostKey(String),
 }
 
 impl EngineError {
@@ -58,6 +117,7 @@ impl EngineError {
             EngineError::Connect(_) => -4,
             EngineError::SftpUnavailable(_) => -5,
             EngineError::Cancelled => -6,
+            EngineError::HostKey(_) => -7,
         }
     }
 
@@ -67,7 +127,8 @@ impl EngineError {
             | EngineError::Connect(m)
             | EngineError::Auth(m)
             | EngineError::SftpUnavailable(m)
-            | EngineError::Io(m) => m.clone(),
+            | EngineError::Io(m)
+            | EngineError::HostKey(m) => m.clone(),
             EngineError::Cancelled => "Transfer cancelled by user".to_string(),
         }
     }
@@ -94,6 +155,9 @@ pub struct ConnectionParams<'a> {
     pub jump_port: u16,
     pub jump_username: Option<&'a str>,
     pub jump_password: Option<&'a str>,
+    /// SHA256 fingerprints trusted for the target and the jump host.
+    pub host_keys: Vec<&'a str>,
+    pub jump_host_keys: Vec<&'a str>,
 }
 
 /// Pause/cancel checks for one transfer. With no control block attached the
@@ -242,11 +306,14 @@ impl Connection {
         let mut session = match (params.jump_host, params.jump_username) {
             (Some(j_host), Some(j_user)) if !j_host.is_empty() => {
                 let j_pass = params.jump_password.unwrap_or("");
+                let j_target = format!("{j_host}:{}", params.jump_port);
+                let (j_handler, j_rejected) = ClientHandler::new(&params.jump_host_keys);
                 let mut jump_session = with_timeout(
-                    &format!("Connect to jump host {j_host}:{}", params.jump_port),
-                    russh::client::connect(config.clone(), (j_host, params.jump_port), ClientHandler),
+                    &format!("Connect to jump host {j_target}"),
+                    russh::client::connect(config.clone(), (j_host, params.jump_port), j_handler),
                 )
-                .await?;
+                .await
+                .map_err(|e| host_key_or(e, &j_rejected, &j_target))?;
                 authenticate(&mut jump_session, j_user, j_pass).await?;
                 let channel = with_timeout(
                     &format!("Open tunnel to {target}"),
@@ -258,20 +325,24 @@ impl Connection {
                     ),
                 )
                 .await?;
+                let (handler, rejected) = ClientHandler::new(&params.host_keys);
                 let s = with_timeout(
                     &format!("Connect to {target}"),
-                    russh::client::connect_stream(config.clone(), channel.into_stream(), ClientHandler),
+                    russh::client::connect_stream(config.clone(), channel.into_stream(), handler),
                 )
-                .await?;
+                .await
+                .map_err(|e| host_key_or(e, &rejected, &target))?;
                 jump = Some(jump_session);
                 s
             }
             _ => {
+                let (handler, rejected) = ClientHandler::new(&params.host_keys);
                 with_timeout(
                     &format!("Connect to {target}"),
-                    russh::client::connect(config.clone(), (params.host, params.port), ClientHandler),
+                    russh::client::connect(config.clone(), (params.host, params.port), handler),
                 )
-                .await?
+                .await
+                .map_err(|e| host_key_or(e, &rejected, &target))?
             }
         };
 
@@ -410,5 +481,32 @@ impl Connection {
         if let Some(jump) = self._jump {
             let _ = jump.disconnect(russh::Disconnect::ByApplication, "", "en").await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_fingerprint_list() {
+        assert!(parse_fingerprints(None).is_empty());
+        assert!(parse_fingerprints(Some(" \n")).is_empty());
+        assert_eq!(
+            parse_fingerprints(Some("SHA256:a\r\nSHA256:b\n")),
+            vec!["SHA256:a", "SHA256:b"]
+        );
+    }
+
+    #[test]
+    fn host_key_error_only_when_handler_rejected() {
+        let rejected = Arc::new(Mutex::new(None));
+        let e = host_key_or(EngineError::Connect("boom".into()), &rejected, "h:22");
+        assert_eq!(e.code(), -4);
+
+        *rejected.lock().unwrap() = Some("SHA256:x".into());
+        let e = host_key_or(EngineError::Connect("boom".into()), &rejected, "h:22");
+        assert_eq!(e.code(), -7);
+        assert!(e.message().contains("SHA256:x"));
     }
 }

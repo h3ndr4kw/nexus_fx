@@ -9,6 +9,8 @@ Serves --root over SFTP on 127.0.0.1. Prints "PORT <n>" once listening.
 Requires paramiko. Test-only: accepts one fixed user/password.
 """
 import argparse
+import base64
+import hashlib
 import os
 import socket
 import sys
@@ -162,6 +164,9 @@ def main():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", ARGS.port))
     sock.listen(16)
+    # OpenSSH-style fingerprint, so tests can trust exactly this key.
+    digest = hashlib.sha256(host_key.asbytes()).digest()
+    print("FP SHA256:%s" % base64.b64encode(digest).decode().rstrip("="), flush=True)
     print("PORT %d" % sock.getsockname()[1], flush=True)
     while True:
         conn, _ = sock.accept()

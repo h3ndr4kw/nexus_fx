@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/network_manager_config.dart';
 import '../models/ssh_tunnel_models.dart';
 import 'ssh_service.dart';
+import 'known_hosts_service.dart';
 
 /// Manages SSH master jump host connections and multiplexed port forwarding channels.
 ///
@@ -137,6 +138,7 @@ class SshTunnelManager {
     final client = SSHClient(
       socket,
       username: config.username,
+      onVerifyHostKey: KnownHostsService.instance.handlerFor(config.host, config.port),
       algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => config.password,
       onUserInfoRequest: (r) => r.prompts.map((_) => config.password).toList(),
@@ -370,7 +372,7 @@ class SshTunnelManager {
     try {
       final client = await (customClusterClientFactory != null
           ? customClusterClientFactory!(channel, host, username, password)
-          : _defaultClusterClientFactory(channel, username, password));
+          : _defaultClusterClientFactory(channel, host, username, password));
 
       client.done.then((_) {
         if (_clusterClients[key] == client) {
@@ -395,12 +397,14 @@ class SshTunnelManager {
 
   Future<SSHClient> _defaultClusterClientFactory(
     SSHSocket socket,
+    String host,
     String username,
     String password,
   ) async {
     final client = SSHClient(
       socket,
       username: username,
+      onVerifyHostKey: KnownHostsService.instance.handlerFor(host, 22),
       algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => password,
       onUserInfoRequest: (r) => r.prompts.map((_) => password).toList(),

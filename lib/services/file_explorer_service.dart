@@ -8,6 +8,7 @@ import '../models/file_explorer_models.dart';
 import 'ssh_service.dart';
 import 'ssh_tunnel_manager.dart';
 import 'rust_sftp_bridge.dart';
+import 'known_hosts_service.dart';
 
 class RemoteSession {
   final SSHClient client;
@@ -499,11 +500,14 @@ class FileExplorerService {
   Future<SSHClient> _defaultTargetClientFactory(
     SSHSocket socket,
     String username,
-    String password,
-  ) async {
+    String password, {
+    required String host,
+    required int port,
+  }) async {
     final client = SSHClient(
       socket,
       username: username,
+      onVerifyHostKey: KnownHostsService.instance.handlerFor(host, port),
       algorithms: SshAlgorithmHelper.buildAlgorithms(),
       onPasswordRequest: () => password,
       onUserInfoRequest: (r) => r.prompts.map((_) => password).toList(),
@@ -552,6 +556,8 @@ class FileExplorerService {
         jumpClient = SSHClient(
           jumpSocket,
           username: target.jumpUsername ?? '',
+          onVerifyHostKey: KnownHostsService.instance
+              .handlerFor(target.jumpHost!, target.jumpPort),
           algorithms: SshAlgorithmHelper.buildAlgorithms(),
           onPasswordRequest: () => target.jumpPassword ?? '',
           onUserInfoRequest: (r) =>
@@ -562,6 +568,8 @@ class FileExplorerService {
         client = SSHClient(
           channel,
           username: target.username,
+          onVerifyHostKey: KnownHostsService.instance
+              .handlerFor(target.host, target.port, via: target.jumpHost),
           algorithms: SshAlgorithmHelper.buildAlgorithms(
             sshMacs: target.sshMacs,
             customSshOptions: target.customSshOptions,
@@ -580,6 +588,7 @@ class FileExplorerService {
         client = SSHClient(
           socket,
           username: target.username,
+          onVerifyHostKey: KnownHostsService.instance.handlerFor(target.host, target.port),
           algorithms: SshAlgorithmHelper.buildAlgorithms(
             sshMacs: target.sshMacs,
             customSshOptions: target.customSshOptions,
@@ -626,6 +635,8 @@ class FileExplorerService {
             socket,
             directUsername,
             directPassword,
+            host: target.host,
+            port: target.port,
           ));
     SftpClient? sftp;
     try {
@@ -1419,6 +1430,12 @@ class FileExplorerService {
       jumpPort: t.jumpPort,
       jumpUsername: t.jumpUsername,
       jumpPassword: t.jumpPassword,
+      // The Dart session to this target was verified (and the user asked)
+      // already; the engine only accepts those same keys.
+      hostKeys: KnownHostsService.instance.fingerprintsFor(t.host, t.port),
+      jumpHostKeys: t.hasJumpHost
+          ? KnownHostsService.instance.fingerprintsFor(t.jumpHost!, t.jumpPort)
+          : const [],
     ));
   }
 
