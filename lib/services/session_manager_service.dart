@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/session_models.dart';
+import 'ssh_key_loader.dart';
 
 class CircularJumpHostException implements Exception {
   final String message;
@@ -19,6 +20,9 @@ class ResolvedSshRoute {
   final String? jumpUsername;
   final String? jumpPassword;
 
+  /// Key the jump host logs in with, when its session uses one.
+  final SshPrivateKeyRef? jumpPrivateKey;
+
   const ResolvedSshRoute({
     required this.targetSession,
     this.jumpHost,
@@ -26,6 +30,7 @@ class ResolvedSshRoute {
     this.jumpFallbackHost,
     this.jumpUsername,
     this.jumpPassword,
+    this.jumpPrivateKey,
   });
 
   bool get hasJumpHost => jumpHost != null && jumpHost!.isNotEmpty;
@@ -485,6 +490,11 @@ class SessionManagerService extends ChangeNotifier {
       jumpFallbackHost: jumpSession.fallbackHost,
       jumpUsername: jumpSession.username,
       jumpPassword: jumpSession.password,
+      jumpPrivateKey: SshPrivateKeyRef.of(
+        usesKey: jumpSession.authMethod == AuthMethod.privateKey,
+        path: jumpSession.privateKeyPath,
+        passphrase: jumpSession.privateKeyPassphrase,
+      ),
     );
   }
 

@@ -14,6 +14,7 @@ import 'package:nexus_fx/models/file_explorer_models.dart';
 import 'package:nexus_fx/services/file_explorer_service.dart';
 import 'package:nexus_fx/services/known_hosts_service.dart';
 import 'package:nexus_fx/services/rust_sftp_bridge.dart';
+import 'package:nexus_fx/services/ssh_key_loader.dart';
 
 const _user = 'tester';
 const _password = 'secret';
@@ -41,12 +42,17 @@ class _TestServer {
   /// `SHA256:...` of the server's host key, as printed by the fixture.
   final String fingerprint;
 
-  static Future<_TestServer> start({String auth = 'password', int throttle = 0}) async {
+  static Future<_TestServer> start({
+    String auth = 'password',
+    int throttle = 0,
+    String? authorizedKey,
+  }) async {
     final root = await Directory.systemTemp.createTemp('sftp_e2e_root_');
     final script = '${Directory.current.path}${Platform.pathSeparator}test'
         '${Platform.pathSeparator}fixtures${Platform.pathSeparator}sftp_test_server.py';
     final process = await Process.start('python', [
       '-I', script, '--root', root.path, '--auth', auth, '--throttle', '$throttle',
+      if (authorizedKey != null) ...['--authorized-key', authorizedKey],
     ]);
     String? fp;
     final portLine = await process.stdout
@@ -242,6 +248,82 @@ void main() {
       addTearDown(conn.close);
       await conn.download(server.remote('k.txt'), localPath('k.txt'));
       expect(File(localPath('k.txt')).readAsStringSync(), 'kbd ok');
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    Future<String> keygen(String name, String type, String passphrase,
+        {List<String> extra = const []}) async {
+      final path = localPath(name);
+      final r = await Process.run('ssh-keygen',
+          ['-q', '-t', type, '-N', passphrase, '-f', path, '-C', 'e2e', ...extra]);
+      if (r.exitCode != 0) fail('ssh-keygen failed: ${r.stderr}');
+      return path;
+    }
+
+    test('native engine logs in with private keys (OpenSSH encrypted, legacy PEM RSA)',
+        () async {
+      final keys = [
+        (await keygen('id_ed', 'ed25519', 'pw'), 'pw'),
+        (await keygen('id_rsa', 'rsa', '', extra: ['-b', '2048', '-m', 'PEM']), null),
+      ];
+      for (final (path, pass) in keys) {
+        final server = await _TestServer.start(auth: 'publickey', authorizedKey: '$path.pub');
+        addTearDown(server.stop);
+        server.file('key.txt').writeAsStringSync('key ok');
+        final conn = await RustSftpConnection.connect(RustSftpConnectParams(
+          host: '127.0.0.1',
+          port: server.port,
+          username: _user,
+          password: '',
+          hostKeys: [server.fingerprint],
+          keyPath: path,
+          keyPassphrase: pass,
+        ));
+        addTearDown(conn.close);
+        await conn.download(server.remote('key.txt'), localPath('key_${path.hashCode}.txt'));
+        expect(File(localPath('key_${path.hashCode}.txt')).readAsStringSync(), 'key ok');
+      }
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('native engine reports a rejected key as an auth error', () async {
+      final good = await keygen('id_good', 'ed25519', '');
+      final other = await keygen('id_other', 'ed25519', '');
+      final server = await _TestServer.start(auth: 'publickey', authorizedKey: '$good.pub');
+      addTearDown(server.stop);
+      await expectLater(
+        RustSftpConnection.connect(RustSftpConnectParams(
+          host: '127.0.0.1',
+          port: server.port,
+          username: _user,
+          password: '',
+          hostKeys: [server.fingerprint],
+          keyPath: other,
+        )),
+        throwsA(isA<RustSftpException>()
+            .having((e) => e.code, 'code', RustSftpException.auth)),
+      );
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('a key-based session browses (Dart) and transfers (native) end to end', () async {
+      final keyPath = await keygen('id_session', 'ed25519', 'secret phrase');
+      final server = await _TestServer.start(auth: 'publickey', authorizedKey: '$keyPath.pub');
+      addTearDown(server.stop);
+      final data = _randomBytes(512 * 1024, 9);
+      server.file('sess.bin').writeAsBytesSync(data);
+
+      final svc = FileExplorerService();
+      addTearDown(svc.closeAllSessions);
+      final target = ExplorerNodeTarget(
+        type: ExplorerTargetType.sessionSsh,
+        label: 'key e2e',
+        port: server.port,
+        username: _user,
+        privateKey: SshPrivateKeyRef(keyPath, 'secret phrase'),
+      );
+      final session = await _quietly(() => svc.getOrConnectRemote(target));
+      expect(session.sftp, isNotNull);
+      await svc.downloadRemoteToLocal(session, '/sess.bin', false, local.path,
+          cancelToken: TransferCancelToken());
+      expect(File(localPath('sess.bin')).readAsBytesSync(), data);
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('an untrusted host key is refused before authenticating', () async {

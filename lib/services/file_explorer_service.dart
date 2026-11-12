@@ -9,6 +9,7 @@ import 'ssh_service.dart';
 import 'ssh_tunnel_manager.dart';
 import 'rust_sftp_bridge.dart';
 import 'known_hosts_service.dart';
+import 'ssh_key_loader.dart';
 
 class RemoteSession {
   final SSHClient client;
@@ -503,14 +504,18 @@ class FileExplorerService {
     String password, {
     required String host,
     required int port,
+    SshPrivateKeyRef? privateKey,
   }) async {
+    final identities = privateKey == null ? null : await loadSshIdentities(privateKey);
+    final keyOnly = identities != null && password.isEmpty;
     final client = SSHClient(
       socket,
       username: username,
       onVerifyHostKey: KnownHostsService.instance.handlerFor(host, port),
+      identities: identities,
       algorithms: SshAlgorithmHelper.buildAlgorithms(),
-      onPasswordRequest: () => password,
-      onUserInfoRequest: (r) => r.prompts.map((_) => password).toList(),
+      onPasswordRequest: keyOnly ? null : () => password,
+      onUserInfoRequest: keyOnly ? null : (r) => r.prompts.map((_) => password).toList(),
       keepAliveInterval: const Duration(seconds: 15),
     );
     await client.authenticated;
@@ -547,6 +552,14 @@ class FileExplorerService {
     if (target.type == ExplorerTargetType.sessionSsh || target.type == ExplorerTargetType.customSsh) {
       SSHClient? jumpClient;
       final SSHClient client;
+      // Bad key files fail here, before connecting anywhere.
+      final identities =
+          target.privateKey == null ? null : await loadSshIdentities(target.privateKey!);
+      final jumpIdentities = target.hasJumpHost && target.jumpPrivateKey != null
+          ? await loadSshIdentities(target.jumpPrivateKey!)
+          : null;
+      final keyOnly = identities != null && target.password.isEmpty;
+      final jumpKeyOnly = jumpIdentities != null && (target.jumpPassword ?? '').isEmpty;
       if (target.hasJumpHost) {
         final jumpSocket = await SSHSocket.connect(
           target.jumpHost!,
@@ -558,10 +571,12 @@ class FileExplorerService {
           username: target.jumpUsername ?? '',
           onVerifyHostKey: KnownHostsService.instance
               .handlerFor(target.jumpHost!, target.jumpPort),
+          identities: jumpIdentities,
           algorithms: SshAlgorithmHelper.buildAlgorithms(),
-          onPasswordRequest: () => target.jumpPassword ?? '',
-          onUserInfoRequest: (r) =>
-              r.prompts.map((_) => target.jumpPassword ?? '').toList(),
+          onPasswordRequest: jumpKeyOnly ? null : () => target.jumpPassword ?? '',
+          onUserInfoRequest: jumpKeyOnly
+              ? null
+              : (r) => r.prompts.map((_) => target.jumpPassword ?? '').toList(),
         );
         await jumpClient.authenticated;
         final channel = await jumpClient.forwardLocal(target.host, target.port);
@@ -574,9 +589,11 @@ class FileExplorerService {
             sshMacs: target.sshMacs,
             customSshOptions: target.customSshOptions,
           ),
-          onPasswordRequest: () => target.password,
-          onUserInfoRequest: (r) =>
-              r.prompts.map((_) => target.password).toList(),
+          identities: identities,
+          onPasswordRequest: keyOnly ? null : () => target.password,
+          onUserInfoRequest: keyOnly
+              ? null
+              : (r) => r.prompts.map((_) => target.password).toList(),
         );
         await client.authenticated;
       } else {
@@ -593,9 +610,11 @@ class FileExplorerService {
             sshMacs: target.sshMacs,
             customSshOptions: target.customSshOptions,
           ),
-          onPasswordRequest: () => target.password,
-          onUserInfoRequest: (r) =>
-              r.prompts.map((_) => target.password).toList(),
+          identities: identities,
+          onPasswordRequest: keyOnly ? null : () => target.password,
+          onUserInfoRequest: keyOnly
+              ? null
+              : (r) => r.prompts.map((_) => target.password).toList(),
         );
         await client.authenticated;
       }
@@ -637,6 +656,7 @@ class FileExplorerService {
             directPassword,
             host: target.host,
             port: target.port,
+            privateKey: target.privateKey,
           ));
     SftpClient? sftp;
     try {
@@ -1436,6 +1456,12 @@ class FileExplorerService {
       jumpHostKeys: t.hasJumpHost
           ? KnownHostsService.instance.fingerprintsFor(t.jumpHost!, t.jumpPort)
           : const [],
+      keyPath: t.privateKey == null ? null : expandKeyPath(t.privateKey!.path),
+      keyPassphrase: t.privateKey?.passphrase,
+      jumpKeyPath: t.hasJumpHost && t.jumpPrivateKey != null
+          ? expandKeyPath(t.jumpPrivateKey!.path)
+          : null,
+      jumpKeyPassphrase: t.hasJumpHost ? t.jumpPrivateKey?.passphrase : null,
     ));
   }
 

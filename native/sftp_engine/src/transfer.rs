@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use russh::client::{Handle, KeyboardInteractiveAuthResponse};
-use russh::keys::{HashAlg, PublicKeyOrCertificate};
+use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
 use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -155,6 +155,8 @@ pub struct ConnectionParams<'a> {
     pub jump_port: u16,
     pub jump_username: Option<&'a str>,
     pub jump_password: Option<&'a str>,
+    pub key: Option<KeyFile<'a>>,
+    pub jump_key: Option<KeyFile<'a>>,
     /// SHA256 fingerprints trusted for the target and the jump host.
     pub host_keys: Vec<&'a str>,
     pub jump_host_keys: Vec<&'a str>,
@@ -227,11 +229,56 @@ impl Progress<'_> {
     }
 }
 
+/// A private key file and its passphrase.
+#[derive(Clone, Copy)]
+pub struct KeyFile<'a> {
+    pub path: &'a str,
+    pub passphrase: Option<&'a str>,
+}
+
+impl<'a> KeyFile<'a> {
+    pub fn from_parts(path: Option<&'a str>, passphrase: Option<&'a str>) -> Option<Self> {
+        match path {
+            Some(p) if !p.trim().is_empty() => Some(KeyFile {
+                path: p,
+                passphrase: passphrase.filter(|s| !s.is_empty()),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// Tries [key] first (when set), then the password. A key-only login
+/// (empty password) does not fall back to sending an empty password.
 async fn authenticate(
     handle: &mut Handle<ClientHandler>,
     user: &str,
     password: &str,
+    key: Option<KeyFile<'_>>,
 ) -> Result<(), EngineError> {
+    if let Some(key) = key {
+        let secret = russh::keys::load_secret_key(key.path, key.passphrase)
+            .map_err(|e| EngineError::Auth(format!("Private key {}: {e}", key.path)))?;
+        let hash = handle
+            .best_supported_rsa_hash()
+            .await
+            .map_err(|e| EngineError::Auth(format!("Authentication failed for {user}: {e}")))?
+            .flatten();
+        let res = handle
+            .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(secret), hash))
+            .await
+            .map_err(|e| EngineError::Auth(format!("Authentication failed for {user}: {e}")))?;
+        if res.success() {
+            return Ok(());
+        }
+        if password.is_empty() {
+            return Err(EngineError::Auth(format!(
+                "Authentication failed for {user}: the server rejected key {}",
+                key.path
+            )));
+        }
+    }
+
     let res = handle
         .authenticate_password(user, password)
         .await
@@ -314,7 +361,7 @@ impl Connection {
                 )
                 .await
                 .map_err(|e| host_key_or(e, &j_rejected, &j_target))?;
-                authenticate(&mut jump_session, j_user, j_pass).await?;
+                authenticate(&mut jump_session, j_user, j_pass, params.jump_key).await?;
                 let channel = with_timeout(
                     &format!("Open tunnel to {target}"),
                     jump_session.channel_open_direct_tcpip(
@@ -346,7 +393,7 @@ impl Connection {
             }
         };
 
-        authenticate(&mut session, params.username, params.password).await?;
+        authenticate(&mut session, params.username, params.password, params.key).await?;
 
         let chan = session
             .channel_open_session()

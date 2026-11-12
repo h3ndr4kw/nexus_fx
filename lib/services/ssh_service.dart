@@ -13,6 +13,7 @@ import 'ssh_log_service.dart';
 import 'ssh_tunnel_manager.dart';
 import 'settings_service.dart';
 import 'known_hosts_service.dart';
+import 'ssh_key_loader.dart';
 
 class MasterConnectionException implements Exception {
   final Object cause;
@@ -232,6 +233,9 @@ class SshConnection {
   final String? fallbackLabel;
   final String? targetUsername;
   final String? targetPassword;
+
+  /// Key the target logs in with, when its session uses one.
+  final SshPrivateKeyRef? targetPrivateKey;
   final String? jumpClusterHost;
   final int jumpClusterPort;
   final String? jumpClusterFallback;
@@ -392,6 +396,7 @@ class SshConnection {
     this.fallbackLabel,
     this.targetUsername,
     this.targetPassword,
+    this.targetPrivateKey,
     this.jumpClusterHost,
     this.jumpClusterPort = 22,
     this.jumpClusterFallback,
@@ -437,6 +442,11 @@ class SshConnection {
       fallbackHost: profile.fallbackHost,
       targetUsername: profile.username,
       targetPassword: profile.password,
+      targetPrivateKey: SshPrivateKeyRef.of(
+        usesKey: profile.authMethod == AuthMethod.privateKey,
+        path: profile.privateKeyPath,
+        passphrase: profile.privateKeyPassphrase,
+      ),
       jumpClusterHost: route.jumpHost,
       jumpClusterPort: route.jumpPort,
       jumpClusterFallback: route.jumpFallbackHost,
@@ -1143,17 +1153,21 @@ class SshConnection {
     required int port,
     String? via,
   }) async {
+    final identities = await _loadTargetIdentities();
+    final keyOnly = identities != null && password.isEmpty;
     final client = SSHClient(
       socket,
       username: username,
       onVerifyHostKey: KnownHostsService.instance.handlerFor(host, port, via: via),
+      identities: identities,
       algorithms: SshAlgorithmHelper.buildAlgorithms(
         sshMacs: sshMacs,
         customSshOptions: customSshOptions,
       ),
-      onPasswordRequest: () => password,
-      onUserInfoRequest: (request) =>
-          request.prompts.map((p) => password).toList(),
+      onPasswordRequest: keyOnly ? null : () => password,
+      onUserInfoRequest: keyOnly
+          ? null
+          : (request) => request.prompts.map((p) => password).toList(),
       keepAliveInterval: const Duration(seconds: 15),
     );
     await client.authenticated;
@@ -1500,6 +1514,10 @@ class SshConnection {
     required String targetPassword,
   }) async {
     try {
+      // Load (and decrypt) the key first, so a bad key file fails before
+      // anything is sent to the server.
+      final identities = await _loadTargetIdentities();
+      final keyOnly = identities != null && targetPassword.isEmpty;
       final socket = await SSHSocket.connect(_currentHost, port,
           timeout: const Duration(seconds: 10));
 
@@ -1507,13 +1525,15 @@ class SshConnection {
         socket,
         username: targetUsername,
         onVerifyHostKey: KnownHostsService.instance.handlerFor(_currentHost, port),
+        identities: identities,
         algorithms: SshAlgorithmHelper.buildAlgorithms(
           sshMacs: sshMacs,
           customSshOptions: customSshOptions,
         ),
-        onPasswordRequest: () => targetPassword,
-        onUserInfoRequest: (request) =>
-            request.prompts.map((p) => targetPassword).toList(),
+        onPasswordRequest: keyOnly ? null : () => targetPassword,
+        onUserInfoRequest: keyOnly
+            ? null
+            : (request) => request.prompts.map((p) => targetPassword).toList(),
         keepAliveInterval: const Duration(seconds: 15),
       );
 
@@ -1656,6 +1676,16 @@ class SshConnection {
     // Regex matching prompts like `user@host:path$`, `(venv) [user@host ~]#`, `PS C:\path>`, `host>`
     final promptRegex = RegExp(r'([@:][^@:\n]+[\$#>\%❯➜▶⚡»›\)])\s*$');
     return promptRegex.hasMatch(lastLine);
+  }
+
+  /// The session's key pairs, or null when it logs in with a password.
+  /// Throws [SshKeyLoadException] with a user-facing message.
+  Future<List<SSHKeyPair>?> _loadTargetIdentities() async {
+    final key = targetPrivateKey;
+    if (key == null) return null;
+    final keys = await loadSshIdentities(key);
+    _log('Using private key ${expandKeyPath(key.path)}', color: 'cyan');
+    return keys;
   }
 
   bool _isHostKeyPrompt(String buffer) {

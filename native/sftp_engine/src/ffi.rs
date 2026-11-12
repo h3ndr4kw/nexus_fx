@@ -12,7 +12,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use crate::transfer::{self, ConnectionParams, Control, EngineError, TransferControl};
 
 /// Bumped whenever the C ABI changes, so Dart can refuse a stale DLL.
-pub const API_VERSION: i32 = 3;
+pub const API_VERSION: i32 = 4;
 
 const PANIC_CODE: i32 = -99;
 
@@ -31,6 +31,11 @@ pub struct SftpConnectConfig {
     pub host_keys: *const c_char,
     /// Same for the jump host.
     pub jump_host_keys: *const c_char,
+    /// Optional private key files (absolute paths) and passphrases.
+    pub key_path: *const c_char,
+    pub key_passphrase: *const c_char,
+    pub jump_key_path: *const c_char,
+    pub jump_key_passphrase: *const c_char,
 }
 
 pub type ProgressCallback = extern "C" fn(transferred: i64, total: i64);
@@ -109,6 +114,11 @@ pub extern "C" fn nexus_sftp_connect(
             jump_password: c_to_str(cfg.jump_password),
             host_keys: transfer::parse_fingerprints(c_to_str(cfg.host_keys)),
             jump_host_keys: transfer::parse_fingerprints(c_to_str(cfg.jump_host_keys)),
+            key: transfer::KeyFile::from_parts(c_to_str(cfg.key_path), c_to_str(cfg.key_passphrase)),
+            jump_key: transfer::KeyFile::from_parts(
+                c_to_str(cfg.jump_key_path),
+                c_to_str(cfg.jump_key_passphrase),
+            ),
         };
 
         // One worker thread drives russh's background tasks (keepalive,

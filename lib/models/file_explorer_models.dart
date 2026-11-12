@@ -1,4 +1,5 @@
 import 'session_models.dart';
+import '../services/ssh_key_loader.dart';
 import '../services/session_manager_service.dart';
 
 enum ExplorerTargetType {
@@ -29,6 +30,10 @@ class ExplorerNodeTarget {
   final String sshMacs;
   final String customSshOptions;
 
+  /// Keys to log in with instead of (or before) the password.
+  final SshPrivateKeyRef? privateKey;
+  final SshPrivateKeyRef? jumpPrivateKey;
+
   const ExplorerNodeTarget({
     required this.type,
     required this.label,
@@ -47,6 +52,8 @@ class ExplorerNodeTarget {
     this.sessionId,
     this.sshMacs = 'auto',
     this.customSshOptions = '',
+    this.privateKey,
+    this.jumpPrivateKey,
   });
 
   bool get isLocal => type == ExplorerTargetType.local;
@@ -85,6 +92,12 @@ class ExplorerNodeTarget {
       jumpPort: route?.jumpPort ?? 22,
       jumpUsername: route?.jumpUsername,
       jumpPassword: route?.jumpPassword,
+      jumpPrivateKey: route?.jumpPrivateKey,
+      privateKey: SshPrivateKeyRef.of(
+        usesKey: profile.authMethod == AuthMethod.privateKey,
+        path: profile.privateKeyPath,
+        passphrase: profile.privateKeyPassphrase,
+      ),
       sessionId: profile.id,
       sshMacs: profile.sshMacs,
       customSshOptions: profile.customSshOptions,
@@ -118,6 +131,7 @@ class ExplorerNodeTarget {
       feHostname: feHostname ?? this.feHostname,
       sshMacs: sshMacs ?? this.sshMacs,
       customSshOptions: customSshOptions ?? this.customSshOptions,
+      privateKey: privateKey,
     );
   }
 }

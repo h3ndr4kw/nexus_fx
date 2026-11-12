@@ -4,6 +4,7 @@ Serves --root over SFTP on 127.0.0.1. Prints "PORT <n>" once listening.
 
   --auth password   only password auth
   --auth kbd        only keyboard-interactive auth (one password prompt)
+  --auth publickey  only public key auth, for the key in --authorized-key
   --throttle N      limit reads/writes to about N bytes/second per file
 
 Requires paramiko. Test-only: accepts one fixed user/password.
@@ -113,7 +114,14 @@ class FsSftp(SFTPServerInterface):
 
 class Server(paramiko.ServerInterface):
     def get_allowed_auths(self, username):
-        return "password" if ARGS.auth == "password" else "keyboard-interactive"
+        return {"password": "password", "kbd": "keyboard-interactive", "publickey": "publickey"}[ARGS.auth]
+
+    def check_auth_publickey(self, username, key):
+        if ARGS.auth != "publickey" or username != USER or not ARGS.authorized_key:
+            return paramiko.AUTH_FAILED
+        with open(ARGS.authorized_key) as f:
+            authorized = f.read().split()[1]
+        return paramiko.AUTH_SUCCESSFUL if key.get_base64() == authorized else paramiko.AUTH_FAILED
 
     def check_auth_password(self, username, password):
         if ARGS.auth == "password" and username == USER and password == PASSWORD:
@@ -155,7 +163,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--root", required=True)
     p.add_argument("--port", type=int, default=0)
-    p.add_argument("--auth", choices=["password", "kbd"], default="password")
+    p.add_argument("--auth", choices=["password", "kbd", "publickey"], default="password")
+    p.add_argument("--authorized-key", help="OpenSSH .pub file accepted with --auth publickey")
     p.add_argument("--throttle", type=int, default=0)
     ARGS = p.parse_args()
 

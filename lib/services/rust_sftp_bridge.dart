@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'file_explorer_service.dart' show TransferCancelToken, TransferCancelledException;
 
 // ---------------------------------------------------------------------------
-// C ABI (native/sftp_engine/src/ffi.rs, API version 3)
+// C ABI (native/sftp_engine/src/ffi.rs, API version 4)
 // ---------------------------------------------------------------------------
 
 final class _ConnectConfigC extends Struct {
@@ -25,6 +25,10 @@ final class _ConnectConfigC extends Struct {
   external Pointer<Utf8> jumpPassword;
   external Pointer<Utf8> hostKeys;
   external Pointer<Utf8> jumpHostKeys;
+  external Pointer<Utf8> keyPath;
+  external Pointer<Utf8> keyPassphrase;
+  external Pointer<Utf8> jumpKeyPath;
+  external Pointer<Utf8> jumpKeyPassphrase;
 }
 
 typedef _NativeProgressCallback = Void Function(Int64 transferred, Int64 total);
@@ -116,6 +120,10 @@ class RustSftpConnectParams {
     this.jumpPassword,
     this.hostKeys = const [],
     this.jumpHostKeys = const [],
+    this.keyPath,
+    this.keyPassphrase,
+    this.jumpKeyPath,
+    this.jumpKeyPassphrase,
   });
 
   final String host;
@@ -133,6 +141,12 @@ class RustSftpConnectParams {
 
   /// Same for the jump host.
   final List<String> jumpHostKeys;
+
+  /// Private key files (absolute paths) tried before the password.
+  final String? keyPath;
+  final String? keyPassphrase;
+  final String? jumpKeyPath;
+  final String? jumpKeyPassphrase;
 }
 
 /// One SFTP connection the file explorer can push file transfers through.
@@ -158,7 +172,7 @@ abstract class NativeSftpLink {
 }
 
 class RustSftpBridge {
-  static const int expectedApiVersion = 3;
+  static const int expectedApiVersion = 4;
 
   static bool? _cachedIsAvailable;
   static String? _resolvedDllPath;
@@ -533,6 +547,10 @@ void _workerMain(_WorkerStart start) {
       ..jumpUsername = _str(p.jumpUsername, arena)
       ..jumpPassword = _str(p.jumpPassword, arena)
       ..hostKeys = _str(p.hostKeys.join('\n'), arena)
+      ..keyPath = _str(p.keyPath, arena)
+      ..keyPassphrase = _str(p.keyPassphrase, arena)
+      ..jumpKeyPath = _str(p.jumpKeyPath, arena)
+      ..jumpKeyPassphrase = _str(p.jumpKeyPassphrase, arena)
       ..jumpHostKeys = _str(p.jumpHostKeys.join('\n'), arena);
     final err = arena<Uint8>(_errBufLen).cast<Utf8>();
     final code = arena<Int32>();
