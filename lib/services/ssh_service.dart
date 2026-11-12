@@ -241,6 +241,9 @@ class SshConnection {
   final String? jumpClusterFallback;
   final String? jumpClusterUsername;
   final String? jumpClusterPassword;
+
+  /// Key the jump host logs in with, when its session uses one.
+  final SshPrivateKeyRef? jumpClusterPrivateKey;
   final String? feHostname;
   final String? clusterName;
   final bool isOam;
@@ -274,6 +277,10 @@ class SshConnection {
   String get currentLabel => _currentLabel;
 
   SSHClient? _client;
+
+  /// Jump host client when the target is reached through a direct-tcpip
+  /// forward (jump route without a Network Manager).
+  SSHClient? _jumpClient;
   SSHSession? _session;
   bool _isConnected = false;
   bool _isConnecting = false;
@@ -402,6 +409,7 @@ class SshConnection {
     this.jumpClusterFallback,
     this.jumpClusterUsername,
     this.jumpClusterPassword,
+    this.jumpClusterPrivateKey,
     this.feHostname,
     this.clusterName,
     bool? isOam,
@@ -452,6 +460,7 @@ class SshConnection {
       jumpClusterFallback: route.jumpFallbackHost,
       jumpClusterUsername: route.jumpUsername,
       jumpClusterPassword: route.jumpPassword,
+      jumpClusterPrivateKey: route.jumpPrivateKey,
       isLocalShell: isLocal,
       logService: logService,
       enableLogging: shouldLog,
@@ -1518,13 +1527,17 @@ class SshConnection {
       // anything is sent to the server.
       final identities = await _loadTargetIdentities();
       final keyOnly = identities != null && targetPassword.isEmpty;
-      final socket = await SSHSocket.connect(_currentHost, port,
-          timeout: const Duration(seconds: 10));
+      final viaJump = _hasDirectJumpRoute;
+      final socket = viaJump
+          ? await _openJumpForward()
+          : await SSHSocket.connect(_currentHost, port,
+              timeout: const Duration(seconds: 10));
 
       _client = SSHClient(
         socket,
         username: targetUsername,
-        onVerifyHostKey: KnownHostsService.instance.handlerFor(_currentHost, port),
+        onVerifyHostKey: KnownHostsService.instance
+            .handlerFor(_currentHost, port, via: viaJump ? _activeJumpHost : null),
         identities: identities,
         algorithms: SshAlgorithmHelper.buildAlgorithms(
           sshMacs: sshMacs,
@@ -1572,8 +1585,15 @@ class SshConnection {
 
       return true;
     } catch (e) {
-      _log('✖ Direct connection to $_currentHost failed: $e',
+      _log(
+          _hasDirectJumpRoute
+              ? '✖ Connection to $_currentHost via ${_activeJumpHost ?? jumpClusterHost} failed: $e'
+              : '✖ Direct connection to $_currentHost failed: $e',
           color: 'red');
+      _client?.close();
+      _client = null;
+      _jumpClient?.close();
+      _jumpClient = null;
       if (fallbackHost != null &&
           _currentHost != fallbackHost &&
           fallbackHost!.trim().isNotEmpty) {
@@ -1680,6 +1700,71 @@ class SshConnection {
 
   /// The session's key pairs, or null when it logs in with a password.
   /// Throws [SshKeyLoadException] with a user-facing message.
+  /// A jump route that is not served by a Network Manager: the target is
+  /// reached through a direct-tcpip forward on the jump host.
+  bool get _hasDirectJumpRoute =>
+      jumpClusterHost != null && jumpClusterHost!.trim().isNotEmpty;
+
+  /// The jump host the current forward runs through.
+  String? _activeJumpHost;
+
+  /// Opens an SSH connection to the jump host (its fallback when the primary
+  /// cannot be reached) and forwards a channel to the current target.
+  Future<SSHSocket> _openJumpForward() async {
+    final jumpKey = jumpClusterPrivateKey;
+    // Bad key files fail here, before connecting anywhere.
+    final jumpIdentities = jumpKey == null ? null : await loadSshIdentities(jumpKey);
+    final jumpPass = jumpClusterPassword ?? '';
+    final jumpKeyOnly = jumpIdentities != null && jumpPass.isEmpty;
+    final candidates = <String>[
+      jumpClusterHost!.trim(),
+      if (jumpClusterFallback != null &&
+          jumpClusterFallback!.trim().isNotEmpty &&
+          jumpClusterFallback!.trim() != jumpClusterHost!.trim())
+        jumpClusterFallback!.trim(),
+    ];
+
+    Object? lastError;
+    for (final jumpHost in candidates) {
+      SSHClient? jump;
+      try {
+        _log('⏳ Connecting to jump host $jumpHost:$jumpClusterPort...', color: 'yellow');
+        if (jumpKey != null) {
+          _log('Using private key ${expandKeyPath(jumpKey.path)} for the jump host',
+              color: 'cyan');
+        }
+        final socket = await SSHSocket.connect(jumpHost, jumpClusterPort,
+            timeout: const Duration(seconds: 10));
+        jump = SSHClient(
+          socket,
+          username: (jumpClusterUsername ?? '').trim().isNotEmpty
+              ? jumpClusterUsername!.trim()
+              : 'root',
+          onVerifyHostKey:
+              KnownHostsService.instance.handlerFor(jumpHost, jumpClusterPort),
+          identities: jumpIdentities,
+          algorithms: SshAlgorithmHelper.buildAlgorithms(),
+          onPasswordRequest: jumpKeyOnly ? null : () => jumpPass,
+          onUserInfoRequest: jumpKeyOnly
+              ? null
+              : (request) => request.prompts.map((p) => jumpPass).toList(),
+          keepAliveInterval: const Duration(seconds: 15),
+        );
+        await jump.authenticated;
+        final channel = await jump.forwardLocal(_currentHost, port);
+        _jumpClient = jump;
+        _activeJumpHost = jumpHost;
+        _log('✔ Tunnel via $jumpHost to $_currentHost:$port open', color: 'green');
+        return channel;
+      } catch (e) {
+        jump?.close();
+        lastError = e;
+        _log('✖ Jump host $jumpHost failed: $e', color: 'red');
+      }
+    }
+    throw lastError ?? StateError('No jump host');
+  }
+
   Future<List<SSHKeyPair>?> _loadTargetIdentities() async {
     final key = targetPrivateKey;
     if (key == null) return null;
@@ -2129,8 +2214,10 @@ class SshConnection {
     }
     _session?.close();
     _client?.close();
+    _jumpClient?.close();
     _session = null;
     _client = null;
+    _jumpClient = null;
     if (_leaseId != null) {
       SshTunnelManager.instance.releaseLease(_leaseId!);
       _leaseId = null;

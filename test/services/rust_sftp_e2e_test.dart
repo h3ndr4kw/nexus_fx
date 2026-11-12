@@ -14,6 +14,7 @@ import 'package:nexus_fx/models/file_explorer_models.dart';
 import 'package:nexus_fx/services/file_explorer_service.dart';
 import 'package:nexus_fx/services/known_hosts_service.dart';
 import 'package:nexus_fx/services/rust_sftp_bridge.dart';
+import 'package:nexus_fx/services/ssh_service.dart';
 import 'package:nexus_fx/services/ssh_key_loader.dart';
 
 const _user = 'tester';
@@ -127,6 +128,15 @@ Future<T> _quietly<T>(Future<T> Function() body) {
     }
   });
   return done.future;
+}
+
+bool _keygenAvailable() {
+  try {
+    Process.runSync('ssh-keygen', ['-?']);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 void main() {
@@ -258,6 +268,105 @@ void main() {
       if (r.exitCode != 0) fail('ssh-keygen failed: ${r.stderr}');
       return path;
     }
+
+    group('terminal through a jump host (direct-tcpip, no Network Manager)', () {
+      Future<(bool, String, SshConnection)> openTerminal(SshConnection conn) async {
+        final out = StringBuffer();
+        final sub = conn.outputStream.listen(out.write);
+        addTearDown(() async {
+          await sub.cancel();
+          conn.dispose();
+        });
+        final ok = await _quietly(() => conn.connect());
+        if (ok) await _until(() => out.toString().contains('SHELL-READY'));
+        return (ok, out.toString(), conn);
+      }
+
+      test('reaches a key-only target through a password jump host', () async {
+        final jump = await _TestServer.start();
+        addTearDown(jump.stop);
+        final key = await keygen('id_target', 'ed25519', 'pp');
+        final target = await _TestServer.start(auth: 'publickey', authorizedKey: '$key.pub');
+        addTearDown(target.stop);
+        final prompts = <HostKeyPromptRequest>[];
+        KnownHostsService.instance.prompter = (req) async {
+          prompts.add(req);
+          return HostKeyDecision.trustOnce;
+        };
+
+        final (ok, out, _) = await openTerminal(SshConnection(
+          id: 'jump-e2e',
+          host: '127.0.0.1',
+          port: target.port,
+          label: 'target',
+          targetUsername: _user,
+          targetPrivateKey: SshPrivateKeyRef(key, 'pp'),
+          jumpClusterHost: '127.0.0.1',
+          jumpClusterPort: jump.port,
+          jumpClusterUsername: _user,
+          jumpClusterPassword: _password,
+          enableLogging: false,
+        ));
+
+        expect(ok, isTrue);
+        // The shell banner names the target's port: the forward really went
+        // to the target, not to the jump host.
+        expect(out, contains('SHELL-READY $_user@${target.port}'));
+        expect(prompts.map((p) => (p.port, p.via)),
+            [(jump.port, null), (target.port, '127.0.0.1')]);
+      }, timeout: const Timeout(Duration(minutes: 1)));
+
+      test('falls back to the second jump host and logs in to it with a key', () async {
+        final key = await keygen('id_jump', 'ed25519', '');
+        final jump = await _TestServer.start(auth: 'publickey', authorizedKey: '$key.pub');
+        addTearDown(jump.stop);
+        final target = await _TestServer.start();
+        addTearDown(target.stop);
+
+        final (ok, out, _) = await openTerminal(SshConnection(
+          id: 'jump-fallback-e2e',
+          host: '127.0.0.1',
+          port: target.port,
+          label: 'target',
+          targetUsername: _user,
+          targetPassword: _password,
+          // Nothing listens on 127.0.0.2, so the fallback is used.
+          jumpClusterHost: '127.0.0.2',
+          jumpClusterFallback: '127.0.0.1',
+          jumpClusterPort: jump.port,
+          jumpClusterUsername: _user,
+          jumpClusterPrivateKey: SshPrivateKeyRef(key),
+          enableLogging: false,
+        ));
+
+        expect(ok, isTrue);
+        expect(out, contains('SHELL-READY $_user@${target.port}'));
+      }, timeout: const Timeout(Duration(minutes: 1)));
+
+      test('a rejected jump login fails the connection instead of going direct', () async {
+        final jump = await _TestServer.start();
+        addTearDown(jump.stop);
+        final target = await _TestServer.start();
+        addTearDown(target.stop);
+
+        final (ok, _, conn) = await openTerminal(SshConnection(
+          id: 'jump-reject-e2e',
+          host: '127.0.0.1',
+          port: target.port,
+          label: 'target',
+          targetUsername: _user,
+          targetPassword: _password,
+          jumpClusterHost: '127.0.0.1',
+          jumpClusterPort: jump.port,
+          jumpClusterUsername: _user,
+          jumpClusterPassword: 'wrong',
+          enableLogging: false,
+        ));
+
+        expect(ok, isFalse);
+        expect(conn.isConnected, isFalse);
+      }, timeout: const Timeout(Duration(minutes: 1)));
+    }, skip: _keygenAvailable() ? null : 'ssh-keygen not available');
 
     test('native engine logs in with private keys (OpenSSH encrypted, legacy PEM RSA)',
         () async {
