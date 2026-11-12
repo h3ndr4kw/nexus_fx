@@ -336,7 +336,7 @@ class _FloatingSendProgressDialogState extends State<FloatingSendProgressDialog>
                 Text(
                   '(${_remainingSeconds}s)',
                   style: TextStyle(
-                    color: palette.textColor.withValues(alpha: 0.6),
+                    color: palette.dimText(0.6),
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),

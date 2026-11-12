@@ -650,7 +650,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                 style: TextStyle(
                   fontFamily: 'Courier',
                   fontSize: 11,
-                  color: palette.textColor.withValues(alpha: 0.7),
+                  color: palette.dimText(0.7),
                 ),
               ),
               const SizedBox(height: 8),
@@ -668,7 +668,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                   hintStyle: TextStyle(
                     fontFamily: 'Courier',
                     fontSize: 12,
-                    color: palette.textColor.withValues(alpha: 0.4),
+                    color: palette.dimText(0.4),
                   ),
                   suffixText: '.nxnb',
                   suffixStyle: TextStyle(
@@ -779,7 +779,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                 style: TextStyle(
                   fontFamily: 'Courier',
                   fontSize: 11,
-                  color: palette.textColor.withValues(alpha: 0.7),
+                  color: palette.dimText(0.7),
                 ),
               ),
               const SizedBox(height: 8),
@@ -797,7 +797,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                   hintStyle: TextStyle(
                     fontFamily: 'Courier',
                     fontSize: 12,
-                    color: palette.textColor.withValues(alpha: 0.4),
+                    color: palette.dimText(0.4),
                   ),
                   isDense: true,
                   enabledBorder: OutlineInputBorder(
@@ -1115,7 +1115,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                 style: TextStyle(
                   fontFamily: 'Courier',
                   fontSize: 11,
-                  color: palette.textColor.withValues(alpha: 0.7),
+                  color: palette.dimText(0.7),
                 ),
               ),
               const SizedBox(height: 8),
@@ -1133,7 +1133,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                   hintStyle: TextStyle(
                     fontFamily: 'Courier',
                     fontSize: 12,
-                    color: palette.textColor.withValues(alpha: 0.4),
+                    color: palette.dimText(0.4),
                   ),
                   isDense: true,
                   enabledBorder: OutlineInputBorder(
@@ -3136,15 +3136,15 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                                     children: [
                                       _buildSashDot((_isDraggingDivider || _isDividerHovered)
                                           ? palette.primaryColor
-                                          : palette.textColor.withValues(alpha: 0.5)),
+                                          : palette.dimText(0.5)),
                                       const SizedBox(height: 3),
                                       _buildSashDot((_isDraggingDivider || _isDividerHovered)
                                           ? palette.primaryColor
-                                          : palette.textColor.withValues(alpha: 0.5)),
+                                          : palette.dimText(0.5)),
                                       const SizedBox(height: 3),
                                       _buildSashDot((_isDraggingDivider || _isDividerHovered)
                                           ? palette.primaryColor
-                                          : palette.textColor.withValues(alpha: 0.5)),
+                                          : palette.dimText(0.5)),
                                     ],
                                   ),
                                 ),
@@ -3239,7 +3239,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                             size: 15,
                             color: _activeTabIndex == 0
                                 ? palette.primaryColor
-                                : palette.textColor.withValues(alpha: 0.75),
+                                : palette.dimText(0.75),
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -3595,7 +3595,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                       style: TextStyle(
                         fontFamily: 'Courier',
                         fontSize: 12,
-                        color: palette.textColor.withValues(alpha: 0.6),
+                        color: palette.dimText(0.6),
                       ),
                     ),
                   )
@@ -4167,7 +4167,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
             Icon(
               Icons.search,
               size: 15,
-              color: palette.textColor.withValues(alpha: 0.7),
+              color: palette.dimText(0.7),
             ),
             const SizedBox(width: 6),
             Expanded(
@@ -4185,7 +4185,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                   hintStyle: TextStyle(
                     fontFamily: 'Courier',
                     fontSize: 12,
-                    color: palette.textColor.withValues(alpha: 0.4),
+                    color: palette.dimText(0.4),
                   ),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
@@ -4216,7 +4216,7 @@ class InteractiveRunbookSidebarState extends State<InteractiveRunbookSidebar> {
                 fontSize: 11,
                 color: total > 0
                     ? palette.primaryColor
-                    : palette.textColor.withValues(alpha: 0.6),
+                    : palette.dimText(0.6),
               ),
             ),
             const SizedBox(width: 4),
@@ -4902,7 +4902,7 @@ class _SidebarToolbarButtonState extends State<_SidebarToolbarButton> {
 
     final Color effectiveIdleColor = widget.iconColor ??
         (widget.isDanger && enabled
-            ? widget.palette.textColor.withValues(alpha: 0.72)
+            ? widget.palette.dimText(0.72)
             : widget.palette.textColor.withValues(alpha: enabled ? 0.72 : 0.28));
 
     final Color hoverColor = widget.isDanger
@@ -4997,7 +4997,7 @@ class _SidebarCaptionCloseButtonState
             size: 14,
             color: _isHovered
                 ? Colors.white
-                : widget.palette.textColor.withValues(alpha: 0.7),
+                : widget.palette.dimText(0.7),
           ),
         ),
         onPressed: widget.onPressed,
@@ -5046,7 +5046,7 @@ class _SidebarTabCloseButtonState extends State<_SidebarTabCloseButton> {
           size: 13,
           color: _isHovered
               ? Colors.white
-              : widget.palette.textColor.withValues(alpha: 0.7),
+              : widget.palette.dimText(0.7),
         ),
       ),
       onPressed: widget.onPressed,

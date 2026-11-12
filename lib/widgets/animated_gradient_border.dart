@@ -1,8 +1,8 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../theme/app_motion.dart';
 
 /// Style presets for the animated border beam.
 enum GradientBorderPreset {
@@ -101,7 +101,16 @@ class AnimatedGradientBorder extends StatefulWidget {
 }
 
 class _AnimatedGradientBorderState extends State<AnimatedGradientBorder>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReduceMotionLoop {
+  @override
+  AnimationController get loopController => _controller;
+
+  @override
+  double get restValue => 0.5;
+
+  @override
+  bool get loopActive => _isCurrentlyActive;
+
   late final AnimationController _controller;
 
   // Google Stitch / Gemini signature palette:
@@ -172,14 +181,6 @@ class _AnimatedGradientBorderState extends State<AnimatedGradientBorder>
     return true;
   }
 
-  static final bool _isRunningInTest = () {
-    try {
-      return Platform.environment.containsKey('FLUTTER_TEST');
-    } catch (_) {
-      return false;
-    }
-  }();
-
   Duration get _effectiveDuration =>
       widget.duration ?? SettingsService.instance.borderAnimationDurationObj;
 
@@ -194,13 +195,7 @@ class _AnimatedGradientBorderState extends State<AnimatedGradientBorder>
     widget.focusNode?.addListener(_onFocusChange);
     SettingsService.instance.addListener(_onSettingsChange);
 
-    if (_isCurrentlyActive) {
-      if (_isRunningInTest) {
-        _controller.value = 0.5;
-      } else {
-        _controller.repeat();
-      }
-    }
+    // The loop itself starts in didChangeDependencies (ReduceMotionLoop).
   }
 
   void _onSettingsChange() {
@@ -209,9 +204,8 @@ class _AnimatedGradientBorderState extends State<AnimatedGradientBorder>
       final newDuration = SettingsService.instance.borderAnimationDurationObj;
       if (_controller.duration != newDuration) {
         _controller.duration = newDuration;
-        if (_isCurrentlyActive && !_isRunningInTest) {
-          _controller.repeat();
-        }
+        if (_controller.isAnimating) _controller.stop();
+        syncLoop();
       }
     }
   }
@@ -222,21 +216,7 @@ class _AnimatedGradientBorderState extends State<AnimatedGradientBorder>
     _syncController();
   }
 
-  void _syncController() {
-    if (_isRunningInTest) {
-      _controller.value = 0.5;
-      return;
-    }
-    if (_isCurrentlyActive) {
-      if (!_controller.isAnimating) {
-        _controller.repeat();
-      }
-    } else {
-      if (_controller.isAnimating) {
-        _controller.stop();
-      }
-    }
-  }
+  void _syncController() => syncLoop();
 
   @override
   void didUpdateWidget(covariant AnimatedGradientBorder oldWidget) {

@@ -150,6 +150,7 @@ class SettingsService extends ChangeNotifier {
   bool _autoCheckUpdates = true;
   bool _autoDownloadUpdates = false;
   bool _transferNotifications = true;
+  bool _reduceMotion = false;
   String _updateRemotePath = '/home/vmridwan/smart_e_he_updates';
   String? _customConfigPath;
   FileExplorerDensity _fileExplorerDensity = FileExplorerDensity.standard;
@@ -219,6 +220,11 @@ class SettingsService extends ChangeNotifier {
   /// Desktop notifications for file transfers that finish, fail or need a
   /// decision while the window is in the background.
   bool get transferNotifications => _transferNotifications;
+
+  /// Stop looping decorative animations (beacons, animated borders,
+  /// shimmer). The OS "reduce motion" preference is honoured as well; see
+  /// AppMotion.reduced.
+  bool get reduceMotion => _reduceMotion;
   String get updateRemotePath => _updateRemotePath;
   FileExplorerDensity get fileExplorerDensity => _fileExplorerDensity;
   FileExplorerFontFamily get fileExplorerFontFamily => _fileExplorerFontFamily;
@@ -438,6 +444,10 @@ class SettingsService extends ChangeNotifier {
 
           if (yaml['transfer_notifications'] != null) {
             _transferNotifications = yaml['transfer_notifications'] == true;
+          }
+
+          if (yaml['reduce_motion'] != null) {
+            _reduceMotion = yaml['reduce_motion'] == true;
           }
 
           if (yaml['update_remote_path'] != null) {
@@ -925,6 +935,19 @@ class SettingsService extends ChangeNotifier {
     await _saveSettings();
   }
 
+  Future<void> setReduceMotion(bool value) async {
+    if (_reduceMotion == value) return;
+    _reduceMotion = value;
+    notifyListeners();
+    await _saveSettings();
+  }
+
+  @visibleForTesting
+  void setReduceMotionForTesting(bool value) {
+    _reduceMotion = value;
+    notifyListeners();
+  }
+
   Future<void> setUpdateRemotePath(String path) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty || _updateRemotePath == trimmed) return;
@@ -981,6 +1004,7 @@ class SettingsService extends ChangeNotifier {
       buffer.writeln('auto_check_updates: $_autoCheckUpdates');
       buffer.writeln('auto_download_updates: $_autoDownloadUpdates');
       buffer.writeln('transfer_notifications: $_transferNotifications');
+      buffer.writeln('reduce_motion: $_reduceMotion');
       buffer.writeln('update_remote_path: "$_updateRemotePath"');
       buffer.writeln('file_explorer_density: "${_fileExplorerDensity.name}"');
       buffer.writeln('file_explorer_font_family: "${_fileExplorerFontFamily.name}"');

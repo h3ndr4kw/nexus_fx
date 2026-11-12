@@ -306,7 +306,7 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
                             Text(
                               widget.itemSubtitle!(item),
                               style: TextStyle(
-                                color: AppTheme.textColor.withValues(alpha: 0.6),
+                                color: AppTheme.dimText(0.6),
                                 fontSize: 11,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -317,7 +317,7 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
                     : Text(
                         widget.hintText,
                         style: TextStyle(
-                          color: AppTheme.textColor.withValues(alpha: 0.4),
+                          color: AppTheme.dimText(0.4),
                           fontSize: 13,
                         ),
                       ),
@@ -506,7 +506,7 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
               decoration: InputDecoration(
                 hintText: widget.searchPlaceholder,
                 hintStyle:
-                    TextStyle(color: AppTheme.textColor.withValues(alpha: 0.4)),
+                    TextStyle(color: AppTheme.dimText(0.4)),
                 prefixIcon: const Icon(Icons.search,
                     size: 18, color: AppTheme.primaryColor),
                 suffixIcon: _searchCtrl.text.isNotEmpty
@@ -550,12 +550,12 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
                         children: [
                           Icon(Icons.search_off_rounded,
                               size: 28,
-                              color: AppTheme.textColor.withValues(alpha: 0.3)),
+                              color: AppTheme.dimText(0.3)),
                           const SizedBox(height: 6),
                           Text(
                             'No items match "${_searchCtrl.text}"',
                             style: TextStyle(
-                              color: AppTheme.textColor.withValues(alpha: 0.6),
+                              color: AppTheme.dimText(0.6),
                               fontSize: 12,
                             ),
                           ),

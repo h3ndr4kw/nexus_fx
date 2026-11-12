@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 enum AppThemeType {
@@ -50,6 +52,55 @@ class AppPalette {
     required this.successColor,
     required this.warningColor,
   });
+
+  /// [textColor] faded to [alpha], but never fainter than WCAG AA (4.5:1)
+  /// allows on [background] and [surfaceColor]. Keeps the relative
+  /// hierarchy of dimmed labels while making the faintest ones readable.
+  Color dimText(double alpha) =>
+      textColor.withValues(alpha: math.max(alpha, minReadableTextAlpha));
+
+  /// Text dimmed as far as it can go while still meeting 4.5:1.
+  Color get mutedTextColor => dimText(0);
+
+  /// Lowest alpha at which [textColor] still meets 4.5:1 on both
+  /// [background] and [surfaceColor].
+  double get minReadableTextAlpha =>
+      _minAlphaCache[id] ??= AppContrast.minAlphaFor(textColor, [background, surfaceColor]);
+
+  static final Map<String, double> _minAlphaCache = {};
+}
+
+/// WCAG 2.x contrast helpers.
+class AppContrast {
+  AppContrast._();
+
+  /// Minimum ratio for normal-size text (WCAG AA).
+  static const double textMinimum = 4.5;
+
+  /// Contrast ratio between two opaque colors (1..21).
+  static double ratio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = math.max(la, lb);
+    final lo = math.min(la, lb);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// Contrast of [fg] at its own alpha, drawn over opaque [bg].
+  static double ratioOver(Color fg, Color bg) =>
+      ratio(Color.alphaBlend(fg, bg), bg);
+
+  /// Smallest alpha (in 0.01 steps) at which [fg] reaches [minimum] on every
+  /// color in [backgrounds]; 1.0 if even the opaque color does not.
+  static double minAlphaFor(Color fg, List<Color> backgrounds,
+      {double minimum = textMinimum}) {
+    for (var step = 0; step <= 100; step++) {
+      final a = step / 100;
+      final c = fg.withValues(alpha: a);
+      if (backgrounds.every((bg) => ratioOver(c, bg) >= minimum)) return a;
+    }
+    return 1.0;
+  }
 }
 
 class AppTheme {
@@ -72,10 +123,14 @@ class AppTheme {
   static const Color borderSubtle = inputBorderColor;
   static const Color textPrimary = Color(0xFFE2E4E9);
   static const Color textSecondary = textColor;
-  static const Color textMuted = Color(0xFF6B7280);
+  static const Color textMuted = Color(0xFF7B828E);
   static const Color statusError = errorColor;
   static const Color statusSuccess = successColor;
   static const Color statusWarning = warningColor;
+
+  /// [textColor] faded to [alpha], floored at WCAG AA on the default
+  /// background and surface. For widgets that use the static colors.
+  static Color dimText(double alpha) => getPalette(AppThemeType.antigravity).dimText(alpha);
 
   // Current active palette (defaults to antigravity)
   static AppThemeType currentTheme = AppThemeType.antigravity;
@@ -142,7 +197,7 @@ class AppTheme {
       textColor: Color(0xFFCCCCCC),
       titleColor: Color(0xFF4EC9B0),
       inputBorderColor: Color(0xFF3C3C3C),
-      errorColor: Color(0xFFF14C4C),
+      errorColor: Color(0xFFF25555),
       successColor: Color(0xFF89D185),
       warningColor: Color(0xFFCCA700),
     ),
@@ -156,10 +211,10 @@ class AppTheme {
       primaryColor: Color(0xFF589DF6),
       accentColor: Color(0xFFFFC66D),
       textColor: Color(0xFFA9B7C6),
-      titleColor: Color(0xFF6897BB),
+      titleColor: Color(0xFF749FC0),
       inputBorderColor: Color(0xFF4B4B4B),
-      errorColor: Color(0xFFBC3F3C),
-      successColor: Color(0xFF629755),
+      errorColor: Color(0xFFD58684),
+      successColor: Color(0xFF78A66D),
       warningColor: Color(0xFFBBB529),
     ),
 
@@ -204,11 +259,11 @@ class AppTheme {
       primaryColor: Color(0xFF88C0D0),
       accentColor: Color(0xFFEBCB8B),
       textColor: Color(0xFFECEFF4),
-      titleColor: Color(0xFF81A1C1),
+      titleColor: Color(0xFF96B1CC),
       inputBorderColor: Color(0xFF4C566A),
-      errorColor: Color(0xFFBF616A),
+      errorColor: Color(0xFFD89FA4),
       successColor: Color(0xFFA3BE8C),
-      warningColor: Color(0xFFD08770),
+      warningColor: Color(0xFFDAA08E),
     ),
 
     // 9. One Dark Pro
@@ -222,7 +277,7 @@ class AppTheme {
       textColor: Color(0xFFABB2BF),
       titleColor: Color(0xFFC678DD),
       inputBorderColor: Color(0xFF3E4451),
-      errorColor: Color(0xFFE06C75),
+      errorColor: Color(0xFFE17079),
       successColor: Color(0xFF98C379),
       warningColor: Color(0xFFD19A66),
     ),
@@ -238,7 +293,7 @@ class AppTheme {
       textColor: Color(0xFFF8F8F2),
       titleColor: Color(0xFF8BE9FD),
       inputBorderColor: Color(0xFF44475A),
-      errorColor: Color(0xFFFF5555),
+      errorColor: Color(0xFFFF7575),
       successColor: Color(0xFF50FA7B),
       warningColor: Color(0xFFFFB86C),
     ),
@@ -254,7 +309,7 @@ class AppTheme {
       textColor: Color(0xFFFCFCFA),
       titleColor: Color(0xFF78DCE8),
       inputBorderColor: Color(0xFF49464E),
-      errorColor: Color(0xFFFF6188),
+      errorColor: Color(0xFFFF7295),
       successColor: Color(0xFFA9DC76),
       warningColor: Color(0xFFFFD866),
     ),
@@ -270,7 +325,7 @@ class AppTheme {
       textColor: Color(0xFFEBDBB2),
       titleColor: Color(0xFF8EC07C),
       inputBorderColor: Color(0xFF504945),
-      errorColor: Color(0xFFFB4934),
+      errorColor: Color(0xFFFC6857),
       successColor: Color(0xFFB8BB26),
       warningColor: Color(0xFFFE8019),
     ),
@@ -337,7 +392,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.transparent,
-        hintStyle: TextStyle(color: palette.textColor.withValues(alpha: 0.5)),
+        hintStyle: TextStyle(color: palette.dimText(0.5)),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(color: palette.inputBorderColor, width: 1.5),
           borderRadius: BorderRadius.circular(4),

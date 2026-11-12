@@ -115,7 +115,7 @@ class TableColumnFilterHeader extends StatelessWidget {
                   size: 15,
                   color: filtered
                       ? AppTheme.primaryColor
-                      : AppTheme.textColor.withValues(alpha: 0.6),
+                      : AppTheme.dimText(0.6),
                 ),
                 if (filtered)
                   Positioned(
@@ -364,7 +364,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                           hintText: 'Search values...',
                           hintStyle: TextStyle(
                             fontSize: 12,
-                            color: AppTheme.textColor.withValues(alpha: 0.6),
+                            color: AppTheme.dimText(0.6),
                           ),
                           prefixIcon: const Icon(Icons.search, size: 15, color: AppTheme.textColor),
                           prefixIconConstraints: const BoxConstraints(minWidth: 28),
@@ -449,7 +449,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                               'No matching values',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: AppTheme.textColor.withValues(alpha: 0.6),
+                                color: AppTheme.dimText(0.6),
                               ),
                             ),
                           )
@@ -517,7 +517,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                                         '($count)',
                                         style: TextStyle(
                                           fontSize: 10.5,
-                                          color: AppTheme.textColor.withValues(alpha: 0.6),
+                                          color: AppTheme.dimText(0.6),
                                         ),
                                       ),
                                     ],

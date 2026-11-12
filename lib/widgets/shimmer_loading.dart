@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/settings_service.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 
 class ShimmerEffect extends StatefulWidget {
@@ -20,22 +22,43 @@ class ShimmerEffect extends StatefulWidget {
 }
 
 class _ShimmerEffectState extends State<ShimmerEffect>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   AnimationController? _ctrl;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
 
   @override
   void initState() {
     super.initState();
-    if (ShimmerEffect.enableAnimation) {
+    SettingsService.instance.addListener(_onSettings);
+  }
+
+  void _onSettings() {
+    if (mounted) setState(_syncMotion);
+  }
+
+  /// Shimmer is purely decorative: with reduced motion the placeholder is
+  /// shown still.
+  void _syncMotion() {
+    final animate = ShimmerEffect.enableAnimation && !AppMotion.reduced(context);
+    if (animate && _ctrl == null) {
       _ctrl = AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 1400),
       )..repeat();
+    } else if (!animate && _ctrl != null) {
+      _ctrl!.dispose();
+      _ctrl = null;
     }
   }
 
   @override
   void dispose() {
+    SettingsService.instance.removeListener(_onSettings);
     _ctrl?.dispose();
     super.dispose();
   }

@@ -1833,6 +1833,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            key: const ValueKey('settings_reduce_motion'),
+            title: const Text('Reduce motion',
+                style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
+            subtitle: const Text(
+              'Stop looping animations (tab beacons, animated borders, loading shimmer). '
+              'Also on automatically when animation effects are turned off in Windows.',
+              style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+            ),
+            value: settings.reduceMotion,
+            onChanged: (val) {
+              setState(() => settings.setReduceMotion(val ?? false));
+            },
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
           const SizedBox(height: 24),
           _buildSettingsSection('SSH Session Tab Beacon Indicator'),
           const SizedBox(height: 8),

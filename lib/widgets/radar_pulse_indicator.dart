@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 
 /// Radar pulse expanding ripple beacon for active session tabs (ping-slow)
@@ -24,9 +24,12 @@ class RadarPulseIndicator extends StatefulWidget {
 }
 
 class _RadarPulseIndicatorState extends State<RadarPulseIndicator>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReduceMotionLoop {
   late AnimationController _controller;
   late Animation<double> _animation;
+
+  @override
+  AnimationController get loopController => _controller;
 
   @override
   void initState() {
@@ -35,11 +38,6 @@ class _RadarPulseIndicatorState extends State<RadarPulseIndicator>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat();
-    } else {
-      _controller.value = 1.0;
-    }
     _animation = CurvedAnimation(parent: _controller, curve: Curves.linear);
   }
 
@@ -262,9 +260,15 @@ class BreathingAmberBadge extends StatefulWidget {
 }
 
 class _BreathingAmberBadgeState extends State<BreathingAmberBadge>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReduceMotionLoop {
   late AnimationController _controller;
   late Animation<double> _animation;
+
+  @override
+  AnimationController get loopController => _controller;
+
+  @override
+  void startLoop() => _controller.repeat(reverse: true);
 
   @override
   void initState() {
@@ -273,11 +277,6 @@ class _BreathingAmberBadgeState extends State<BreathingAmberBadge>
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.value = 1.0;
-    }
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
   }
 
@@ -350,9 +349,15 @@ class CyanPulseDot extends StatefulWidget {
 }
 
 class _CyanPulseDotState extends State<CyanPulseDot>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReduceMotionLoop {
   late AnimationController _controller;
   late Animation<double> _animation;
+
+  @override
+  AnimationController get loopController => _controller;
+
+  @override
+  void startLoop() => _controller.repeat(reverse: true);
 
   @override
   void initState() {
@@ -361,11 +366,6 @@ class _CyanPulseDotState extends State<CyanPulseDot>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.value = 1.0;
-    }
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
   }
 

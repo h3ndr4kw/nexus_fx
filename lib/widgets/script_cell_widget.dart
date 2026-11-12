@@ -585,7 +585,7 @@ class ScriptCellWidgetState extends State<ScriptCellWidget> {
                           child: Icon(
                             Icons.arrow_drop_down,
                             size: 14,
-                            color: palette.textColor.withValues(alpha: 0.6),
+                            color: palette.dimText(0.6),
                           ),
                         ),
                       ),
@@ -656,7 +656,7 @@ class ScriptCellWidgetState extends State<ScriptCellWidget> {
                               fontFamily: 'Courier',
                               fontSize: 13,
                               height: 1.45,
-                              color: palette.textColor.withValues(alpha: 0.4),
+                              color: palette.dimText(0.4),
                             ),
                           ),
                         ),
@@ -1019,7 +1019,7 @@ class ScriptCellWidgetState extends State<ScriptCellWidget> {
                             ),
                             Icon(
                               Icons.arrow_drop_down,
-                              color: palette.textColor.withValues(alpha: 0.7),
+                              color: palette.dimText(0.7),
                               size: 14,
                             ),
                           ],

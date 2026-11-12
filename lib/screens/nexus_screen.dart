@@ -1101,7 +1101,7 @@ class NexusScreenState extends State<NexusScreen> {
               size: 16,
               color: _showCommandPane
                   ? palette.primaryColor
-                  : palette.textColor.withValues(alpha: 0.7),
+                  : palette.dimText(0.7),
             ),
           ),
         ),
@@ -1445,7 +1445,7 @@ class NexusScreenState extends State<NexusScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'Courier New',
-                  color: palette.textColor.withValues(alpha: 0.5),
+                  color: palette.dimText(0.5),
                 ),
               ),
             ),
@@ -1471,7 +1471,7 @@ class NexusScreenState extends State<NexusScreen> {
                     size: 13,
                     color: isMulti
                         ? palette.primaryColor
-                        : palette.textColor.withValues(alpha: 0.7),
+                        : palette.dimText(0.7),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1528,7 +1528,7 @@ class NexusScreenState extends State<NexusScreen> {
           child: Icon(
             Icons.history_rounded,
             size: 14,
-            color: palette.textColor.withValues(alpha: 0.7),
+            color: palette.dimText(0.7),
           ),
         ),
       ),
@@ -1587,7 +1587,7 @@ class NexusScreenState extends State<NexusScreen> {
                   size: 15,
                   color: selectedCount > 0
                       ? palette.primaryColor
-                      : palette.textColor.withValues(alpha: 0.6),
+                      : palette.dimText(0.6),
                 ),
                 if (selectedCount > 0) ...[
                   const SizedBox(width: 4),
@@ -1605,7 +1605,7 @@ class NexusScreenState extends State<NexusScreen> {
                 Icon(
                   Icons.keyboard_arrow_down_rounded,
                   size: 13,
-                  color: palette.textColor.withValues(alpha: 0.5),
+                  color: palette.dimText(0.5),
                 ),
               ],
             ),
@@ -1691,7 +1691,7 @@ class NexusScreenState extends State<NexusScreen> {
                         size: 18,
                         color: isActive
                             ? Colors.white
-                            : palette.textColor.withValues(alpha: 0.3),
+                            : palette.dimText(0.3),
                       ),
               ),
             ),
@@ -1800,7 +1800,7 @@ class NexusScreenState extends State<NexusScreen> {
                     hintStyle: TextStyle(
                       fontFamily: 'Courier New',
                       fontSize: 12,
-                      color: palette.textColor.withValues(alpha: 0.35),
+                      color: palette.dimText(0.35),
                     ),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -1854,7 +1854,7 @@ class NexusScreenState extends State<NexusScreen> {
               size: 16,
               color: _isSplitView
                   ? palette.primaryColor
-                  : palette.textColor.withValues(alpha: 0.7),
+                  : palette.dimText(0.7),
             ),
           ),
         ),
@@ -1979,7 +1979,7 @@ class NexusScreenState extends State<NexusScreen> {
             child: Text(
               isRightPane ? 'Split Pane (Empty)' : 'Left Pane (Empty)',
               style: TextStyle(
-                color: AppTheme.textColor.withValues(alpha: 0.5),
+                color: AppTheme.dimText(0.5),
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
@@ -2127,7 +2127,7 @@ class NexusScreenState extends State<NexusScreen> {
                 return Text(
                   snapshot.data ?? conn.currentLabel,
                   style: TextStyle(
-                    color: isActive ? palette.textColor : palette.textColor.withValues(alpha: 0.6),
+                    color: isActive ? palette.textColor : palette.dimText(0.6),
                     fontSize: 12,
                     fontWeight:
                         isActive ? FontWeight.bold : FontWeight.normal,
@@ -2146,7 +2146,7 @@ class NexusScreenState extends State<NexusScreen> {
                 size: 14,
                 color: isActive
                     ? palette.textColor
-                    : palette.textColor.withValues(alpha: 0.5),
+                    : palette.dimText(0.5),
               ),
             ),
           ],
@@ -2234,7 +2234,7 @@ class NexusScreenState extends State<NexusScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
-              color: AppTheme.textColor.withValues(alpha: 0.7),
+              color: AppTheme.dimText(0.7),
             ),
           ),
         ],

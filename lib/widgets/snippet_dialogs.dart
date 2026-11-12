@@ -168,7 +168,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
                       onPressed: () => Navigator.of(context).pop(),
-                      color: palette.textColor.withValues(alpha: 0.6),
+                      color: palette.dimText(0.6),
                       splashRadius: 18,
                     ),
                   ],
@@ -205,7 +205,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             hintText: 'e.g. Restart Web Server & Check Status',
                             hintStyle: TextStyle(
                               fontSize: 12,
-                              color: palette.textColor.withValues(alpha: 0.35),
+                              color: palette.dimText(0.35),
                             ),
                             filled: true,
                             fillColor: palette.background,
@@ -247,7 +247,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             hintText: 'Brief explanation of this snippet',
                             hintStyle: TextStyle(
                               fontSize: 12,
-                              color: palette.textColor.withValues(alpha: 0.35),
+                              color: palette.dimText(0.35),
                             ),
                             filled: true,
                             fillColor: palette.background,
@@ -288,7 +288,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                               'Supports multi-line script',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: palette.textColor.withValues(alpha: 0.45),
+                                color: palette.dimText(0.45),
                               ),
                             ),
                           ],
@@ -315,7 +315,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             hintStyle: TextStyle(
                               fontSize: 12,
                               fontFamily: 'Courier New',
-                              color: palette.textColor.withValues(alpha: 0.35),
+                              color: palette.dimText(0.35),
                             ),
                             filled: true,
                             fillColor: palette.background,
@@ -488,7 +488,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                             hintText: 'Search snippet by name or command...',
                             hintStyle: TextStyle(
                               fontSize: 12,
-                              color: palette.textColor.withValues(alpha: 0.4),
+                              color: palette.dimText(0.4),
                             ),
                             isDense: true,
                             filled: false,
@@ -504,7 +504,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                         IconButton(
                           icon: const Icon(Icons.clear_rounded, size: 16),
                           onPressed: () => _searchController.clear(),
-                          color: palette.textColor.withValues(alpha: 0.5),
+                          color: palette.dimText(0.5),
                           splashRadius: 14,
                         ),
                       ],
@@ -541,7 +541,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                               Icon(
                                 Icons.bookmark_border_rounded,
                                 size: 36,
-                                color: palette.textColor.withValues(alpha: 0.3),
+                                color: palette.dimText(0.3),
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -550,7 +550,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                                     : 'No snippets matching "$_searchQuery"',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: palette.textColor.withValues(alpha: 0.5),
+                                  color: palette.dimText(0.5),
                                 ),
                               ),
                             ],
@@ -608,7 +608,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                                                   style: TextStyle(
                                                     fontSize: 9.5,
                                                     fontFamily: 'Courier New',
-                                                    color: palette.textColor.withValues(alpha: 0.7),
+                                                    color: palette.dimText(0.7),
                                                   ),
                                                 ),
                                               ),
@@ -620,7 +620,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                                               item.description,
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: palette.textColor.withValues(alpha: 0.5),
+                                                color: palette.dimText(0.5),
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -657,7 +657,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                                       message: 'Edit snippet',
                                       child: IconButton(
                                         icon: const Icon(Icons.edit_outlined, size: 16),
-                                        color: palette.textColor.withValues(alpha: 0.6),
+                                        color: palette.dimText(0.6),
                                         hoverColor: palette.primaryColor.withValues(alpha: 0.15),
                                         splashRadius: 16,
                                         onPressed: () => _openEditor(snippet: item),
@@ -689,7 +689,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                         'Click snippet to insert into command line',
                         style: TextStyle(
                           fontSize: 11,
-                          color: palette.textColor.withValues(alpha: 0.5),
+                          color: palette.dimText(0.5),
                         ),
                       ),
                       Text(
@@ -697,7 +697,7 @@ class _SnippetPickerModalState extends State<SnippetPickerModal> {
                         style: TextStyle(
                           fontSize: 10,
                           fontFamily: 'Courier New',
-                          color: palette.textColor.withValues(alpha: 0.4),
+                          color: palette.dimText(0.4),
                         ),
                       ),
                     ],
