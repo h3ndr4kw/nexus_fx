@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/file_explorer_models.dart';
 import '../services/file_explorer_service.dart';
+import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
 import '../services/settings_service.dart';
 
@@ -275,6 +277,11 @@ class FileExplorerView extends StatefulWidget {
   final PaneSide? initialActivePane;
   final ValueChanged<ExplorerNodeTarget>? onTargetChanged;
   final FileExplorerService? service;
+  final TransferManager? transferManager;
+
+  /// Tags jobs started here (e.g. the hosting tab's id) so the tab strip can
+  /// show which tab has transfers running. Defaults to this view's state.
+  final Object? transferOwnerId;
   final FocusNode? focusNode;
   final bool isActive;
   final VoidCallback? onNewTab;
@@ -291,6 +298,8 @@ class FileExplorerView extends StatefulWidget {
     this.initialActivePane,
     this.onTargetChanged,
     this.service,
+    this.transferManager,
+    this.transferOwnerId,
     this.focusNode,
     this.isActive = true,
     this.onNewTab,
@@ -335,6 +344,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   FocusNode? _internalFocusNode;
   FocusNode get _focusNode => widget.focusNode ?? (_internalFocusNode ??= FocusNode());
   FileExplorerService get _service => widget.service ?? FileExplorerService.instance;
+  TransferManager get _transfers => widget.transferManager ?? TransferManager.instance;
+  StreamSubscription<TransferJob>? _transferSub;
+  Object get _transferOwner => widget.transferOwnerId ?? this;
 
   bool _isDualPane = true;
   PaneSide _activePane = PaneSide.left;
@@ -379,6 +391,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _loadPane(_leftPane);
     _loadPane(_rightPane);
     SettingsService.instance.addListener(_handleSettingsChanged);
+    _transferSub = _transfers.finished.listen(_onTransferFinished);
 
     if (widget.isActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -419,6 +432,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   @override
   void dispose() {
     SettingsService.instance.removeListener(_handleSettingsChanged);
+    _transferSub?.cancel();
     _internalFocusNode?.dispose();
     _leftPane.dispose();
     _rightPane.dispose();
@@ -1093,6 +1107,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _focusNode.requestFocus();
   }
 
+  /// Hands the copy/move to the app-wide [TransferManager] and returns at
+  /// once. Progress and cancel live in the global transfer bar, so this tab,
+  /// other tabs and other pages stay usable while the job runs.
   Future<void> _executeTransfer({
     required _PaneController src,
     required _PaneController dest,
@@ -1101,168 +1118,51 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     required bool isMove,
   }) async {
     if (targets.isEmpty) return;
-
-    final actionLabel = isMove ? 'Moving' : 'Copying';
-    final progressNotifier = ValueNotifier<FileTransferProgress>(
-      FileTransferProgress(
-        title: '$actionLabel ${targets.length} item(s)...',
-        currentFile: targets.first.name,
-        completedItems: 0,
-        totalItems: targets.length,
-        progress: 0.0,
-      ),
+    final job = _transfers.enqueue(
+      items: List.of(targets),
+      srcTarget: src.target,
+      srcDirPath: src.currentPath,
+      destTarget: dest.target,
+      destDirPath: destDirPath,
+      isMove: isMove,
+      owner: _transferOwner,
     );
+    _setStatus('${job.title} → ${job.destLabel} (in background, see transfer bar)');
+  }
 
-    bool isCancelled = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => FileExplorerProgressDialog(
-        progressNotifier: progressNotifier,
-        onCancel: () {
-          isCancelled = true;
-          Navigator.of(ctx).pop();
-        },
-      ),
-    );
-
-    int transferredCount = 0;
-    try {
-      final isSameTarget = src.target.isSameTarget(dest.target);
-
-      for (int i = 0; i < targets.length; i++) {
-        if (isCancelled) break;
-        final item = targets[i];
-
-        void updateItemProgress(int sentBytes, int totalBytes, {double stageOffset = 0.0, double stageMultiplier = 1.0}) {
-          if (isCancelled) return;
-          final fileRatio = totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
-          final combinedRatio = stageOffset + (fileRatio * stageMultiplier);
-          final overallProgress = (i + combinedRatio) / targets.length;
-          progressNotifier.value = FileTransferProgress(
-            title: '$actionLabel ${targets.length} item(s)...',
-            currentFile: item.name,
-            completedItems: i,
-            totalItems: targets.length,
-            progress: overallProgress,
-            currentBytes: sentBytes,
-            totalBytes: totalBytes,
-          );
-        }
-
-        final progressFraction = i / targets.length;
-        progressNotifier.value = FileTransferProgress(
-          title: '$actionLabel ${targets.length} item(s)...',
-          currentFile: item.name,
-          completedItems: i,
-          totalItems: targets.length,
-          progress: progressFraction,
-        );
-        _setStatus('[${i + 1}/${targets.length}] $actionLabel ${item.name} (${(progressFraction * 100).toInt()}%)...');
-
-        if (src.target.isLocal && dest.target.isLocal) {
-          // Local to Local
-          if (isMove) {
-            await _service.moveLocal(item.path, destDirPath);
-          } else {
-            await _service.copyLocal(
-              item.path,
-              destDirPath,
-              onProgress: (sent, total) => updateItemProgress(sent, total),
-            );
-          }
-        } else if (isSameTarget && !src.target.isLocal) {
-          // Same Remote to Same Remote (optimized direct remote shell/sftp command)
-          src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-          if (isMove) {
-            await _service.moveRemote(src.remoteSession!, item.path, destDirPath);
-          } else {
-            await _service.copyRemote(src.remoteSession!, item.path, destDirPath);
-          }
-        } else if (src.target.isLocal && !dest.target.isLocal) {
-          // Local to Remote (Upload)
-          dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-          await _service.uploadLocalToRemote(
-            item.path,
-            dest.remoteSession!,
-            destDirPath,
-            onProgress: (sent, total) => updateItemProgress(sent, total),
-          );
-          if (isMove) {
-            await _service.deleteLocal(item.path);
-          }
-        } else if (!src.target.isLocal && dest.target.isLocal) {
-          // Remote to Local (Download)
-          src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-          await _service.downloadRemoteToLocal(
-            src.remoteSession!,
-            item.path,
-            item.isDir,
-            destDirPath,
-            onProgress: (rcv, total) => updateItemProgress(rcv, total),
-          );
-          if (isMove) {
-            await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
-          }
-        } else {
-          // Cross Remote to Different Remote
-          _setStatus('Remote-to-remote transfer in progress...');
-          final tempDir = await Directory.systemTemp.createTemp('he_transfer_');
-          try {
-            src.remoteSession ??= await _service.getOrConnectRemote(src.target);
-            await _service.downloadRemoteToLocal(
-              src.remoteSession!,
-              item.path,
-              item.isDir,
-              tempDir.path,
-              onProgress: (rcv, total) => updateItemProgress(rcv, total, stageOffset: 0.0, stageMultiplier: 0.5),
-            );
-            final downloadedPath = '${tempDir.path}${Platform.pathSeparator}${item.name}';
-            dest.remoteSession ??= await _service.getOrConnectRemote(dest.target);
-            await _service.uploadLocalToRemote(
-              downloadedPath,
-              dest.remoteSession!,
-              destDirPath,
-              onProgress: (sent, total) => updateItemProgress(sent, total, stageOffset: 0.5, stageMultiplier: 0.5),
-            );
-            if (isMove) {
-              await _service.deleteRemote(src.remoteSession!, item.path, item.isDir);
-            }
-          } finally {
-            await tempDir.delete(recursive: true);
-          }
-        }
-
-        transferredCount++;
-        src.multiSelected.remove(item.path);
+  /// Refreshes any pane showing the job's source or destination folder, and
+  /// reports the outcome in the status line of the tab that started it.
+  void _onTransferFinished(TransferJob job) {
+    if (!mounted) return;
+    final panes = [_leftPane, _rightPane];
+    if (job.owner == _transferOwner) {
+      for (final pane in panes) {
+        pane.multiSelected.removeAll(job.transferredPaths);
       }
-
-      progressNotifier.value = FileTransferProgress(
-        title: 'Complete',
-        currentFile: '',
-        completedItems: transferredCount,
-        totalItems: targets.length,
-        progress: 1.0,
+      _setStatus(
+        job.resultSummary,
+        isError: job.status == TransferStatus.failed,
+        isSuccess: job.status == TransferStatus.completed,
       );
-    } catch (e) {
-      _setStatus('$actionLabel failed: $e', isError: true);
-    } finally {
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-      progressNotifier.dispose();
-      if (isCancelled) {
-        _setStatus('$actionLabel cancelled ($transferredCount/${targets.length} items transferred).');
-      } else if (transferredCount > 0) {
-        _setStatus('Successfully ${isMove ? "moved" : "copied"} $transferredCount item(s).', isSuccess: true);
-        src.multiSelected.clear();
-      }
-      await _loadPane(src, silent: true);
-      if (src != dest || destDirPath != src.currentPath) {
-        await _loadPane(dest, silent: true);
+    }
+    for (final pane in panes) {
+      if (_paneShows(pane, job.srcTarget, job.srcDirPath) ||
+          _paneShows(pane, job.destTarget, job.destDirPath)) {
+        _loadPane(pane, silent: true);
       }
     }
+  }
+
+  bool _paneShows(_PaneController pane, ExplorerNodeTarget target, String dirPath) {
+    if (!pane.target.isSameTarget(target)) return false;
+    String norm(String p) {
+      var s = p;
+      while (s.length > 1 && (s.endsWith('/') || s.endsWith('\\'))) {
+        s = s.substring(0, s.length - 1);
+      }
+      return target.isLocal && Platform.isWindows ? s.toLowerCase() : s;
+    }
+    return norm(pane.currentPath) == norm(dirPath);
   }
 
   Future<void> _initiateCopy() async {

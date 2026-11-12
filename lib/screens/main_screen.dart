@@ -11,6 +11,7 @@ import '../services/crypto_vault_service.dart';
 import '../services/nexus_tool_registry.dart';
 import '../services/session_manager_service.dart';
 import '../services/settings_service.dart';
+import '../services/transfer_manager.dart';
 import '../services/window_state_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/command_palette.dart';
@@ -19,6 +20,7 @@ import '../widgets/file_explorer_view.dart';
 import '../widgets/fuzzy_searchable_dropdown.dart';
 import '../widgets/keyboard_shortcuts_dialog.dart';
 import '../widgets/sidebar_icon.dart';
+import '../widgets/transfer_status_bar.dart';
 import '../widgets/window_caption_buttons.dart';
 import 'nexus_screen.dart';
 import 'sessions_screen.dart';
@@ -50,7 +52,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WindowListener {
   late final SessionManagerService _sessionManager;
   late final NexusToolRegistry _toolRegistry;
   AppTab _selectedTab = AppTab.sessions;
@@ -153,6 +155,8 @@ class _MainScreenState extends State<MainScreen> {
       _sidebarWidth = savedLeftWidth;
     }
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    windowManager.addListener(this);
+    TransferManager.instance.addListener(_syncPreventCloseForTransfers);
 
     if (!widget.suppressStartupDialog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -205,6 +209,8 @@ class _MainScreenState extends State<MainScreen> {
     _toolRegistry.removeListener(_onToolsChanged);
     _sashIdleTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    windowManager.removeListener(this);
+    TransferManager.instance.removeListener(_syncPreventCloseForTransfers);
     _sidebarFocusNode.dispose();
     _fileExplorerTabScrollController.dispose();
     for (final tab in _fileExplorerTabs) {
@@ -501,14 +507,85 @@ class _MainScreenState extends State<MainScreen> {
     await WindowStateService.instance.toggleFullScreen();
   }
 
+  // ==========================================
+  // Quit guard while file transfers are running
+  // ==========================================
+
+  bool _preventCloseForTransfers = false;
+
+  /// Intercepts the window close button only while transfers are active, so
+  /// normal closing is unaffected.
+  void _syncPreventCloseForTransfers() {
+    final want = TransferManager.instance.hasActiveJobs;
+    if (want == _preventCloseForTransfers) return;
+    _preventCloseForTransfers = want;
+    _setWindowPreventClose(want);
+  }
+
+  Future<void> _setWindowPreventClose(bool value) async {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
+    try {
+      await windowManager.setPreventClose(value);
+    } catch (_) {
+      // Not available in tests / before window_manager is initialised.
+    }
+  }
+
+  @override
+  void onWindowClose() async {
+    if (!_preventCloseForTransfers || !mounted) return;
+    if (await _confirmQuitWithTransfers()) {
+      TransferManager.instance.cancelAll();
+      await _setWindowPreventClose(false);
+      try {
+        await windowManager.destroy();
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> _confirmQuitWithTransfers() async {
+    final count = TransferManager.instance.activeJobs.length;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        title: const Text('File transfers still running'),
+        content: Text(
+          '$count file transfer(s) are still running. Quitting cancels them and '
+          'may leave incomplete files at the destination.',
+          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('quit_keep_transfers'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep running'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('quit_cancel_transfers'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.statusError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel transfers & quit',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return confirm == true;
+  }
+
   Future<void> _confirmAndExit() async {
+    final activeTransfers = TransferManager.instance.activeJobs.length;
+    final transferNote = activeTransfers > 0
+        ? ' $activeTransfers file transfer(s) still running will be cancelled.'
+        : '';
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.bgSurface,
         title: Text('Exit ${widget.appTitle}?'),
         content: Text(
-          'Are you sure you want to exit ${widget.appTitle}? Any running terminal sessions will be terminated.',
+          'Are you sure you want to exit ${widget.appTitle}? Any running terminal sessions will be terminated.$transferNote',
           style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
         ),
         actions: [
@@ -935,6 +1012,8 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
+            // Global, non-modal copy/move progress; visible on every page.
+            const TransferStatusBar(),
           ],
         ),
       ),
@@ -1387,6 +1466,7 @@ class _MainScreenState extends State<MainScreen> {
               final isTabActive = (_selectedTab == AppTab.fileExplorer) && (index == safeActiveIdx);
               return FileExplorerView(
                 key: GlobalObjectKey(tab),
+                transferOwnerId: tab.id,
                 focusNode: tab.focusNode,
                 isActive: isTabActive,
                 initialLeftTarget: tab.leftTarget,
@@ -1479,6 +1559,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ),
               ),
+              _FileExplorerTabTransferBadge(tabId: tab.id),
               const SizedBox(width: 8),
               Tooltip(
                 message: 'Close Tab (Ctrl+W)',
@@ -2080,6 +2161,48 @@ class _KeyboardShortcutsTopBarButtonState
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Small indicator on an explorer tab while transfers it started are running:
+/// a spinner, or an amber warning when one is waiting on a name conflict.
+class _FileExplorerTabTransferBadge extends StatelessWidget {
+  const _FileExplorerTabTransferBadge({required this.tabId});
+
+  final String tabId;
+
+  @override
+  Widget build(BuildContext context) {
+    final manager = TransferManager.instance;
+    return ListenableBuilder(
+      listenable: manager,
+      builder: (context, _) {
+        final jobs = manager.activeJobs.where((j) => j.owner == tabId).toList();
+        if (jobs.isEmpty) return const SizedBox.shrink();
+        final needsAttention = jobs.any((j) => j.needsAttention);
+        final tooltip = needsAttention
+            ? 'A transfer from this tab needs your decision (see transfer bar)'
+            : '${jobs.length} transfer(s) running from this tab';
+        return Padding(
+          key: ValueKey('file_explorer_tab_transfer_badge_$tabId'),
+          padding: const EdgeInsets.only(left: 6),
+          child: Tooltip(
+            message: tooltip,
+            child: needsAttention
+                ? const Icon(Icons.warning_amber_rounded,
+                    size: 13, color: AppTheme.statusWarning)
+                : const SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Color(0xFF56B6C2),
+                    ),
+                  ),
+          ),
+        );
+      },
     );
   }
 }

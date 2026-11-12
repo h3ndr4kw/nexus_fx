@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:dartssh2/dartssh2.dart';
 import '../models/file_explorer_models.dart';
@@ -10,7 +11,7 @@ import 'rust_sftp_bridge.dart';
 
 class RemoteSession {
   final SSHClient client;
-  final SftpClient? sftp;
+  SftpClient? sftp;
   final SSHClient? jumpClient;
   final String? leaseId;
   final bool isSharedClient;
@@ -36,7 +37,116 @@ class RemoteSession {
           "ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 $feHostname '$escaped'";
       return await client.run(feCmd, stderr: false);
     }
+    if (await detectTmshShell()) {
+      return await _runViaTmshBash(cmd);
+    }
     return await client.run(cmd);
+  }
+
+  /// Starts [cmd] on an exec channel and returns the live session, so callers
+  /// can stream stdin/stdout (for byte-level progress). Applies the same
+  /// FE-hop and tmsh wrapping as [run].
+  Future<SSHSession> execute(String cmd) async {
+    if (feHostname != null && feHostname!.isNotEmpty) {
+      final escaped = cmd.replaceAll("'", "'\\''");
+      return await client.execute(
+        "ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 $feHostname '$escaped'",
+      );
+    }
+    if (await detectTmshShell()) {
+      await ensureShellAccess();
+      final encoded = base64.encode(utf8.encode(cmd));
+      return await client.execute(
+        'run util bash -c "echo $encoded | base64 -d | bash"',
+      );
+    }
+    return await client.execute(cmd);
+  }
+
+  /// Total size in bytes of [path] (file or directory), or -1 if unknown.
+  Future<int> sizeOf(String path) async {
+    try {
+      final out = utf8.decode(
+        await run('du -sb "$path" 2>/dev/null | cut -f1'),
+        allowMalformed: true,
+      );
+      return int.tryParse(out.trim().split('\n').last.trim()) ?? -1;
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  /// Whether the remote login shell is F5 tmsh (null = not probed yet).
+  bool? isTmshShell;
+
+  static const _shellProbeMarker = '__NEXUS_SHELL_OK__';
+  static final _tmshErrorPattern = RegExp(r'^\s*Syntax Error:', multiLine: true);
+
+  /// Probes the login shell once. F5 BIG-IP users whose shell is tmsh cannot
+  /// run POSIX commands (or SFTP) directly; commands must go through
+  /// `run util bash -c`.
+  Future<bool> detectTmshShell() async {
+    final known = isTmshShell;
+    if (known != null) return known;
+    var tmsh = false;
+    try {
+      final out = utf8.decode(
+        await client.run('echo $_shellProbeMarker'),
+        allowMalformed: true,
+      );
+      tmsh = !out.contains(_shellProbeMarker) && _tmshErrorPattern.hasMatch(out);
+    } catch (_) {}
+    isTmshShell = tmsh;
+    if (tmsh) {
+      // The SFTP subsystem is unusable under tmsh (the channel carries tmsh
+      // text instead of SFTP packets), so stop trying it for this session.
+      sftp?.close();
+      sftp = null;
+    }
+    return tmsh;
+  }
+
+  bool _shellAccessVerified = false;
+
+  /// Under tmsh, verifies that this user may run `run util bash` (F5 roles
+  /// without advanced-shell access may not). Throws a clear error instead of
+  /// letting callers treat tmsh's refusal text as command output.
+  Future<void> ensureShellAccess() async {
+    if (_shellAccessVerified || !await detectTmshShell()) return;
+    final out = utf8.decode(
+      await client
+          .run('run util bash -c "echo $_shellProbeMarker"')
+          .timeout(const Duration(seconds: 20)),
+      allowMalformed: true,
+    );
+    if (!out.contains(_shellProbeMarker)) {
+      final firstLine = out.trim().isEmpty
+          ? 'no output'
+          : out.trim().split('\n').first.trim();
+      throw ShellAccessDeniedException(
+        'Bash access denied on this node: the tmsh user is not allowed to '
+        'run "run util bash" ($firstLine). File transfer needs bash or SFTP '
+        'access.',
+      );
+    }
+    _shellAccessVerified = true;
+  }
+
+  Future<Uint8List> _runViaTmshBash(String cmd) async {
+    await ensureShellAccess();
+    // Base64 keeps the command free of quoting issues in tmsh's parser.
+    final encoded = base64.encode(utf8.encode(cmd));
+    final out = await client.run(
+      'run util bash -c "echo $encoded | base64 -d | bash"',
+    );
+    final text = utf8.decode(out, allowMalformed: true);
+    if (_tmshErrorPattern.hasMatch(text)) {
+      final firstLine = text.trim().split('\n').first;
+      throw Exception(
+        'tmsh shell rejected "run util bash" (bash access required): $firstLine',
+      );
+    }
+    return out;
   }
 
   void close() {
@@ -196,38 +306,58 @@ class FileExplorerService {
     String srcPath,
     String destDirPath, {
     void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
   }) async {
-    final isDir = await Directory(srcPath).exists();
     final name = srcPath.split(Platform.pathSeparator).last;
     final destPath = '$destDirPath${Platform.pathSeparator}$name';
+    final isDir = await Directory(srcPath).exists();
+    final agg = onProgress == null
+        ? null
+        : _ProgressAggregator(await _localSize(srcPath), onProgress);
 
     if (isDir) {
-      await _copyDirLocal(Directory(srcPath), Directory(destPath), onProgress: onProgress);
+      await _copyDirLocal(Directory(srcPath), Directory(destPath), agg, cancelToken);
     } else {
-      final file = File(srcPath);
-      final totalBytes = await file.length();
-      final destFile = File(destPath);
-      await destFile.parent.create(recursive: true);
-      final sink = destFile.openWrite();
-      var sent = 0;
-      try {
-        await for (final chunk in file.openRead()) {
-          sink.add(chunk);
-          sent += chunk.length;
-          onProgress?.call(sent, totalBytes);
-        }
-        await sink.flush();
-      } finally {
-        await sink.close();
+      await File(destPath).parent.create(recursive: true);
+      await _copyFileLocal(File(srcPath), File(destPath), agg?.forFile(), cancelToken);
+    }
+  }
+
+  Future<void> _copyFileLocal(
+    File src,
+    File dest,
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  ) async {
+    final totalBytes = await src.length();
+    final sink = dest.openWrite();
+    var sent = 0;
+    var ok = false;
+    try {
+      await for (final chunk in src.openRead()) {
+        cancelToken?.throwIfCancelled();
+        sink.add(chunk);
+        sent += chunk.length;
+        onProgress?.call(sent, totalBytes);
+      }
+      await sink.flush();
+      ok = true;
+    } finally {
+      await sink.close();
+      if (!ok) {
+        try {
+          await dest.delete();
+        } catch (_) {}
       }
     }
   }
 
   Future<void> _copyDirLocal(
     Directory src,
-    Directory dest, {
-    void Function(int sentBytes, int totalBytes)? onProgress,
-  }) async {
+    Directory dest,
+    _ProgressAggregator? agg,
+    TransferCancelToken? cancelToken,
+  ) async {
     if (!await dest.exists()) {
       await dest.create(recursive: true);
     }
@@ -237,38 +367,53 @@ class FileExplorerService {
           : entity.path;
       final newDest = '${dest.path}${Platform.pathSeparator}$entityName';
       if (entity is Directory) {
-        await _copyDirLocal(entity, Directory(newDest), onProgress: onProgress);
+        await _copyDirLocal(entity, Directory(newDest), agg, cancelToken);
       } else if (entity is File) {
-        final totalBytes = await entity.length();
-        final destFile = File(newDest);
-        final sink = destFile.openWrite();
-        var sent = 0;
-        try {
-          await for (final chunk in entity.openRead()) {
-            sink.add(chunk);
-            sent += chunk.length;
-            onProgress?.call(sent, totalBytes);
-          }
-          await sink.flush();
-        } finally {
-          await sink.close();
-        }
+        await _copyFileLocal(entity, File(newDest), agg?.forFile(), cancelToken);
       }
     }
   }
 
-  Future<void> moveLocal(String srcPath, String destDirPath) async {
+  /// Total size in bytes of a local file or directory tree.
+  Future<int> _localSize(String path) async {
+    final type = await FileSystemEntity.type(path);
+    if (type == FileSystemEntityType.file) return await File(path).length();
+    if (type != FileSystemEntityType.directory) return 0;
+    var total = 0;
+    await for (final e in Directory(path).list(recursive: true, followLinks: false)) {
+      if (e is File) {
+        try {
+          total += await e.length();
+        } catch (_) {}
+      }
+    }
+    return total;
+  }
+
+  Future<void> moveLocal(
+    String srcPath,
+    String destDirPath, {
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) async {
     final name = srcPath.split(Platform.pathSeparator).last;
     final destPath = '$destDirPath${Platform.pathSeparator}$name';
     try {
+      // Same-volume rename: atomic and instant.
       if (await Directory(srcPath).exists()) {
         await Directory(srcPath).rename(destPath);
       } else {
         await File(srcPath).rename(destPath);
       }
+      onProgress?.call(1, 1);
     } catch (_) {
-      // Fallback: copy and delete
-      await copyLocal(srcPath, destDirPath);
+      // Cross-volume: copy (with progress) then delete.
+      await copyLocal(
+        srcPath,
+        destDirPath,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
       await deleteLocal(srcPath);
     }
   }
@@ -385,6 +530,8 @@ class FileExplorerService {
           username: target.jumpUsername ?? '',
           algorithms: SshAlgorithmHelper.buildAlgorithms(),
           onPasswordRequest: () => target.jumpPassword ?? '',
+          onUserInfoRequest: (r) =>
+              r.prompts.map((_) => target.jumpPassword ?? '').toList(),
         );
         await jumpClient.authenticated;
         final channel = await jumpClient.forwardLocal(target.host, target.port);
@@ -396,6 +543,8 @@ class FileExplorerService {
             customSshOptions: target.customSshOptions,
           ),
           onPasswordRequest: () => target.password,
+          onUserInfoRequest: (r) =>
+              r.prompts.map((_) => target.password).toList(),
         );
         await client.authenticated;
       } else {
@@ -412,6 +561,8 @@ class FileExplorerService {
             customSshOptions: target.customSshOptions,
           ),
           onPasswordRequest: () => target.password,
+          onUserInfoRequest: (r) =>
+              r.prompts.map((_) => target.password).toList(),
         );
         await client.authenticated;
       }
@@ -635,7 +786,13 @@ class FileExplorerService {
     await session.run('mv "$oldPath" "$newPath"');
   }
 
-  Future<void> moveRemote(RemoteSession session, String srcPath, String destDirPath) async {
+  Future<void> moveRemote(
+    RemoteSession session,
+    String srcPath,
+    String destDirPath, {
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) async {
     final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
         ? destDirPath.substring(0, destDirPath.length - 1)
         : destDirPath;
@@ -644,21 +801,88 @@ class FileExplorerService {
 
     if (session.sftp != null) {
       try {
+        // Same-filesystem rename: atomic and instant.
         await session.sftp!.rename(srcPath, targetPath);
+        onProgress?.call(1, 1);
         return;
       } catch (_) {}
     }
-    await session.run('mv "$srcPath" "$targetPath"');
+    // `mv` across filesystems copies the data, so track the target growing.
+    await _runWithRemoteProgress(
+      session,
+      'mv "$srcPath" "$targetPath"',
+      srcPath: srcPath,
+      targetPath: targetPath,
+      onProgress: onProgress,
+      cancelToken: cancelToken,
+    );
   }
 
-  Future<void> copyRemote(RemoteSession session, String srcPath, String destDirPath) async {
+  Future<void> copyRemote(
+    RemoteSession session,
+    String srcPath,
+    String destDirPath, {
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) async {
     final cleanDest = destDirPath.endsWith('/') && destDirPath.length > 1
         ? destDirPath.substring(0, destDirPath.length - 1)
         : destDirPath;
     final name = srcPath.split('/').last;
     final targetPath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
 
-    await session.run('cp -r "$srcPath" "$targetPath"');
+    await _runWithRemoteProgress(
+      session,
+      'cp -r "$srcPath" "$targetPath"',
+      srcPath: srcPath,
+      targetPath: targetPath,
+      onProgress: onProgress,
+      cancelToken: cancelToken,
+    );
+  }
+
+  /// Runs a server-side copy/move [cmd] and reports progress by polling the
+  /// size of [targetPath] against the size of [srcPath] (measured up front),
+  /// since `cp`/`mv` themselves give no progress output.
+  Future<void> _runWithRemoteProgress(
+    RemoteSession session,
+    String cmd, {
+    required String srcPath,
+    required String targetPath,
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  }) async {
+    final total = onProgress == null ? -1 : await session.sizeOf(srcPath);
+    if (onProgress == null || total <= 0) {
+      await session.run(cmd);
+      onProgress?.call(1, 1);
+      return;
+    }
+
+    onProgress(0, total);
+    var finished = false;
+    final op = session.run(cmd).whenComplete(() => finished = true);
+    while (!finished) {
+      await Future.any<void>([
+        op.then((_) {}),
+        Future<void>.delayed(const Duration(milliseconds: 800)),
+      ]);
+      if (finished) break;
+      if (cancelToken?.isCancelled ?? false) {
+        // Stop waiting; the server-side cp/mv cannot be interrupted safely.
+        op.ignore();
+        throw const TransferCancelledException(
+          'Cancelled (the copy may still finish on the node).',
+        );
+      }
+      final current = await session.sizeOf(targetPath);
+      if (!finished && current >= 0) {
+        // Hold back the last 1% until the command actually exits.
+        onProgress(current.clamp(0, (total * 0.99).floor()), total);
+      }
+    }
+    await op;
+    onProgress(total, total);
   }
 
   Future<String> readRemoteText(RemoteSession session, String path) async {
@@ -695,12 +919,35 @@ class FileExplorerService {
   // Cross-Transfer (Upload / Download / Copy)
   // ==========================================
 
+  /// Abort a streaming transfer when no bytes arrive for this long.
+  static const Duration transferIdleTimeout = Duration(seconds: 30);
+
+  /// Yield to the event loop after this many bytes, so a fast transfer
+  /// (SSH crypto runs on the UI isolate) cannot starve frames/input and
+  /// make the window "Not Responding".
+  static const int _yieldEveryBytes = 512 * 1024;
+
   Future<void> uploadLocalToRemote(
     String localPath,
     RemoteSession session,
     String remoteDestDir, {
     void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
   }) async {
+    final agg = onProgress == null
+        ? null
+        : _ProgressAggregator(await _localSize(localPath), onProgress);
+    await _uploadLocalToRemote(localPath, session, remoteDestDir, agg, cancelToken);
+  }
+
+  Future<void> _uploadLocalToRemote(
+    String localPath,
+    RemoteSession session,
+    String remoteDestDir,
+    _ProgressAggregator? agg,
+    TransferCancelToken? cancelToken,
+  ) async {
+    cancelToken?.throwIfCancelled();
     final entity = FileSystemEntity.isFileSync(localPath)
         ? File(localPath)
         : Directory(localPath);
@@ -711,6 +958,7 @@ class FileExplorerService {
     final targetRemotePath = cleanDest == '/' ? '/$name' : '$cleanDest/$name';
 
     if (entity is File) {
+      final onProgress = agg?.forFile();
       final totalBytes = await entity.length();
 
       // Check if threshold qualifies for Rust native engine (>= 500 MB)
@@ -747,6 +995,7 @@ class FileExplorerService {
         try {
           var sentBytes = 0;
           final stream = entity.openRead().map((chunk) {
+            cancelToken?.throwIfCancelled();
             sentBytes += chunk.length;
             onProgress?.call(sentBytes, totalBytes);
             return Uint8List.fromList(chunk);
@@ -756,15 +1005,14 @@ class FileExplorerService {
           await rFile.close();
         }
       } else {
-        if (totalBytes > 50 * 1024 * 1024) {
-          throw UnsupportedError(
-            'File size (${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB) exceeds shell fallback limit (50 MB). SFTP subsystem required.',
-          );
-        }
-        final bytes = await entity.readAsBytes();
-        onProgress?.call(bytes.length, totalBytes);
-        final encoded = base64Encode(bytes);
-        await session.run('echo "$encoded" | base64 -d > "$targetRemotePath"');
+        await _shellUpload(
+          session,
+          entity,
+          targetRemotePath,
+          totalBytes,
+          onProgress,
+          cancelToken,
+        );
       }
     } else if (entity is Directory) {
       if (session.sftp != null) {
@@ -776,13 +1024,106 @@ class FileExplorerService {
       }
 
       await for (final child in entity.list(recursive: false)) {
-        await uploadLocalToRemote(
+        await _uploadLocalToRemote(
           child.path,
           session,
           targetRemotePath,
-          onProgress: onProgress,
+          agg,
+          cancelToken,
         );
       }
+    }
+  }
+
+  /// Uploads [file] over a shell exec channel when SFTP is unavailable,
+  /// reporting progress per chunk instead of all-at-once.
+  Future<void> _shellUpload(
+    RemoteSession session,
+    File file,
+    String targetRemotePath,
+    int totalBytes,
+    void Function(int sentBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+  ) async {
+    // Fails fast with a clear message if tmsh refuses `run util bash`.
+    await session.ensureShellAccess();
+
+    if (await session.detectTmshShell()) {
+      // tmsh: each command goes through `run util bash -c`, so send the file
+      // as base64 chunks appended one command at a time (kept well below the
+      // shell's per-argument length limit). One command per 48 KB is slow,
+      // so cap the size; larger uploads need SFTP or a bash login shell.
+      if (totalBytes > 50 * 1024 * 1024) {
+        throw UnsupportedError(
+          'File size (${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB) exceeds the tmsh shell upload limit (50 MB). SFTP or a bash login shell is required.',
+        );
+      }
+      const chunkSize = 48 * 1024;
+      final raf = await file.open();
+      try {
+        var sent = 0;
+        var first = true;
+        while (true) {
+          cancelToken?.throwIfCancelled();
+          final chunk = await raf.read(chunkSize);
+          if (chunk.isEmpty && !first) break;
+          final redirect = first ? '>' : '>>';
+          await session
+              .run('echo "${base64Encode(chunk)}" | base64 -d $redirect "$targetRemotePath"')
+              .timeout(
+                transferIdleTimeout,
+                onTimeout: () => throw TimeoutException(
+                  'Upload stalled: no response from the node for '
+                  '${transferIdleTimeout.inSeconds}s (connection dropped or '
+                  'access revoked).',
+                ),
+              );
+          first = false;
+          sent += chunk.length;
+          onProgress?.call(sent, totalBytes);
+          if (chunk.length < chunkSize) break;
+        }
+      } finally {
+        await raf.close();
+      }
+    } else {
+      // Regular shell: stream raw bytes into `cat` over stdin.
+      final ssh = await session.execute('cat > "$targetRemotePath"');
+      final unregister = cancelToken?.onCancel(ssh.close);
+      final drainOut = ssh.stdout.drain<void>().catchError((_) {});
+      final drainErr = ssh.stderr.drain<void>().catchError((_) {});
+      var ok = false;
+      try {
+        var sent = 0;
+        await ssh.stdin.addStream(file.openRead().map((chunk) {
+          cancelToken?.throwIfCancelled();
+          sent += chunk.length;
+          onProgress?.call(sent, totalBytes);
+          return Uint8List.fromList(chunk);
+        }));
+        await ssh.stdin.close();
+        await ssh.done.timeout(transferIdleTimeout);
+        cancelToken?.throwIfCancelled();
+        final code = ssh.exitCode;
+        if (code != null && code != 0) {
+          throw Exception('Upload to $targetRemotePath failed (exit code $code)');
+        }
+        ok = true;
+      } finally {
+        unregister?.call();
+        if (!ok) ssh.close();
+        await drainOut.timeout(const Duration(seconds: 2), onTimeout: () {});
+        await drainErr.timeout(const Duration(seconds: 2), onTimeout: () {});
+      }
+    }
+
+    // Verify the node actually received every byte.
+    final remoteSize = await session.sizeOf(targetRemotePath);
+    if (remoteSize >= 0 && remoteSize != totalBytes) {
+      throw Exception(
+        'Upload incomplete: $targetRemotePath has $remoteSize of $totalBytes '
+        'bytes (connection dropped or access revoked).',
+      );
     }
   }
 
@@ -792,11 +1133,43 @@ class FileExplorerService {
     bool isDir,
     String localDestDir, {
     void Function(int receivedBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
   }) async {
+    _ProgressAggregator? agg;
+    if (onProgress != null) {
+      var total = -1;
+      if (!isDir && session.sftp != null) {
+        try {
+          total = (await session.sftp!.stat(remotePath)).size ?? -1;
+        } catch (_) {}
+      }
+      if (total <= 0) total = await session.sizeOf(remotePath);
+      agg = _ProgressAggregator(total, onProgress);
+    }
+    await _downloadRemoteToLocal(
+      session,
+      remotePath,
+      isDir,
+      localDestDir,
+      agg,
+      cancelToken,
+    );
+  }
+
+  Future<void> _downloadRemoteToLocal(
+    RemoteSession session,
+    String remotePath,
+    bool isDir,
+    String localDestDir,
+    _ProgressAggregator? agg,
+    TransferCancelToken? cancelToken,
+  ) async {
+    cancelToken?.throwIfCancelled();
     final name = remotePath.split('/').last;
     final targetLocalPath = '$localDestDir${Platform.pathSeparator}$name';
 
     if (!isDir) {
+      final onProgress = agg?.forFile();
       final localFile = File(targetLocalPath);
       await localFile.parent.create(recursive: true);
 
@@ -837,28 +1210,38 @@ class FileExplorerService {
 
       if (session.sftp != null) {
         final remoteFile = await session.sftp!.open(remotePath, mode: SftpFileOpenMode.read);
-        final sink = localFile.openWrite();
-        var received = 0;
-        try {
-          await for (final chunk in remoteFile.read()) {
-            sink.add(chunk);
-            received += chunk.length;
-            onProgress?.call(received, totalBytes > 0 ? totalBytes : received);
-          }
-          await sink.flush();
-        } finally {
-          await sink.close();
-          await remoteFile.close();
-        }
+        await _streamToLocalFile(
+          remoteFile.read(),
+          localFile,
+          totalBytes: totalBytes,
+          onProgress: onProgress,
+          cancelToken: cancelToken,
+          onAbort: () => remoteFile.close(),
+          sourceLabel: remotePath,
+        );
+        await remoteFile.close();
       } else {
-        if (totalBytes > 50 * 1024 * 1024) {
-          throw UnsupportedError(
-            'File size exceeds shell fallback limit (50 MB). SFTP subsystem required.',
-          );
-        }
-        final bytes = await session.run('cat "$remotePath"');
-        await localFile.writeAsBytes(bytes);
-        onProgress?.call(bytes.length, bytes.length);
+        // Fails fast with a clear message if tmsh refuses `run util bash`.
+        await session.ensureShellAccess();
+        if (totalBytes <= 0) totalBytes = await session.sizeOf(remotePath);
+        // Stream `cat` output straight to disk (no size limit, constant
+        // memory) so progress advances per chunk.
+        final ssh = await session.execute('cat "$remotePath"');
+        final drainErr = ssh.stderr.drain<void>().catchError((_) {});
+        await _streamToLocalFile(
+          ssh.stdout,
+          localFile,
+          totalBytes: totalBytes,
+          onProgress: onProgress,
+          cancelToken: cancelToken,
+          onAbort: ssh.close,
+          sourceLabel: remotePath,
+          afterStream: () async {
+            await ssh.done.timeout(transferIdleTimeout, onTimeout: () {});
+            await drainErr.timeout(const Duration(seconds: 2), onTimeout: () {});
+            return ssh.exitCode;
+          },
+        );
       }
     } else {
       final localDir = Directory(targetLocalPath);
@@ -868,13 +1251,108 @@ class FileExplorerService {
       final items = await listRemote(session, remotePath);
       for (final item in items) {
         if (item.name == '..') continue;
-        await downloadRemoteToLocal(
+        await _downloadRemoteToLocal(
           session,
           item.path,
           item.isDir,
           targetLocalPath,
-          onProgress: onProgress,
+          agg,
+          cancelToken,
         );
+      }
+    }
+  }
+
+  /// Writes [source] to [localFile] with byte progress, an idle timeout,
+  /// cancellation, periodic yielding to keep the UI responsive, and
+  /// validation. On any failure the partial local file is deleted and a
+  /// descriptive error is thrown.
+  Future<void> _streamToLocalFile(
+    Stream<Uint8List> source,
+    File localFile, {
+    required int totalBytes,
+    required String sourceLabel,
+    void Function(int receivedBytes, int totalBytes)? onProgress,
+    TransferCancelToken? cancelToken,
+    void Function()? onAbort,
+    Future<int?> Function()? afterStream,
+  }) async {
+    final unregister = onAbort == null ? null : cancelToken?.onCancel(onAbort);
+    final sink = localFile.openWrite();
+    final head = BytesBuilder(copy: true);
+    var received = 0;
+    var sinceYield = 0;
+    var ok = false;
+    try {
+      final guarded = source.timeout(
+        transferIdleTimeout,
+        onTimeout: (s) {
+          s.addError(TimeoutException(
+            'Download stalled: no data from the node for '
+            '${transferIdleTimeout.inSeconds}s (connection dropped or access '
+            'revoked).',
+          ));
+          s.close();
+        },
+      );
+      await for (final chunk in guarded) {
+        cancelToken?.throwIfCancelled();
+        if (head.length < 4096) head.add(chunk);
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, totalBytes > 0 ? totalBytes : received);
+        sinceYield += chunk.length;
+        if (sinceYield >= _yieldEveryBytes) {
+          sinceYield = 0;
+          // Pausing here also applies SSH back-pressure (no window adjust
+          // while the stream is paused).
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+      cancelToken?.throwIfCancelled();
+      final exitCode = afterStream == null ? null : await afterStream();
+      cancelToken?.throwIfCancelled();
+
+      final headText = utf8.decode(head.toBytes(), allowMalformed: true);
+      final looksLikeShellError = received < 4096 &&
+          RegExp(
+            r'Syntax Error|not allowed|denied|not authorized|permission|No such file',
+            caseSensitive: false,
+          ).hasMatch(headText);
+
+      if (totalBytes > 0 && received != totalBytes) {
+        final detail = looksLikeShellError ? ': ${headText.trim().split('\n').first}' : '';
+        throw Exception(
+          'Download incomplete: received $received of $totalBytes bytes for '
+          '$sourceLabel (connection dropped or access revoked)$detail',
+        );
+      }
+      if (totalBytes <= 0 &&
+          ((exitCode != null && exitCode != 0) || looksLikeShellError)) {
+        throw Exception(
+          'Download of $sourceLabel failed'
+          '${exitCode != null && exitCode != 0 ? ' (exit code $exitCode)' : ''}'
+          ': ${headText.trim().isEmpty ? 'no data' : headText.trim().split('\n').first}',
+        );
+      }
+      ok = true;
+    } finally {
+      unregister?.call();
+      if (!ok) {
+        try {
+          onAbort?.call();
+        } catch (_) {}
+      }
+      try {
+        await sink.flush();
+      } catch (_) {}
+      try {
+        await sink.close();
+      } catch (_) {}
+      if (!ok) {
+        try {
+          if (await localFile.exists()) await localFile.delete();
+        } catch (_) {}
       }
     }
   }
@@ -1259,5 +1737,78 @@ class FileExplorerService {
     final bytes = await session.run('cat "$remotePath"');
     await File(localPath).writeAsBytes(bytes);
     return localPath;
+  }
+}
+
+/// Turns per-file progress callbacks into one cumulative progress stream
+/// across a whole directory tree, so the bar does not reset for every file.
+class _ProgressAggregator {
+  _ProgressAggregator(this.total, this._sink);
+
+  final int total;
+  final void Function(int sentBytes, int totalBytes) _sink;
+  int _done = 0;
+
+  void Function(int sentBytes, int totalBytes) forFile() {
+    var last = 0;
+    return (sent, _) {
+      if (sent > last) {
+        _done += sent - last;
+        last = sent;
+      }
+      final effectiveTotal = total > 0 ? total : _done;
+      _sink(_done.clamp(0, effectiveTotal), effectiveTotal);
+    };
+  }
+}
+
+/// Thrown when the user cancels a transfer.
+class TransferCancelledException implements Exception {
+  const TransferCancelledException([this.message = 'Transfer cancelled']);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Thrown when a tmsh user may not run `run util bash`.
+class ShellAccessDeniedException implements Exception {
+  const ShellAccessDeniedException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Cooperative cancellation for file transfers: loops poll
+/// [throwIfCancelled], and blocking operations (an SSH channel waiting on a
+/// stalled peer) register an [onCancel] hook that aborts them.
+class TransferCancelToken {
+  bool _cancelled = false;
+  final List<void Function()> _hooks = [];
+
+  bool get isCancelled => _cancelled;
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    for (final hook in List.of(_hooks)) {
+      try {
+        hook();
+      } catch (_) {}
+    }
+    _hooks.clear();
+  }
+
+  void throwIfCancelled() {
+    if (_cancelled) throw const TransferCancelledException();
+  }
+
+  /// Registers [hook] to run on cancel; returns a function that unregisters.
+  void Function() onCancel(void Function() hook) {
+    if (_cancelled) {
+      hook();
+      return () {};
+    }
+    _hooks.add(hook);
+    return () => _hooks.remove(hook);
   }
 }
