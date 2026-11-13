@@ -1,3 +1,5 @@
+/// Network Manager hop. An empty [host] means "not configured": sessions
+/// then connect directly or through their own jump host.
 class NetworkManagerConfig {
   final String host;
   final int port;
@@ -5,9 +7,9 @@ class NetworkManagerConfig {
   final String password;
 
   const NetworkManagerConfig({
-    this.host = '10.52.19.24',
+    this.host = '',
     this.port = 22,
-    this.username = 'vmridwan',
+    this.username = '',
     this.password = '',
   });
 
@@ -36,11 +38,11 @@ class NetworkManagerConfig {
 
   factory NetworkManagerConfig.fromMap(Map<String, dynamic> map) {
     return NetworkManagerConfig(
-      host: map['host'] as String? ?? '10.52.19.24',
+      host: map['host'] as String? ?? '',
       port: (map['port'] is int)
           ? map['port'] as int
           : int.tryParse(map['port']?.toString() ?? '22') ?? 22,
-      username: map['username'] as String? ?? 'vmridwan',
+      username: map['username'] as String? ?? '',
       password: map['password'] as String? ?? '',
     );
   }

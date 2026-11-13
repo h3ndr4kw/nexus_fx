@@ -1011,7 +1011,7 @@ extension _RunbookViewBuilders on InteractiveRunbookSidebarState {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: palette.inputBorderColor),
+                    borderSide: BorderSide(color: palette.inputOutlineColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),

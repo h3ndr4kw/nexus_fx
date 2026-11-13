@@ -19,8 +19,8 @@ remember_me: true
 remembered_username: "admin"
 tools_page_view: "grid"
 gilan_dashboard:
-  url: "https://10.52.10.180:31343/"
-  username: "hendra_kusuma_x"
+  url: ""
+  username: ""
 nodes_page_view:
   current: "cards"
   enabled:
@@ -31,7 +31,7 @@ nodes_page_view:
 auto_check_updates: true
 auto_download_updates: false
 transfer_notifications: true
-update_remote_path: "/home/vmridwan/smart_e_he_updates"
+update_remote_path: ""
 file_explorer_density: "standard"
 file_explorer_font_family: "monospace"
 file_explorer_icon_theme: "smart"

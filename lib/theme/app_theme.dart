@@ -68,6 +68,16 @@ class AppPalette {
       _minAlphaCache[id] ??= AppContrast.minAlphaFor(textColor, [background, surfaceColor]);
 
   static final Map<String, double> _minAlphaCache = {};
+
+  /// Outline for text fields and other controls: [inputBorderColor] moved
+  /// toward [textColor] just far enough to reach the WCAG 3:1 non-text
+  /// minimum on [background] and [surfaceColor], so an empty field is still
+  /// visible. Decorative dividers keep [inputBorderColor].
+  Color get inputOutlineColor => _outlineCache[id] ??=
+      AppContrast.towardContrast(inputBorderColor, textColor, [background, surfaceColor],
+          minimum: AppContrast.nonTextMinimum);
+
+  static final Map<String, Color> _outlineCache = {};
 }
 
 /// WCAG 2.x contrast helpers.
@@ -76,6 +86,10 @@ class AppContrast {
 
   /// Minimum ratio for normal-size text (WCAG AA).
   static const double textMinimum = 4.5;
+
+  /// Minimum ratio for UI component boundaries such as field outlines
+  /// (WCAG 1.4.11).
+  static const double nonTextMinimum = 3.0;
 
   /// Contrast ratio between two opaque colors (1..21).
   static double ratio(Color a, Color b) {
@@ -101,6 +115,17 @@ class AppContrast {
     }
     return 1.0;
   }
+
+  /// [from] blended toward [to] (in 2% steps) until it reaches [minimum] on
+  /// every color in [backgrounds]; [to] itself if nothing closer does.
+  static Color towardContrast(Color from, Color to, List<Color> backgrounds,
+      {double minimum = textMinimum}) {
+    for (var step = 0; step <= 50; step++) {
+      final c = Color.lerp(from, to, step / 50)!;
+      if (backgrounds.every((bg) => ratio(c, bg) >= minimum)) return c;
+    }
+    return to;
+  }
 }
 
 class AppTheme {
@@ -121,6 +146,10 @@ class AppTheme {
   static const Color bgSurfaceSecondary = Color(0xFF13151B);
   static const Color accentPrimary = primaryColor;
   static const Color borderSubtle = inputBorderColor;
+
+  /// Field outline for the active theme (meets 3:1); see
+  /// [AppPalette.inputOutlineColor].
+  static Color get inputOutline => activePalette.inputOutlineColor;
   static const Color textPrimary = Color(0xFFE2E4E9);
   static const Color textSecondary = textColor;
   static const Color textMuted = Color(0xFF7B828E);
@@ -192,7 +221,7 @@ class AppTheme {
       name: 'VS Code Dark+',
       background: Color(0xFF1E1E1E),
       surfaceColor: Color(0xFF252526),
-      primaryColor: Color(0xFF007ACC),
+      primaryColor: Color(0xFF3794FF),
       accentColor: Color(0xFFDCDCAA),
       textColor: Color(0xFFCCCCCC),
       titleColor: Color(0xFF4EC9B0),
@@ -394,7 +423,7 @@ class AppTheme {
         fillColor: Colors.transparent,
         hintStyle: TextStyle(color: palette.dimText(0.5)),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: palette.inputBorderColor, width: 1.5),
+          borderSide: BorderSide(color: palette.inputOutlineColor, width: 1.5),
           borderRadius: BorderRadius.circular(4),
         ),
         focusedBorder: OutlineInputBorder(

@@ -220,7 +220,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: palette.inputBorderColor),
+                              borderSide: BorderSide(color: palette.inputOutlineColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -262,7 +262,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: palette.inputBorderColor),
+                              borderSide: BorderSide(color: palette.inputOutlineColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -326,7 +326,7 @@ class _SnippetEditorDialogState extends State<SnippetEditorDialog> {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: palette.inputBorderColor),
+                              borderSide: BorderSide(color: palette.inputOutlineColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),

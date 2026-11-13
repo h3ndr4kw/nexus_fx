@@ -29,14 +29,40 @@ void main() {
                 reason: '${p.name}: ${fg.key} on ${bg.key} is ${r.toStringAsFixed(2)}:1');
           }
         }
-        // Primary is also a fill behind white text, so only the 3:1
-        // non-text minimum is required of it as a foreground.
-        for (final bg in bgs.values) {
-          expect(AppContrast.ratio(p.primaryColor, bg), greaterThanOrEqualTo(3.0),
-              reason: '${p.name}: primary');
+        // Primary colors section titles, links and outlined buttons, so it
+        // is held to the text minimum too.
+        for (final bg in bgs.entries) {
+          final r = AppContrast.ratio(p.primaryColor, bg.value);
+          expect(r, greaterThanOrEqualTo(aa),
+              reason: '${p.name}: primary on ${bg.key} is ${r.toStringAsFixed(2)}:1');
+        }
+        // Field outlines must be visible (WCAG 1.4.11, 3:1).
+        for (final bg in bgs.entries) {
+          final r = AppContrast.ratio(p.inputOutlineColor, bg.value);
+          expect(r, greaterThanOrEqualTo(AppContrast.nonTextMinimum),
+              reason: '${p.name}: input outline on ${bg.key} is ${r.toStringAsFixed(2)}:1');
         }
       });
     }
+  });
+
+  test('text fields use the 3:1 outline; dividers keep the subtle border', () {
+    for (final type in AppThemeType.values) {
+      final p = AppTheme.getPalette(type);
+      final theme = AppTheme.getThemeData(type);
+      final border = theme.inputDecorationTheme.enabledBorder as OutlineInputBorder;
+      expect(border.borderSide.color, p.inputOutlineColor, reason: p.name);
+      expect(theme.dividerColor, p.inputBorderColor, reason: p.name);
+    }
+  });
+
+  test('outline moves only as far as needed', () {
+    // Already-visible borders are kept as they are.
+    const fg = Color(0xFF808080);
+    expect(AppContrast.towardContrast(fg, Colors.white, [Colors.black], minimum: 3.0), fg);
+    final c = AppContrast.towardContrast(
+        const Color(0xFF232630), Colors.white, [const Color(0xFF0D0E12)], minimum: 3.0);
+    expect(AppContrast.ratio(c, const Color(0xFF0D0E12)), inInclusiveRange(3.0, 3.4));
   });
 
   test('dimText keeps brighter levels as they are', () {

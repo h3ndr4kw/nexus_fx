@@ -127,9 +127,9 @@ class SettingsService extends ChangeNotifier {
   ToolsViewMode _toolsViewMode = ToolsViewMode.grid;
   NexusPulseStyle _nexusPulseStyle = NexusPulseStyle.neonSonarWave;
   NexusPulseColor _nexusPulseColor = NexusPulseColor.emerald;
-  String _gilanDashboardUrl = 'https://10.52.10.180:31343/';
-  String _gilanDashboardUsername = 'hendra_kusuma_x';
-  String _gilanDashboardPassword = 'H3ndr4kw@12a';
+  String _gilanDashboardUrl = '';
+  String _gilanDashboardUsername = '';
+  String _gilanDashboardPassword = '';
   bool _nexusOnlyWhenActive = false;
   bool _nexusAutoCloseTabOnDisconnect = false;
   bool _nexusAutoSessionLogging = true;
@@ -151,7 +151,7 @@ class SettingsService extends ChangeNotifier {
   bool _autoDownloadUpdates = false;
   bool _transferNotifications = true;
   bool _reduceMotion = false;
-  String _updateRemotePath = '/home/vmridwan/smart_e_he_updates';
+  String _updateRemotePath = '';
   String? _customConfigPath;
   FileExplorerDensity _fileExplorerDensity = FileExplorerDensity.standard;
   FileExplorerFontFamily _fileExplorerFontFamily = FileExplorerFontFamily.monospace;

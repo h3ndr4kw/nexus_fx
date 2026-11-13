@@ -529,7 +529,7 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: AppTheme.inputBorderColor),
+                  borderSide: BorderSide(color: AppTheme.inputOutline),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),

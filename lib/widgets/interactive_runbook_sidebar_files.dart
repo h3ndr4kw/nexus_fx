@@ -436,7 +436,7 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
                   ),
                   isDense: true,
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: palette.inputBorderColor),
+                    borderSide: BorderSide(color: palette.inputOutlineColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: palette.primaryColor),
@@ -558,7 +558,7 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
                   ),
                   isDense: true,
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: palette.inputBorderColor),
+                    borderSide: BorderSide(color: palette.inputOutlineColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: palette.primaryColor),
@@ -894,7 +894,7 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
                   ),
                   isDense: true,
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: palette.inputBorderColor),
+                    borderSide: BorderSide(color: palette.inputOutlineColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: palette.primaryColor),

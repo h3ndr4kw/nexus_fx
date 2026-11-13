@@ -387,7 +387,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
-                            borderSide: BorderSide(color: AppTheme.inputBorderColor),
+                            borderSide: BorderSide(color: AppTheme.inputOutline),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),

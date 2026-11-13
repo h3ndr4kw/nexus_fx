@@ -197,7 +197,7 @@ class _FileExplorerNodePickerDialogState extends State<FileExplorerNodePickerDia
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
-                    borderSide: const BorderSide(color: Color(0xFF2C313C)),
+                    borderSide: const BorderSide(color: Color(0xFF6B7280)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
@@ -477,7 +477,7 @@ class _FileExplorerNodePickerDialogState extends State<FileExplorerNodePickerDia
                         labelText: 'Host IP / Hostname',
                         labelStyle: TextStyle(color: Color(0xFF5C6370)),
                         enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF2C313C)),
+                          borderSide: BorderSide(color: Color(0xFF6B7280)),
                         ),
                         focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(color: Color(0xFF56B6C2)),
@@ -497,7 +497,7 @@ class _FileExplorerNodePickerDialogState extends State<FileExplorerNodePickerDia
                       labelText: 'Username',
                       labelStyle: TextStyle(color: Color(0xFF5C6370)),
                       enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF2C313C)),
+                        borderSide: BorderSide(color: Color(0xFF6B7280)),
                       ),
                       focusedBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: Color(0xFF56B6C2)),
@@ -517,7 +517,7 @@ class _FileExplorerNodePickerDialogState extends State<FileExplorerNodePickerDia
                       labelText: 'Password',
                       labelStyle: const TextStyle(color: Color(0xFF5C6370)),
                       enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF2C313C)),
+                        borderSide: BorderSide(color: Color(0xFF6B7280)),
                       ),
                       focusedBorder: const UnderlineInputBorder(
                         borderSide: BorderSide(color: Color(0xFF56B6C2)),
