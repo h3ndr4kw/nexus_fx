@@ -113,7 +113,7 @@ class WindowStateService extends ChangeNotifier
     } catch (_) {}
   }
 
-  // --- WindowListener overrides ---
+  // WindowListener overrides
 
   @override
   void onWindowMaximize() {
@@ -166,14 +166,14 @@ class WindowStateService extends ChangeNotifier
     }
   }
 
-  // --- WidgetsBindingObserver overrides ---
+  // WidgetsBindingObserver overrides
 
   @override
   void didChangeMetrics() {
     checkWindowState();
   }
 
-  // --- Testing utilities ---
+  // Testing utilities
 
   @visibleForTesting
   void setFullScreenForTesting(bool value) {

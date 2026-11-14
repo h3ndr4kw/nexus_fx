@@ -8,9 +8,7 @@ import 'package:flutter/foundation.dart';
 
 import 'file_explorer_service.dart' show TransferCancelToken, TransferCancelledException;
 
-// ---------------------------------------------------------------------------
 // C ABI (native/sftp_engine/src/ffi.rs, API version 4)
-// ---------------------------------------------------------------------------
 
 final class _ConnectConfigC extends Struct {
   external Pointer<Utf8> host;
@@ -471,9 +469,7 @@ class _PendingOp {
   final Completer<void> done = Completer<void>();
 }
 
-// ---------------------------------------------------------------------------
 // Worker isolate
-// ---------------------------------------------------------------------------
 
 class _WorkerStart {
   const _WorkerStart(this.dllPath, this.params, this.replies);

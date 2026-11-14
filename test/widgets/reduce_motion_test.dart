@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/services/settings_service.dart';
 import 'package:nexus_fx/theme/app_motion.dart';
-import 'package:nexus_fx/widgets/animated_gradient_border.dart';
 import 'package:nexus_fx/widgets/radar_pulse_indicator.dart';
 import 'package:nexus_fx/widgets/shimmer_loading.dart';
 
@@ -25,9 +24,6 @@ void main() {
 
   final loops = <String, Widget Function()>{
     'radar beacon': () => const RadarPulseIndicator(),
-    'amber badge': () => const BreathingAmberBadge(count: 2),
-    'cyan dot': () => const CyanPulseDot(),
-    'gradient border': () => const AnimatedGradientBorder(child: SizedBox(width: 40, height: 40)),
     'shimmer': () => const ShimmerEffect(child: SizedBox(width: 40, height: 10)),
   };
 

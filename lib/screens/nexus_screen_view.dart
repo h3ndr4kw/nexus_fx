@@ -163,7 +163,7 @@ extension _NexusScreenView on NexusScreenState {
                 Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFEF4444)),
                 SizedBox(width: 6),
                 Text(
-                  'PRODUCTION ENVIRONMENT — EXECUTE COMMANDS WITH CAUTION',
+                  'PRODUCTION ENVIRONMENT: EXECUTE COMMANDS WITH CAUTION',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.bold,
@@ -184,7 +184,7 @@ extension _NexusScreenView on NexusScreenState {
                     ? Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Left Terminal Pane — accepts drops from right pane
+                    // Left Terminal Pane: accepts drops from right pane
                     Expanded(
                       flex: 1,
                       child: Listener(
@@ -203,7 +203,7 @@ extension _NexusScreenView on NexusScreenState {
                                     index: _activeTab.clamp(
                                         0, _tabs.length - 1),
                                     children: [
-                                      for (int i = 0; i < _tabs.length; i++)
+                                       for (int i = 0; i < _tabs.length; i++)
                                         SshTabView(
                                           key: GlobalObjectKey(_tabs[i]),
                                           connection: _tabs[i],
@@ -235,7 +235,7 @@ extension _NexusScreenView on NexusScreenState {
                       thickness: 1,
                       color: AppTheme.inputBorderColor,
                     ),
-                    // Right Terminal Pane — accepts drops from left pane
+                    // Right Terminal Pane: accepts drops from left pane
                     Expanded(
                       flex: 1,
                       child: Listener(
@@ -284,7 +284,7 @@ extension _NexusScreenView on NexusScreenState {
                     ),
                   ],
                 )
-              // Single pane mode — show drop target on right half when dragging
+              // Single pane mode: show drop target on right half when dragging
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final terminalContent = IndexedStack(

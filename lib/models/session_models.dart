@@ -49,7 +49,7 @@ enum JumpHostMode {
 }
 
 /// Secure credential encoder/decoder delegating to AES-256 CryptoVaultService
-/// with seamless backward-compatible decoding of legacy XOR payloads.
+/// with backward-compatible decoding of legacy XOR payloads.
 class _Obfuscator {
   static String encode(String raw) => CryptoVaultService.instance.encrypt(raw);
   static String decode(String encoded) => CryptoVaultService.instance.decrypt(encoded);

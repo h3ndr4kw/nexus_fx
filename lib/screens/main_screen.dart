@@ -530,9 +530,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     await WindowStateService.instance.toggleFullScreen();
   }
 
-  // ==========================================
   // Quit guard while file transfers are running
-  // ==========================================
 
   bool _preventCloseForTransfers = false;
   TransferTaskbarProgress? _taskbarProgress;

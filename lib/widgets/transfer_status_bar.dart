@@ -68,8 +68,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     );
   }
 
-  // ---------- collapsed summary ----------
-
+  // Collapsed summary row
   Widget _buildSummaryRow(List<TransferJob> jobs) {
     final active = jobs.where((j) => j.isActive).toList();
     final queued = active.where((j) => j.status == TransferStatus.queued).length;
@@ -149,8 +148,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     );
   }
 
-  // ---------- name conflict prompt ----------
-
+  // Name conflict resolution prompt
   /// Non-modal decision row: the job waits, everything else keeps working.
   Widget _buildConflictRow(TransferJob job) {
     final conflict = job.pendingConflict!;
@@ -215,8 +213,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     );
   }
 
-  // ---------- expanded list ----------
-
+  // Expanded job list
   Widget _buildExpanded(List<TransferJob> jobs) {
     final hasActive = jobs.any((j) => j.isActive);
     final hasFinished = jobs.any((j) => !j.isActive);
@@ -350,8 +347,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     );
   }
 
-  // ---------- text helpers ----------
-
+  // Text formatters
   String _activeLine(TransferJob job) {
     if (job.status == TransferStatus.queued) {
       return 'Queued: ${job.title} → ${job.destLabel}';
@@ -390,8 +386,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     return '${d.inSeconds}s';
   }
 
-  // ---------- visual helpers ----------
-
+  // Visual state mappings
   Color _colorFor(TransferJob job) {
     switch (job.status) {
       case TransferStatus.completed:

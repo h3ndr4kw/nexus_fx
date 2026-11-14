@@ -174,7 +174,7 @@ class SshConnection {
   bool _suppressOutput = false;
   final StringBuffer _suppressedBuffer = StringBuffer();
 
-  // ---- Terminal output pipeline -------------------------------------------
+  // Terminal output pipeline
   // Remote output is queued and fed to xterm in time-boxed slices so a burst
   // (e.g. `cat` of a big file) cannot monopolise the UI isolate. When the
   // queue grows past [outputHighWaterChars] the SSH/process output streams are

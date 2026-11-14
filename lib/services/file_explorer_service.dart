@@ -217,9 +217,7 @@ class FileExplorerService {
     _instance = inst;
   }
 
-  // ==========================================
-  // Local Filesystem Operations
-  // ==========================================
+  // Local filesystem operations
 
   Future<List<FileExplorerItem>> listLocal(String dirPath, {String filter = ''}) async {
     final dir = Directory(dirPath);
@@ -474,9 +472,7 @@ class FileExplorerService {
     }
   }
 
-  // ==========================================
-  // Remote Node Connection & SFTP Operations
-  // ==========================================
+  // Remote node connection & SFTP operations
 
   @visibleForTesting
   Future<SSHClient> Function(
@@ -972,9 +968,7 @@ class FileExplorerService {
     await session.run('echo "$encoded" | base64 -d > "$path"');
   }
 
-  // ==========================================
-  // Cross-Transfer (Upload / Download / Copy)
-  // ==========================================
+  // Cross-transfer operations (upload / download / copy)
 
   /// Abort a streaming transfer when no bytes arrive for this long.
   static const Duration transferIdleTimeout = Duration(seconds: 30);
@@ -1420,9 +1414,7 @@ class FileExplorerService {
     _nativeUnsupported.clear();
   }
 
-  // ==========================================
   // Native (Rust) transfer engine
-  // ==========================================
 
   /// Whether [session]'s target can go through the native engine: it needs a
   /// direct (or jump-host tunnelled) SSH login with an SFTP subsystem. FE

@@ -553,9 +553,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     });
   }
 
-  // ==========================================
-  // Navigation & Actions
-  // ==========================================
+  // Navigation and pane actions
 
   void _switchActivePane() {
     setState(() {
@@ -965,9 +963,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     }
   }
 
-  // ==========================================
-  // Standard File Actions (Copy, Move, Del, etc.)
-  // ==========================================
+  // File actions (copy, move, delete)
 
   List<FileExplorerItem> _getTargetItems() {
     final pane = activePaneState;
@@ -1580,9 +1576,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     ).then((_) => _focusNode.requestFocus());
   }
 
-  // ==========================================
-  // Keyboard Handler
-  // ==========================================
+  // Keyboard handler
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -1844,9 +1838,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return KeyEventResult.ignored;
   }
 
-  // ==========================================
-  // UI Builder
-  // ==========================================
+  // View composition
 
   @override
   Widget build(BuildContext context) {

@@ -26,7 +26,7 @@ extension _NexusTabStrip on NexusScreenState {
     );
   }
 
-  /// Seamless "+" button: no background/border, blends with the tab bar so
+  /// Borderless "+" button: blends with the tab bar so
   /// only the icon is visible.
   Widget _buildNewTabButton({required bool isRightPane}) {
     return Tooltip(

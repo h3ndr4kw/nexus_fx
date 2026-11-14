@@ -288,7 +288,7 @@ extension _NexusCommandPane on NexusScreenState {
     );
   }
 
-  // --- Snippets & History Actions ---
+  // Snippets and history actions
   Future<void> _openSnippetPicker() async {
     final selected = await SnippetPickerModal.show(context);
     if (selected != null && mounted) {
@@ -451,7 +451,7 @@ extension _NexusCommandPane on NexusScreenState {
     );
   }
 
-  // --- Node Picker with FuzzySearchableDropdown ---
+  // Target node picker
   Widget _buildNodePicker() {
     final palette = AppTheme.activePalette;
     final allConns = [..._tabs, ..._rightTabs];
@@ -539,10 +539,9 @@ extension _NexusCommandPane on NexusScreenState {
     ).length;
   }
 
-  // --- Run Button (Vibrant Circular Arrow Button) ---
   Widget _buildRunButton() {
     final palette = AppTheme.activePalette;
-    const activeBlue = Color(0xFF2563EB);
+    final activeColor = palette.primaryColor;
 
     return ListenableBuilder(
       listenable: _commandInputController,
@@ -566,15 +565,15 @@ extension _NexusCommandPane on NexusScreenState {
             color: Colors.transparent,
             child: InkWell(
               onTap: canRun ? _sendBroadcastCommand : null,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(6),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(6),
                   color: isActive
-                      ? activeBlue
+                      ? activeColor
                       : palette.textColor.withValues(alpha: 0.08),
                   border: Border.all(
                     color: isActive
@@ -582,15 +581,6 @@ extension _NexusCommandPane on NexusScreenState {
                         : palette.textColor.withValues(alpha: 0.06),
                     width: 1,
                   ),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: activeBlue.withValues(alpha: 0.45),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
                 ),
                 alignment: Alignment.center,
                 child: _isSendingCommands
@@ -603,10 +593,10 @@ extension _NexusCommandPane on NexusScreenState {
                         ),
                       )
                     : Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 18,
+                        Icons.play_arrow_rounded,
+                        size: 19,
                         color: isActive
-                            ? Colors.white
+                            ? Colors.black
                             : palette.dimText(0.3),
                       ),
               ),
@@ -617,11 +607,10 @@ extension _NexusCommandPane on NexusScreenState {
     );
   }
 
-  // --- DevOps Single-Row Command Pane (Double-Border Layered Inset Capsule) ---
+  // Command toolbar
   Widget _buildDevopsToolbarCommandPane() {
     final palette = AppTheme.activePalette;
     return Container(
-      // LAPISAN 1: OUTER RING (Tipis & redup sebagai trench kedalaman)
       decoration: BoxDecoration(
         color: palette.background.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(22),
@@ -639,9 +628,8 @@ extension _NexusCommandPane on NexusScreenState {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(3.5), // Celah 3.5px antara border luar dan dalam
+      padding: const EdgeInsets.all(3.5),
       child: Container(
-        // LAPISAN 2: INNER SURFACE CAPSULE (Lebih tebal & lebih terang, efek mengambang)
         decoration: BoxDecoration(
           color: palette.surfaceColor,
           borderRadius: BorderRadius.circular(18),

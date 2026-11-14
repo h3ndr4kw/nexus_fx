@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
 
 /// Cryptographic vault service for encrypting and decrypting sensitive credentials
-/// using AES-256-CBC with PKCS7 padding and random IVs, with seamless legacy XOR migration.
+/// using AES-256-CBC with PKCS7 padding and random IVs, supporting legacy XOR migration.
 class CryptoVaultService {
   static final CryptoVaultService _instance = CryptoVaultService._internal();
   static CryptoVaultService get instance => _instance;

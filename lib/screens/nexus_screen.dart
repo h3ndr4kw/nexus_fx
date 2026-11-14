@@ -541,7 +541,7 @@ class NexusScreenState extends State<NexusScreen> {
     super.dispose();
   }
 
-  // --- Destructive Command Guardrails ---
+  // Destructive command guardrails
   static final List<RegExp> _destructivePatterns = [
     RegExp(r'\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*)'),
     RegExp(r'\b(reboot|shutdown|poweroff|halt)\b'),

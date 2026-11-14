@@ -31,6 +31,7 @@ nodes_page_view:
 auto_check_updates: true
 auto_download_updates: false
 transfer_notifications: true
+reduce_motion: false
 update_remote_path: ""
 file_explorer_density: "standard"
 file_explorer_font_family: "monospace"

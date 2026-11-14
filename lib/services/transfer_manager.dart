@@ -579,9 +579,7 @@ class TransferManager extends ChangeNotifier {
     return text.startsWith('Exception: ') ? text.substring(11) : text;
   }
 
-  // ==========================================
   // Default runner: real local / SFTP / SSH I/O
-  // ==========================================
 
   static bool _caseInsensitive(ExplorerNodeTarget t) =>
       t.isLocal && Platform.isWindows;

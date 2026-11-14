@@ -98,8 +98,7 @@ extension _SshShellHops on SshConnection {
         _suppressOutput = true;
         _suppressedBuffer.clear();
 
-        // --- 3-HOP CONNECTION FOR FE NODE ---
-        // Step 1: Hop from Network Manager to Cluster OAM1 (or fallback OAM2)
+        // Hop through cluster OAM (with fallback support) to reach target FE node
         final clusterUser = jumpClusterUsername ?? 'root';
         final clusterPass = jumpClusterPassword ?? '';
         String activeClusterHost = jumpClusterHost!;
@@ -143,7 +142,7 @@ extension _SshShellHops on SshConnection {
           return false;
         }
 
-        // Step 2: From Cluster OAM prompt, hop to FE node via: ssh [FE Hostname]
+        // Hop from cluster OAM prompt to target FE node
         await Future.delayed(const Duration(milliseconds: 400));
         _hopBuffer = '';
         _suppressedBuffer.clear();
@@ -174,7 +173,7 @@ extension _SshShellHops on SshConnection {
           }
         }
       } else {
-        // --- 2-HOP DIRECT HOP (e.g. Cluster OAM node) ---
+        // Direct hop to target host
         success = await _executeHopTo(
           host: _currentHost,
           username: targetUsername,
