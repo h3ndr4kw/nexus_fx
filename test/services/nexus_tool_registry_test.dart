@@ -165,10 +165,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cluster Monitor Active: 1'), findsOneWidget);
 
-      // Switch to Sessions tab and back to verify state preservation in IndexedStack
-      await tester.tap(find.text('Sessions'));
+      // Switch to Nexus tab and back to verify state preservation in IndexedStack
+      await tester.tap(find.text('Nexus'));
       await tester.pumpAndSettle();
-      expect(find.text('All Sessions'), findsOneWidget);
+      expect(find.byIcon(Icons.terminal), findsWidgets);
 
       await tester.tap(find.text('Cluster Monitor'));
       await tester.pumpAndSettle();

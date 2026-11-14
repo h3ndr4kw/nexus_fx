@@ -2675,9 +2675,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               ),
             ),
           ),
-          if (activePaneState.multiSelected.isNotEmpty) ...[
+          if (activePaneState.multiSelected.isNotEmpty)
             Text(
-              '[${activePaneState.multiSelected.length} sel] ',
+              '[${activePaneState.multiSelected.length} sel]',
               style: const TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 10,
@@ -2685,21 +2685,6 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 color: Color(0xFF98C379),
               ),
             ),
-            const SizedBox(width: 4),
-          ],
-          InkWell(
-            key: const ValueKey('file_explorer_active_pane_indicator'),
-            onTap: _switchActivePane,
-            child: Text(
-              'Active: ${_activePane == PaneSide.left ? "LEFT" : "RIGHT"}',
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF56B6C2),
-              ),
-            ),
-          ),
         ],
       ),
     );

@@ -37,28 +37,33 @@ void main() {
     );
   }
 
-  testWidgets('MainScreen boots directly to Sessions view and displays primary navigation tabs', (tester) async {
+  testWidgets('MainScreen boots directly to Nexus view and displays primary navigation tabs', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 800));
     await tester.pumpWidget(createTestWidget());
     await tester.pumpAndSettle();
 
-    // Verify primary navigation items in sidebar (no Alt+X shortcuts in labels)
-    expect(find.text('Sessions'), findsOneWidget);
+    // Verify primary navigation items in sidebar
     expect(find.text('Nexus'), findsOneWidget);
     expect(find.text('File Explorer'), findsOneWidget);
-    // Settings is now a top bar icon button, not in the sidebar navigation list
+    // Session Manager and Settings are top bar icon buttons
+    expect(find.byTooltip('Session Manager'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
 
-    // Verify initial active tab is Sessions and table renders default LOCAL session
+    // Verify initial active tab is Nexus
+    expect(find.byIcon(Icons.terminal), findsWidgets);
+
+    // Tap Session Manager button in top bar -> opens Sessions dialog
+    await tester.tap(find.byTooltip('Session Manager'));
+    await tester.pumpAndSettle();
+
+    // Verify Sessions dialog is open
+    expect(find.byType(DraggableDialog), findsOneWidget);
     expect(find.text('All Sessions'), findsOneWidget);
     expect(find.text('LOCAL'), findsWidgets);
 
-    // Tap Nexus navigation tab
-    await tester.tap(find.text('Nexus'));
+    // Close Sessions dialog
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Close'));
     await tester.pumpAndSettle();
-
-    // Verify Nexus terminal tab view is visible
-    expect(find.byIcon(Icons.terminal), findsWidgets);
 
     // Tap Settings button in top bar
     await tester.tap(find.byTooltip('Settings'));
@@ -107,7 +112,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify sidebar is initially visible
-    expect(find.text('Sessions'), findsOneWidget);
+    expect(find.text('Nexus'), findsOneWidget);
 
     // Press Ctrl+B to toggle sidebar collapse
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -116,7 +121,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Sidebar should be collapsed
-    expect(find.text('Sessions'), findsNothing);
+    expect(find.text('Nexus'), findsNothing);
 
     // Press Ctrl+B again to expand
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -125,7 +130,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Sidebar should be visible again
-    expect(find.text('Sessions'), findsOneWidget);
+    expect(find.text('Nexus'), findsOneWidget);
 
     // Press Alt+2 to switch directly to Nexus tab
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
@@ -192,7 +197,8 @@ void main() {
 
     // Dialog dismissed, MainScreen still visible
     expect(find.byType(DraggableDialog), findsNothing);
-    expect(find.textContaining('Sessions'), findsWidgets);
+    expect(find.byTooltip('Session Manager'), findsOneWidget);
+    expect(find.text('Nexus'), findsOneWidget);
   });
 
   testWidgets('Pressing Enter on Nexus terminal view does not trigger background SessionsScreen connect', (tester) async {
@@ -223,7 +229,6 @@ void main() {
     await tester.pumpAndSettle();
 
     // Initially labels are visible
-    expect(find.text('Sessions'), findsOneWidget);
     expect(find.text('Nexus'), findsOneWidget);
     expect(find.text('File Explorer'), findsOneWidget);
 
@@ -238,10 +243,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Now in compact icon-only mode: text labels are gone, icons remain
-    expect(find.text('Sessions'), findsNothing);
     expect(find.text('Nexus'), findsNothing);
     expect(find.text('File Explorer'), findsNothing);
-    expect(find.byIcon(Icons.dns_outlined), findsWidgets);
     expect(find.byIcon(Icons.terminal), findsWidgets);
     expect(find.byIcon(Icons.folder_open), findsWidgets);
 
@@ -252,7 +255,6 @@ void main() {
     await tester.pumpAndSettle();
 
     // Labels are visible again
-    expect(find.text('Sessions'), findsOneWidget);
     expect(find.text('Nexus'), findsOneWidget);
     expect(find.text('File Explorer'), findsOneWidget);
 
@@ -266,8 +268,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // In icon-only mode, text labels are hidden
-    expect(find.text('Sessions'), findsNothing);
-    expect(find.byIcon(Icons.dns_outlined), findsWidgets);
+    expect(find.text('Nexus'), findsNothing);
+    expect(find.byIcon(Icons.terminal), findsWidgets);
 
     // Test Alt+ArrowRight to enlarge sidebar back
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
@@ -278,8 +280,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Labels are restored
-    expect(find.text('Sessions'), findsOneWidget);
     expect(find.text('Nexus'), findsOneWidget);
+    expect(find.text('File Explorer'), findsOneWidget);
   });
 
   testWidgets('File Explorer supports multi-tab management, new tab button, and close all tabs', (tester) async {
@@ -326,23 +328,23 @@ void main() {
     await tester.pumpWidget(createTestWidget());
     await tester.pumpAndSettle();
 
-    // Initially on Sessions tab: Left sidebar toggle is present, Right sidebar toggle is NOT present
+    // Initially on Nexus tab: both sidebar toggles are present
     expect(find.byType(SidebarToggleButton), findsOneWidget);
-    expect(find.byType(RightSidebarToggleButton), findsNothing);
-
-    // Switch to Nexus tab
-    await tester.tap(find.text('Nexus'));
-    await tester.pumpAndSettle();
-
-    // On Nexus tab: Right sidebar toggle is visible
     expect(find.byType(RightSidebarToggleButton), findsOneWidget);
 
     // Switch to File Explorer tab
     await tester.tap(find.text('File Explorer'));
     await tester.pumpAndSettle();
 
-    // On File Explorer tab: Right sidebar toggle is hidden again
+    // On File Explorer tab: Right sidebar toggle is hidden
     expect(find.byType(RightSidebarToggleButton), findsNothing);
+
+    // Switch back to Nexus tab
+    await tester.tap(find.text('Nexus'));
+    await tester.pumpAndSettle();
+
+    // On Nexus tab: Right sidebar toggle is visible again
+    expect(find.byType(RightSidebarToggleButton), findsOneWidget);
 
     // Switch to Settings tab via top bar
     await tester.tap(find.byTooltip('Settings'));

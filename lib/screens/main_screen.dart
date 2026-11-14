@@ -57,8 +57,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WindowListener {
   late final SessionManagerService _sessionManager;
   late final NexusToolRegistry _toolRegistry;
-  AppTab _selectedTab = AppTab.sessions;
-  AppTab _previousTab = AppTab.sessions;
+  AppTab _selectedTab = AppTab.nexus;
+  AppTab _previousTab = AppTab.nexus;
   String? _selectedCustomToolId;
   String? _previousCustomToolId;
   bool _isSidebarVisible = true;
@@ -69,11 +69,13 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   bool _isCommandPaletteOpen = false;
 
   List<NexusTool> get _customTools => _toolRegistry.tools;
+  final Map<String, Widget> _toolViewCache = {};
   bool get _isNexusActive => _selectedCustomToolId == null && _selectedTab == AppTab.nexus;
   bool get _isFileExplorerActive => _selectedCustomToolId == null && _selectedTab == AppTab.fileExplorer;
 
+  // Sessions is no longer a sidebar item: it is reached through the Session
+  // Manager dialog (top bar button / Alt+1 / startup).
   static const List<AppTab> _sidebarTabs = [
-    AppTab.sessions,
     AppTab.nexus,
     AppTab.fileExplorer,
   ];
@@ -178,10 +180,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   void _onToolsChanged() {
     if (!mounted) return;
     setState(() {
+      _toolViewCache.clear();
       if (_selectedCustomToolId != null &&
           _toolRegistry.getToolById(_selectedCustomToolId!) == null) {
         _selectedCustomToolId = null;
-        _selectedTab = AppTab.sessions;
+        _selectedTab = AppTab.nexus;
       }
     });
   }
@@ -194,15 +197,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       tabController: _nexusKey.currentState?.tabController,
       broadcastCoordinator: _nexusKey.currentState?.broadcastCoordinator,
       connectSessionInTerminal: (profile, {toRightPane = false}) {
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.connectSessionProfile(profile, toRightPane: toRightPane);
         });
       },
       openSessionInFileExplorer: _openSessionInFileExplorer,
-      navigateToTerminal: () => _selectTab(AppTab.nexus, 1),
-      navigateToSessions: () => _selectTab(AppTab.sessions, 0),
-      navigateToFileExplorer: () => _selectTab(AppTab.fileExplorer, 2),
+      navigateToTerminal: () => _selectTab(AppTab.nexus, 0),
+      navigateToSessions: _openStartupSessionsDialog,
+      navigateToFileExplorer: () => _selectTab(AppTab.fileExplorer, 1),
       navigateToTool: (toolId) {
         final idx = _customTools.indexWhere((t) => t.id == toolId);
         if (idx != -1) {
@@ -265,8 +268,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       }
     }
 
-    // Ctrl+Space: Quick Connect Sessions
-    if (isCtrl && !isShift && !isAlt && isSpace) {
+    // Ctrl+Space: Quick Connect Sessions.
+    // Skipped on File Explorer: there Ctrl+Space belongs to the view's own
+    // node/local target picker, so let the event reach the focus tree.
+    if (isCtrl && !isShift && !isAlt && isSpace && !_isFileExplorerActive) {
       if (!_isCommandPaletteOpen) {
         _showCommandPalette(sessionsOnly: true);
         return true;
@@ -295,15 +300,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     // Alt+1 .. Alt+4: Direct Tab Switching
     if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.digit1) {
-      _selectTab(AppTab.sessions, 0);
+      _openStartupSessionsDialog();
       return true;
     }
     if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.digit2) {
-      _selectTab(AppTab.nexus, 1);
+      _selectTab(AppTab.nexus, 0);
       return true;
     }
     if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.digit3) {
-      _selectTab(AppTab.fileExplorer, 2);
+      _selectTab(AppTab.fileExplorer, 1);
       return true;
     }
     if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.digit4) {
@@ -355,7 +360,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     // Ctrl+Shift+Space: Toggle Command Pane in Nexus
     if (isCtrl && isShift && !isAlt && isSpace) {
       if (!_isNexusActive) {
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.showCommandPane();
         });
@@ -409,13 +414,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       final totalSidebarItems = _sidebarTabs.length + _customTools.length;
 
       if (!isCtrl && !isShift && !isAlt && (isUp || isDown) && totalSidebarItems > 0) {
-        setState(() {
-          if (isDown) {
-            _sidebarIndex = (_sidebarIndex + 1) % totalSidebarItems;
-          } else {
-            _sidebarIndex = (_sidebarIndex - 1 + totalSidebarItems) % totalSidebarItems;
-          }
-        });
+        final next = isDown
+            ? (_sidebarIndex + 1) % totalSidebarItems
+            : (_sidebarIndex - 1 + totalSidebarItems) % totalSidebarItems;
+        // Moving the selection opens the page right away; focus stays in the
+        // sidebar so j/k / arrows can keep navigating.
+        _activateSidebarIndex(next, moveFocusToContent: false);
         return true;
       }
 
@@ -423,14 +427,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           event.logicalKey == LogicalKeyboardKey.space ||
           event.logicalKey == LogicalKeyboardKey.arrowRight ||
           event.logicalKey == LogicalKeyboardKey.keyL) {
-        if (_sidebarIndex < _sidebarTabs.length) {
-          _selectTab(_sidebarTabs[_sidebarIndex], _sidebarIndex);
-        } else {
-          final toolIdx = _sidebarIndex - _sidebarTabs.length;
-          if (toolIdx >= 0 && toolIdx < _customTools.length) {
-            _selectCustomTool(_customTools[toolIdx], _sidebarIndex);
-          }
-        }
+        _activateSidebarIndex(_sidebarIndex);
         _sidebarFocusNode.unfocus();
         return true;
       }
@@ -444,7 +441,23 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     return false;
   }
 
-  void _selectTab(AppTab tab, int index) {
+  /// Opens the sidebar item at [index] (built-in tab or custom tool).
+  void _activateSidebarIndex(int index, {bool moveFocusToContent = true}) {
+    if (index < _sidebarTabs.length) {
+      _selectTab(
+        _sidebarTabs[index],
+        index,
+        moveFocusToContent: moveFocusToContent,
+      );
+    } else {
+      final toolIdx = index - _sidebarTabs.length;
+      if (toolIdx >= 0 && toolIdx < _customTools.length) {
+        _selectCustomTool(_customTools[toolIdx], index);
+      }
+    }
+  }
+
+  void _selectTab(AppTab tab, int index, {bool moveFocusToContent = true}) {
     setState(() {
       _selectedCustomToolId = null;
       _previousCustomToolId = null;
@@ -452,7 +465,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       _previousTab = tab;
       _sidebarIndex = index;
     });
-    if (tab == AppTab.fileExplorer) {
+    if (moveFocusToContent && tab == AppTab.fileExplorer) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _focusActiveFileExplorer();
       });
@@ -651,7 +664,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     switch (item.action) {
       case CommandAction.connectSession:
         if (item.session != null) {
-          _selectTab(AppTab.nexus, 1);
+          _selectTab(AppTab.nexus, 0);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _nexusKey.currentState?.connectSessionProfile(item.session!);
           });
@@ -661,19 +674,19 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         _openStartupSessionsDialog();
         break;
       case CommandAction.toggleSplitView:
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleSplitView();
         });
         break;
       case CommandAction.toggleCommandPane:
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleCommandPane();
         });
         break;
       case CommandAction.toggleRunbookSidebar:
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _nexusKey.currentState?.toggleRightSidebar();
         });
@@ -705,7 +718,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         SettingsService.instance.setShowSessionDialogAtStartup(val);
       },
       onConnectSessions: (sessions, {openInRightSplit = false}) {
-        _selectTab(AppTab.nexus, 1);
+        _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           for (final s in sessions) {
             _nexusKey.currentState?.connectSessionProfile(s, toRightPane: openInRightSplit);
@@ -1060,6 +1073,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               ),
             ),
           ),
+          // Session Manager: opens the sessions dialog from any tab.
+          _SessionManagerTopBarButton(
+            onTap: _openStartupSessionsDialog,
+          ),
+          const SizedBox(width: 4),
           // Settings Button (placed to the left of the left sidebar toggle button)
           _SettingsTopBarButton(
             isSelected: _selectedTab == AppTab.settings,
@@ -1122,9 +1140,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 8),
-                  _buildSidebarNavItem(AppTab.sessions, 'Sessions', Icons.dns_outlined, 0, isCompact),
-                  _buildSidebarNavItem(AppTab.nexus, 'Nexus', Icons.terminal, 1, isCompact),
-                  _buildSidebarNavItem(AppTab.fileExplorer, 'File Explorer', Icons.folder_open, 2, isCompact),
+                  _buildSidebarNavItem(AppTab.nexus, 'Nexus', Icons.terminal, 0, isCompact),
+                  _buildSidebarNavItem(AppTab.fileExplorer, 'File Explorer', Icons.folder_open, 1, isCompact),
                   if (tools.isNotEmpty) ...[
                     Padding(
                       padding: EdgeInsets.symmetric(
@@ -1229,7 +1246,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             ],
           );
 
-    final Widget itemContainer = Container(
+    final Widget itemContainer = AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
       height: 36,
       margin: EdgeInsets.symmetric(
         horizontal: isCompact ? 6 : 8,
@@ -1251,8 +1270,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       child: content,
     );
 
+    // Activate on pointer-down (desktop-style, feels instant) and skip the
+    // slow Material ripple; selection feedback comes from the 120ms
+    // AnimatedContainer above instead.
     return InkWell(
-      onTap: onTap,
+      onTapDown: (_) => onTap(),
+      onTap: () {},
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+      hoverColor: AppTheme.bgSurface.withValues(alpha: 0.4),
       borderRadius: BorderRadius.circular(4),
       child: isCompact
           ? Tooltip(
@@ -1381,7 +1407,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           sessionManager: _sessionManager,
           isActive: _selectedCustomToolId == null && _selectedTab == AppTab.sessions,
           onConnectSessions: (sessions, {openInRightSplit = false}) {
-            _selectTab(AppTab.nexus, 1);
+            _selectTab(AppTab.nexus, 0);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               for (final s in sessions) {
                 _nexusKey.currentState?.connectSessionProfile(s, toRightPane: openInRightSplit);
@@ -1400,14 +1426,23 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         ),
         _buildFileExplorerPage(),
         _buildSettingsScreen(),
-        for (final tool in tools)
-          KeyedSubtree(
-            key: ValueKey('nexus_custom_tool_${tool.id}'),
-            child: Builder(
-              builder: (ctx) => tool.buildView(ctx, _buildToolContext()),
-            ),
-          ),
-      ],
+        for (final tool in tools) _cachedToolView(tool),
+      ].map((page) => RepaintBoundary(child: page)).toList(),
+    );
+  }
+
+  /// Returns the same widget instance for a tool across rebuilds so that
+  /// sidebar navigation (which calls setState on this screen) does not force
+  /// every tool view to rebuild. Invalidated in [_onToolsChanged].
+  Widget _cachedToolView(NexusTool tool) {
+    return _toolViewCache.putIfAbsent(
+      tool.id,
+      () => KeyedSubtree(
+        key: ValueKey('nexus_custom_tool_${tool.id}'),
+        child: Builder(
+          builder: (ctx) => tool.buildView(ctx, _buildToolContext()),
+        ),
+      ),
     );
   }
 
@@ -1500,7 +1535,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                     _closeFileExplorerTab(idx);
                   } else {
                     setState(() {
-                      _selectedTab = AppTab.sessions;
+                      _selectedTab = AppTab.nexus;
                     });
                   }
                 },
@@ -2148,6 +2183,57 @@ class _SettingsTopBarButtonState extends State<_SettingsTopBarButton> {
             child: Center(
               child: Icon(
                 Icons.settings_outlined,
+                size: 16.0,
+                color: iconColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionManagerTopBarButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _SessionManagerTopBarButton({required this.onTap});
+
+  @override
+  State<_SessionManagerTopBarButton> createState() =>
+      _SessionManagerTopBarButtonState();
+}
+
+class _SessionManagerTopBarButtonState extends State<_SessionManagerTopBarButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = _isHovered ? Colors.white : AppTheme.textSecondary;
+
+    return Tooltip(
+      message: 'Session Manager',
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            width: 30.0,
+            height: 28.0,
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Center(
+              child: Icon(
+                Icons.dns_outlined,
                 size: 16.0,
                 color: iconColor,
               ),
