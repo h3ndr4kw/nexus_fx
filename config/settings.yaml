@@ -11,7 +11,7 @@ nexus_pulse_style: "neonSonarWave"
 nexus_pulse_color: "emerald"
 floating_command_width: 50
 right_sidebar_width: 440
-left_sidebar_width: 170
+left_sidebar_width: 314
 app_theme: "antigravity"
 app_font_size: "medium"
 border_animation_duration: 8.0
