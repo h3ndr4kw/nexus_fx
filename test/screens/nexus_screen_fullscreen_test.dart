@@ -204,4 +204,37 @@ void main() {
     nexus.exitSessionFullscreen();
     await finishOverlayTimers(tester);
   });
+
+  testWidgets('Alt+digit switching away from the target exits fullscreen',
+      (tester) async {
+    final nexus = await pumpNexus(tester);
+    nexus.addConnectionForTesting(_conn('a'));
+    nexus.addConnectionForTesting(_conn('b'));
+    nexus.tabController.setActiveTab(0);
+    await settle(tester);
+
+    nexus.toggleSessionFullscreen();
+    await settle(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await settle(tester);
+    expect(nexus.isSessionFullscreen, isFalse);
+    await finishOverlayTimers(tester);
+  });
+
+  testWidgets('a new session opened while fullscreen exits fullscreen',
+      (tester) async {
+    final nexus = await pumpNexus(tester);
+    nexus.addConnectionForTesting(_conn('a'));
+    await settle(tester);
+
+    nexus.toggleSessionFullscreen();
+    await settle(tester);
+    nexus.addConnectionForTesting(_conn('b'));
+    await settle(tester);
+    expect(nexus.isSessionFullscreen, isFalse);
+    expect(find.byTooltip(_fsTooltip), findsOneWidget);
+    await finishOverlayTimers(tester);
+  });
 }

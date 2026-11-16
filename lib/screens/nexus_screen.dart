@@ -260,7 +260,15 @@ class NexusScreenState extends State<NexusScreen> {
   }
 
   void _onControllersChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    // Fullscreen shows exactly one session; if another becomes active (tab
+    // jump, newly opened session) leave fullscreen rather than show it under
+    // the old session's label.
+    final target = _fullscreen.target;
+    if (target != null && !identical(_activeConnection, target)) {
+      _fullscreen.exit();
+    }
   }
 
   bool get isSessionFullscreen => _fullscreen.isActive;
