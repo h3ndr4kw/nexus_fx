@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
+import '../controllers/session_fullscreen_controller.dart';
 import '../theme/app_theme.dart';
 import '../theme/terminal_theme_helper.dart';
 import '../services/settings_service.dart';
@@ -16,6 +17,8 @@ class SshTabView extends StatefulWidget {
   final bool isActive;
   final VoidCallback? onFocus;
   final double bottomInset;
+  final bool isFullscreen;
+  final VoidCallback? onToggleFullscreen;
 
   const SshTabView({
     super.key,
@@ -24,6 +27,8 @@ class SshTabView extends StatefulWidget {
     this.isActive = true,
     this.onFocus,
     this.bottomInset = 0.0,
+    this.isFullscreen = false,
+    this.onToggleFullscreen,
   });
 
   @override
@@ -327,6 +332,13 @@ class SshTabViewState extends State<SshTabView> {
         HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altLeft) ||
         HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altRight);
 
+    // Session fullscreen is toggled by the app's global key handler; keep the
+    // keystroke away from the remote shell.
+    if (isSessionFullscreenShortcut(event.logicalKey,
+        ctrl: isCtrl, shift: isShift, alt: isAlt)) {
+      return KeyEventResult.handled;
+    }
+
     if (_isSessionStopped) {
       if (event.logicalKey == LogicalKeyboardKey.enter ||
           event.logicalKey == LogicalKeyboardKey.numpadEnter) {
@@ -611,6 +623,32 @@ class SshTabViewState extends State<SshTabView> {
               ],
             ),
           ),
+          if (widget.onToggleFullscreen != null)
+            PopupMenuItem<String>(
+              value: 'fullscreen',
+              height: 36,
+              child: Row(
+                children: [
+                  Icon(
+                    widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                    size: 14,
+                    color: AppTheme.textColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textColor),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ctrl+Shift+Enter',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
           if (widget.connection.logFile != null)
             const PopupMenuItem<String>(
               value: 'open_log',
@@ -738,6 +776,9 @@ class SshTabViewState extends State<SshTabView> {
           break;
         case 'save_output':
           await _saveTerminalOutputToFile();
+          break;
+        case 'fullscreen':
+          widget.onToggleFullscreen?.call();
           break;
         case 'open_log':
           final logFile = widget.connection.logFile;

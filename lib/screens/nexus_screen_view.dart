@@ -33,37 +33,101 @@ extension _NexusScreenView on NexusScreenState {
     );
   }
 
+  /// One pane's terminals. Each [SshTabView] is built only here, keyed by its
+  /// connection, so switching layouts reparents it instead of remounting.
+  Widget _buildPaneStack({required bool isRightPane}) {
+    final tabs = isRightPane ? _rightTabs : _tabs;
+    final active = isRightPane ? _activeRightTab : _activeTab;
+    return IndexedStack(
+      index: active.clamp(0, tabs.isNotEmpty ? tabs.length - 1 : 0),
+      children: [
+        for (int i = 0; i < tabs.length; i++)
+          SshTabView(
+            key: GlobalObjectKey(tabs[i]),
+            connection: tabs[i],
+            isActive: isRightPane
+                ? _lastActivePaneIsRight && i == _activeRightTab
+                : (!_isSplitView || !_lastActivePaneIsRight) && i == _activeTab,
+            onFocus: () => _lastActivePaneIsRight = isRightPane,
+            onClose: () => _closeTab(i, isRightPane: isRightPane),
+            bottomInset: _showCommandPane ? 68.0 : 0.0,
+            isFullscreen: identical(_fullscreen.target, tabs[i]),
+            onToggleFullscreen: () => toggleSessionFullscreen(tabs[i]),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCommandPaneOverlay() {
+    return ListenableBuilder(
+      listenable: SettingsService.instance,
+      builder: (context, _) {
+        final widthFactor =
+            (SettingsService.instance.floatingCommandWidth / 100.0)
+                .clamp(0.2, 1.0);
+        return Positioned(
+          left: 0,
+          right: 0,
+          bottom: 16,
+          child: Center(
+            child: FractionallySizedBox(
+              widthFactor: widthFactor,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _buildFloatingCommandPane(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Only the fullscreen session is visible. The other pane stays mounted
+  /// offstage so its terminals keep their state.
+  Widget _buildFullscreenArea(SshConnection target) {
+    final targetIsRight = _rightTabs.contains(target);
+    Widget pane(bool isRightPane) {
+      final hidden = isRightPane != targetIsRight;
+      return Positioned.fill(
+        child: Offstage(
+          offstage: hidden,
+          child: ExcludeFocus(
+            excluding: hidden,
+            child: _buildPaneStack(isRightPane: isRightPane),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        if (_tabs.isNotEmpty) pane(false),
+        if (_rightTabs.isNotEmpty) pane(true),
+        if (_showCommandPane) _buildCommandPaneOverlay(),
+        Positioned.fill(
+          child: SessionFullscreenOverlay(
+            key: ObjectKey(target),
+            label: target.currentLabel,
+            onExit: exitSessionFullscreen,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTerminalMainArea() {
+    final fullscreenTarget = _fullscreen.target;
+    if (fullscreenTarget != null) {
+      return _buildFullscreenArea(fullscreenTarget);
+    }
     if (_tabs.isEmpty && _rightTabs.isEmpty) {
       return Stack(
         children: [
           Positioned.fill(
             child: _buildEmptyState(),
           ),
-          if (_showCommandPane)
-            ListenableBuilder(
-              listenable: SettingsService.instance,
-              builder: (context, _) {
-                final widthFactor =
-                    (SettingsService.instance.floatingCommandWidth / 100.0)
-                        .clamp(0.2, 1.0);
-                return Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 16,
-                  child: Center(
-                    child: FractionallySizedBox(
-                      widthFactor: widthFactor,
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: _buildFloatingCommandPane(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+          if (_showCommandPane) _buildCommandPaneOverlay(),
         ],
       );
     }
@@ -111,6 +175,7 @@ extension _NexusScreenView on NexusScreenState {
                             ),
                           ),
                           _buildCommandPaneToggleButton(),
+                          _buildFullscreenButton(),
                           _buildSplitButton(),
                           if (_tabs.length + _rightTabs.length > 1)
                             _buildCloseAllButton(),
@@ -130,6 +195,7 @@ extension _NexusScreenView on NexusScreenState {
                       ),
                     ),
                     _buildCommandPaneToggleButton(),
+                    _buildFullscreenButton(),
                     _buildSplitButton(),
                     if (_tabs.length + _rightTabs.length > 1)
                       _buildCloseAllButton(),
@@ -199,21 +265,7 @@ extension _NexusScreenView on NexusScreenState {
                           builder: (context, candidateData, rejectedData) {
                             final content = _tabs.isEmpty
                                 ? _buildEmptyPaneState('Primary pane empty')
-                                : IndexedStack(
-                                    index: _activeTab.clamp(
-                                        0, _tabs.length - 1),
-                                    children: [
-                                       for (int i = 0; i < _tabs.length; i++)
-                                        SshTabView(
-                                          key: GlobalObjectKey(_tabs[i]),
-                                          connection: _tabs[i],
-                                          isActive: !_lastActivePaneIsRight && i == _activeTab,
-                                          onFocus: () => _lastActivePaneIsRight = false,
-                                          onClose: () => _closeTab(i, isRightPane: false),
-                                          bottomInset: _showCommandPane ? 68.0 : 0.0,
-                                        ),
-                                    ],
-                                  );
+                                : _buildPaneStack(isRightPane: false);
                             if (candidateData.isNotEmpty) {
                               return Stack(
                                 children: [
@@ -251,21 +303,7 @@ extension _NexusScreenView on NexusScreenState {
                             final content = _rightTabs.isEmpty
                                 ? _buildEmptyPaneState(
                                     'Split view active. Open an SSH client to display here.')
-                                : IndexedStack(
-                                    index: _activeRightTab.clamp(
-                                        0, _rightTabs.length - 1),
-                                    children: [
-                                      for (int i = 0; i < _rightTabs.length; i++)
-                                        SshTabView(
-                                          key: GlobalObjectKey(_rightTabs[i]),
-                                          connection: _rightTabs[i],
-                                          isActive: _lastActivePaneIsRight && i == _activeRightTab,
-                                          onFocus: () => _lastActivePaneIsRight = true,
-                                          onClose: () => _closeTab(i, isRightPane: true),
-                                          bottomInset: _showCommandPane ? 68.0 : 0.0,
-                                        ),
-                                    ],
-                                  );
+                                : _buildPaneStack(isRightPane: true);
                             if (candidateData.isNotEmpty) {
                               return Stack(
                                 children: [
@@ -287,21 +325,8 @@ extension _NexusScreenView on NexusScreenState {
               // Single pane mode: show drop target on right half when dragging
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final terminalContent = IndexedStack(
-                      index: _activeTab.clamp(
-                          0, _tabs.isNotEmpty ? _tabs.length - 1 : 0),
-                      children: [
-                        for (int i = 0; i < _tabs.length; i++)
-                          SshTabView(
-                            key: GlobalObjectKey(_tabs[i]),
-                            connection: _tabs[i],
-                            isActive: i == _activeTab,
-                            onFocus: () => _lastActivePaneIsRight = false,
-                            onClose: () => _closeTab(i, isRightPane: false),
-                            bottomInset: _showCommandPane ? 68.0 : 0.0,
-                          ),
-                      ],
-                    );
+                    final terminalContent =
+                        _buildPaneStack(isRightPane: false);
 
                     final halfWidth = constraints.maxWidth / 2;
                     return Stack(
@@ -335,30 +360,7 @@ extension _NexusScreenView on NexusScreenState {
                   },
                 ),
               ),
-              if (_showCommandPane)
-                ListenableBuilder(
-                  listenable: SettingsService.instance,
-                  builder: (context, _) {
-                    final widthFactor =
-                        (SettingsService.instance.floatingCommandWidth / 100.0)
-                            .clamp(0.2, 1.0);
-                    return Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 16,
-                      child: Center(
-                        child: FractionallySizedBox(
-                          widthFactor: widthFactor,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: _buildFloatingCommandPane(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              if (_showCommandPane) _buildCommandPaneOverlay(),
             ],
           ),
         ),

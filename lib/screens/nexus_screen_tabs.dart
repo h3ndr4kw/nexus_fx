@@ -162,6 +162,7 @@ extension _NexusTabOps on NexusScreenState {
     final targetList = isRightPane ? _rightTabs : _tabs;
     if (index < 0 || index >= targetList.length) return;
     final conn = targetList[index];
+    _fullscreen.onConnectionRemoved(conn.id);
     _sshService.removeConnection(conn.id, graceful: true);
 
     setState(() {
@@ -178,6 +179,7 @@ extension _NexusTabOps on NexusScreenState {
   }
 
   void _closeAllTabs() {
+    _fullscreen.exit();
     for (final conn in List.of(_tabs)) {
       _sshService.removeConnection(conn.id, graceful: true);
     }
@@ -196,6 +198,7 @@ extension _NexusTabOps on NexusScreenState {
     final targetList = isRightPane ? _rightTabs : _tabs;
     for (final conn in List.of(targetList)) {
       if (conn.id != keepConn.id) {
+        _fullscreen.onConnectionRemoved(conn.id);
         conn.onClosed = null;
         _sshService.removeConnection(conn.id, graceful: true);
       }
@@ -324,6 +327,24 @@ extension _NexusTabOps on NexusScreenState {
         side: const BorderSide(color: AppTheme.inputBorderColor),
       ),
       items: [
+        PopupMenuItem<String>(
+          value: 'fullscreen',
+          height: 36,
+          child: Row(
+            children: [
+              Icon(
+                identical(_fullscreen.target, conn) ? Icons.fullscreen_exit : Icons.fullscreen,
+                size: 14,
+                color: AppTheme.textColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                identical(_fullscreen.target, conn) ? 'Exit Fullscreen' : 'Fullscreen',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textColor),
+              ),
+            ],
+          ),
+        ),
         const PopupMenuItem<String>(
           value: 'close',
           height: 36,
@@ -516,6 +537,9 @@ extension _NexusTabOps on NexusScreenState {
     }
 
     switch (selected) {
+      case 'fullscreen':
+        toggleSessionFullscreen(conn);
+        break;
       case 'close':
         _closeTabForConnection(conn.id);
         break;

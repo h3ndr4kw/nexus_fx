@@ -11,11 +11,13 @@ import '../widgets/command_palette.dart';
 import '../widgets/interactive_runbook_sidebar.dart';
 import '../controllers/terminal_tab_controller.dart';
 import '../controllers/broadcast_coordinator.dart';
+import '../controllers/session_fullscreen_controller.dart';
 import '../widgets/floating_send_progress_dialog.dart';
 import '../widgets/radar_pulse_indicator.dart';
 import 'sessions_screen.dart';
 import '../widgets/fuzzy_searchable_dropdown.dart';
 import '../widgets/snippet_dialogs.dart';
+import '../widgets/session_fullscreen_overlay.dart';
 
 export '../controllers/broadcast_coordinator.dart' show BroadcastTarget;
 export '../widgets/radar_pulse_indicator.dart';
@@ -62,12 +64,14 @@ class NexusScreen extends StatefulWidget {
   final String? initialHost;
   final String? initialLabel;
   final ValueChanged<bool>? onRightSidebarChanged;
+  final ValueChanged<bool>? onSessionFullscreenChanged;
 
   const NexusScreen({
     super.key,
     this.initialHost,
     this.initialLabel,
     this.onRightSidebarChanged,
+    this.onSessionFullscreenChanged,
   });
 
   @override
@@ -78,6 +82,8 @@ class NexusScreenState extends State<NexusScreen> {
   final SshService _sshService = SshService.instance;
   late final TerminalTabController _tabController = TerminalTabController();
   late final BroadcastCoordinator _broadcastCoordinator = BroadcastCoordinator();
+  final SessionFullscreenController _fullscreen = SessionFullscreenController();
+  bool _wasSessionFullscreen = false;
 
   TerminalTabController get tabController => _tabController;
   BroadcastCoordinator get broadcastCoordinator => _broadcastCoordinator;
@@ -245,6 +251,7 @@ class NexusScreenState extends State<NexusScreen> {
     super.initState();
     _tabController.addListener(_onControllersChanged);
     _broadcastCoordinator.addListener(_onControllersChanged);
+    _fullscreen.addListener(_onFullscreenChanged);
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
     _commandFocusNode.onKeyEvent = _handleCommandInputKey;
     if (widget.initialHost != null) {
@@ -254,6 +261,50 @@ class NexusScreenState extends State<NexusScreen> {
 
   void _onControllersChanged() {
     if (mounted) setState(() {});
+  }
+
+  bool get isSessionFullscreen => _fullscreen.isActive;
+
+  @visibleForTesting
+  SessionFullscreenController get fullscreenController => _fullscreen;
+
+  /// Toggles fullscreen for [conn], or for the active session when omitted.
+  Future<void> toggleSessionFullscreen([SshConnection? conn]) async {
+    if (_fullscreen.isActive) {
+      await _fullscreen.exit();
+      return;
+    }
+    final target = conn ?? _activeConnection;
+    if (target == null) return;
+    _selectConnection(target);
+    await _fullscreen.enter(target);
+  }
+
+  Future<void> exitSessionFullscreen() => _fullscreen.exit();
+
+  void _selectConnection(SshConnection conn) {
+    final left = _tabs.indexOf(conn);
+    if (left != -1) {
+      _activeTab = left;
+      _lastActivePaneIsRight = false;
+      return;
+    }
+    final right = _rightTabs.indexOf(conn);
+    if (right != -1) {
+      _activeRightTab = right;
+      _lastActivePaneIsRight = true;
+    }
+  }
+
+  void _onFullscreenChanged() {
+    if (!mounted) return;
+    final active = _fullscreen.isActive;
+    setState(() {});
+    if (active != _wasSessionFullscreen) {
+      _wasSessionFullscreen = active;
+      widget.onSessionFullscreenChanged?.call(active);
+      _focusActiveTerminal();
+    }
   }
 
   void toggleCommandPane() {
@@ -313,6 +364,13 @@ class NexusScreenState extends State<NexusScreen> {
         HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altRight);
     final isSpace = event.logicalKey == LogicalKeyboardKey.space ||
         event.physicalKey == PhysicalKeyboardKey.space;
+
+    if (widget.onSessionFullscreenChanged == null &&
+        isSessionFullscreenShortcut(event.logicalKey,
+            ctrl: isCtrl, shift: isShift, alt: isAlt)) {
+      toggleSessionFullscreen();
+      return true;
+    }
 
     if (widget.onRightSidebarChanged == null && isCtrl && isShift && isSpace) {
       toggleCommandPane();
@@ -393,6 +451,16 @@ class NexusScreenState extends State<NexusScreen> {
         event.physicalKey == PhysicalKeyboardKey.keyT;
     final isW = event.logicalKey == LogicalKeyboardKey.keyW ||
         event.physicalKey == PhysicalKeyboardKey.keyW;
+
+    // Fullscreen shows one session: tab switching would swap it silently.
+    if (_fullscreen.isActive &&
+        isCtrl &&
+        (isTab ||
+            isT ||
+            event.logicalKey == LogicalKeyboardKey.pageDown ||
+            event.logicalKey == LogicalKeyboardKey.pageUp)) {
+      return false;
+    }
 
     // If sidebar is active, let sidebar handle Tab switching, W (close tab), etc.
     if (isSidebarActive && isCtrl && (isTab || isT || isW || event.logicalKey == LogicalKeyboardKey.pageDown || event.logicalKey == LogicalKeyboardKey.pageUp)) {
@@ -532,6 +600,8 @@ class NexusScreenState extends State<NexusScreen> {
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
     _tabController.removeListener(_onControllersChanged);
     _broadcastCoordinator.removeListener(_onControllersChanged);
+    _fullscreen.removeListener(_onFullscreenChanged);
+    _fullscreen.dispose();
     _tabScrollController.dispose();
     _rightTabScrollController.dispose();
     _commandInputController.dispose();
@@ -583,7 +653,7 @@ class NexusScreenState extends State<NexusScreen> {
                         _sidebarKey.currentState?.onSelectMainWidget();
                       }
                     },
-                    child: _isRightSidebarVisible
+                    child: _isRightSidebarVisible && !_fullscreen.isActive
                         ? Container(
                             margin: const EdgeInsets.only(top: 3, bottom: 3),
                             child: Material(
@@ -604,9 +674,9 @@ class NexusScreenState extends State<NexusScreen> {
                   ),
                 ),
                 Offstage(
-                  offstage: !_isRightSidebarVisible,
+                  offstage: !_isRightSidebarVisible || _fullscreen.isActive,
                   child: ExcludeFocus(
-                    excluding: !_isRightSidebarVisible,
+                    excluding: !_isRightSidebarVisible || _fullscreen.isActive,
                     child: _buildRightSidebarWidget(),
                   ),
                 ),
