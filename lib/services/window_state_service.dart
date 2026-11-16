@@ -53,13 +53,15 @@ class WindowStateService extends ChangeNotifier
   }
 
   /// Toggles fullscreen mode and updates state immediately.
-  Future<void> toggleFullScreen() async {
-    final target = !_isFullScreen;
-    _isFullScreen = target;
+  Future<void> toggleFullScreen() => setFullScreen(!_isFullScreen);
+
+  /// Sets fullscreen mode and updates state immediately.
+  Future<void> setFullScreen(bool value) async {
+    _isFullScreen = value;
     notifyListeners();
 
     try {
-      await windowManager.setFullScreen(target);
+      await windowManager.setFullScreen(value);
       // Give window manager a moment to settle, then verify state
       await Future.delayed(const Duration(milliseconds: 50));
       await checkWindowState();
