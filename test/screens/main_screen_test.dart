@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/screens/main_screen.dart';
+import 'package:nexus_fx/screens/nexus_screen.dart';
+import 'package:nexus_fx/services/ssh_service.dart';
+import 'package:nexus_fx/services/window_state_service.dart';
 import 'package:nexus_fx/services/session_manager_service.dart';
 import 'package:nexus_fx/theme/app_theme.dart';
 import 'package:nexus_fx/widgets/draggable_dialog.dart';
@@ -411,5 +414,115 @@ void main() {
 
     animatedOpacity = tester.widget<AnimatedOpacity>(sashOpacityFinder);
     expect(animatedOpacity.opacity, equals(0.0));
+  });
+  group('session fullscreen', () {
+    setUp(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('window_manager'),
+              (call) async {
+        if (call.method == 'isFullScreen') {
+          return WindowStateService.instance.isFullScreen;
+        }
+        if (call.method == 'isMaximized') return false;
+        return null;
+      });
+      WindowStateService.instance.resetForTesting();
+    });
+
+    tearDown(() {
+      WindowStateService.instance.resetForTesting();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
+    });
+
+    Future<NexusScreenState> pumpWithSession(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+      final nexus = tester.state<NexusScreenState>(find.byType(NexusScreen));
+      final conn = SshConnection(id: 'a', host: '10.0.0.1', port: 22, label: 'A');
+      conn.setConnectedForTesting(true);
+      nexus.addConnectionForTesting(conn);
+      await tester.pump();
+      return nexus;
+    }
+
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    Future<void> drainOverlay(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    Future<void> pressCtrlShiftEnter(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    }
+
+    testWidgets('hides title bar and sidebar; exit restores them',
+        (tester) async {
+      final nexus = await pumpWithSession(tester);
+      expect(find.byTooltip('Session Manager'), findsOneWidget);
+      expect(find.text('File Explorer'), findsOneWidget);
+      final nexusState = nexus;
+
+      nexus.toggleSessionFullscreen();
+      await settle(tester);
+      expect(find.byTooltip('Session Manager'), findsNothing);
+      expect(find.text('File Explorer'), findsNothing);
+      // NexusScreen keeps its state while the chrome around it changes.
+      expect(tester.state(find.byType(NexusScreen)), same(nexusState));
+
+      nexus.exitSessionFullscreen();
+      await settle(tester);
+      expect(find.byTooltip('Session Manager'), findsOneWidget);
+      expect(find.text('File Explorer'), findsOneWidget);
+      expect(tester.state(find.byType(NexusScreen)), same(nexusState));
+      await drainOverlay(tester);
+    });
+
+    testWidgets('Ctrl+Shift+Enter toggles session fullscreen', (tester) async {
+      final nexus = await pumpWithSession(tester);
+      await pressCtrlShiftEnter(tester);
+      await settle(tester);
+      expect(nexus.isSessionFullscreen, isTrue);
+      await pressCtrlShiftEnter(tester);
+      await settle(tester);
+      expect(nexus.isSessionFullscreen, isFalse);
+      expect(find.byTooltip('Session Manager'), findsOneWidget);
+      await drainOverlay(tester);
+    });
+
+    testWidgets('switching to File Explorer exits session fullscreen',
+        (tester) async {
+      final nexus = await pumpWithSession(tester);
+      nexus.toggleSessionFullscreen();
+      await settle(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await settle(tester);
+      expect(nexus.isSessionFullscreen, isFalse);
+      expect(find.text('File Explorer'), findsWidgets);
+      await drainOverlay(tester);
+    });
+
+    testWidgets('command palette lists Toggle Session Fullscreen',
+        (tester) async {
+      await pumpWithSession(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('Toggle Session Fullscreen'), findsOneWidget);
+    });
   });
 }

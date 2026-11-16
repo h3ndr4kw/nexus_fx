@@ -11,6 +11,7 @@ enum CommandAction {
   toggleCommandPane,
   toggleRunbookSidebar,
   toggleSplitView,
+  toggleSessionFullscreen,
   setTheme,
   setFontSize,
   openCustomTool,
@@ -110,6 +111,12 @@ class _CommandPaletteState extends State<CommandPalette> {
         subtitle: 'Toggle dual terminal panes (Left & Right)',
         icon: Icons.vertical_split_outlined,
         action: CommandAction.toggleSplitView,
+      ));
+      list.add(const CommandItem(
+        label: 'Toggle Session Fullscreen',
+        subtitle: 'Fill the screen with the active SSH session',
+        icon: Icons.fullscreen,
+        action: CommandAction.toggleSessionFullscreen,
       ));
       list.add(const CommandItem(
         label: 'Toggle Broadcast Bar',

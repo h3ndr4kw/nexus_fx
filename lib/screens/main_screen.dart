@@ -25,6 +25,7 @@ import '../widgets/sidebar_icon.dart';
 import '../widgets/transfer_status_bar.dart';
 import '../widgets/window_caption_buttons.dart';
 import 'nexus_screen.dart';
+import '../controllers/session_fullscreen_controller.dart';
 import 'sessions_screen.dart';
 
 enum AppTab {
@@ -62,6 +63,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   String? _selectedCustomToolId;
   String? _previousCustomToolId;
   bool _isSidebarVisible = true;
+  bool _isSessionFullscreen = false;
   bool _isRightSidebarVisible = false;
   final GlobalKey<NexusScreenState> _nexusKey = GlobalKey<NexusScreenState>();
   final FocusNode _sidebarFocusNode = FocusNode();
@@ -386,6 +388,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       }
     }
 
+    // Ctrl+Shift+Enter: fullscreen the active SSH session
+    if (_isNexusActive &&
+        isSessionFullscreenShortcut(event.logicalKey,
+            ctrl: isCtrl, shift: isShift, alt: isAlt)) {
+      _nexusKey.currentState?.toggleSessionFullscreen();
+      return true;
+    }
+
     // F11: Full Screen
     if (event.logicalKey == LogicalKeyboardKey.f11) {
       _toggleFullScreen();
@@ -457,7 +467,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     }
   }
 
+  void _exitSessionFullscreen() {
+    if (_isSessionFullscreen) {
+      _nexusKey.currentState?.exitSessionFullscreen();
+    }
+  }
+
   void _selectTab(AppTab tab, int index, {bool moveFocusToContent = true}) {
+    if (tab != AppTab.nexus) _exitSessionFullscreen();
     setState(() {
       _selectedCustomToolId = null;
       _previousCustomToolId = null;
@@ -473,6 +490,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _selectCustomTool(NexusTool tool, int sidebarIndex) {
+    _exitSessionFullscreen();
     setState(() {
       _selectedCustomToolId = tool.id;
       _previousCustomToolId = tool.id;
@@ -484,6 +502,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _toggleSettings() {
+    _exitSessionFullscreen();
     setState(() {
       if (_selectedTab == AppTab.settings) {
         _selectedTab = _previousTab;
@@ -677,6 +696,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           _nexusKey.currentState?.toggleSplitView();
         });
         break;
+      case CommandAction.toggleSessionFullscreen:
+        _selectTab(AppTab.nexus, 0);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _nexusKey.currentState?.toggleSessionFullscreen();
+        });
+        break;
       case CommandAction.toggleCommandPane:
         _selectTab(AppTab.nexus, 0);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -708,6 +733,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _openStartupSessionsDialog() {
+    _exitSessionFullscreen();
     SessionsDialog.show(
       context,
       sessionManager: _sessionManager,
@@ -970,7 +996,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    final isNexusWithRightSidebar = _isNexusActive && _isRightSidebarVisible;
+    final fullscreen = _isSessionFullscreen;
+    final isNexusWithRightSidebar =
+        _isNexusActive && (_isRightSidebarVisible || fullscreen);
 
     return Scaffold(
       backgroundColor: AppTheme.activePalette.background,
@@ -982,11 +1010,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         },
         child: Column(
           children: [
-            _buildTitleBar(),
+            if (!fullscreen) _buildTitleBar(),
             Expanded(
               child: Row(
                 children: [
-                  if (_isSidebarVisible) ...[
+                  if (_isSidebarVisible && !fullscreen) ...[
                     _buildSidebar(),
                     _buildResizeHandle(),
                   ],
@@ -1419,6 +1447,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           onRightSidebarChanged: (visible) {
             if (mounted && _isRightSidebarVisible != visible) {
               setState(() => _isRightSidebarVisible = visible);
+            }
+          },
+          onSessionFullscreenChanged: (active) {
+            if (mounted && _isSessionFullscreen != active) {
+              setState(() => _isSessionFullscreen = active);
             }
           },
         ),

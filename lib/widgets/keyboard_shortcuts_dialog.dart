@@ -312,6 +312,12 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
       source: 'Smart-E HE',
     ),
     ShortcutEntry(
+      command: 'Toggle Session Fullscreen',
+      keys: ['Ctrl', 'Shift', 'Enter'],
+      when: 'nexusTabActive',
+      source: 'Smart-E HE',
+    ),
+    ShortcutEntry(
       command: 'Exit Application',
       keys: ['Ctrl', 'Q'],
       when: 'global',

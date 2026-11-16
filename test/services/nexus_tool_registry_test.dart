@@ -212,7 +212,9 @@ void main() {
       expect(find.text('Open Tool: Cluster Monitor'), findsOneWidget);
       expect(find.text('Run Cluster Diagnostics'), findsOneWidget);
 
-      // Tap "Run Cluster Diagnostics" command
+      // Tap "Run Cluster Diagnostics" command (the palette list scrolls)
+      await tester.ensureVisible(find.text('Run Cluster Diagnostics'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Run Cluster Diagnostics'));
       await tester.pumpAndSettle();
 
