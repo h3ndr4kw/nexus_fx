@@ -138,9 +138,8 @@ extension _SshMultiplexedRoutes on SshConnection {
         pty: _createPtyConfig(),
       );
 
-      _tracked(_session!.stdout).listen(
-        (data) {
-          final text = utf8.decode(data, allowMalformed: true);
+      _decodedOutput(_session!.stdout).listen(
+        (text) {
           if (_suppressOutput) {
             _suppressedBuffer.write(text);
           } else {
@@ -163,8 +162,7 @@ extension _SshMultiplexedRoutes on SshConnection {
         },
       );
 
-      _tracked(_session!.stderr).listen((data) {
-        final text = utf8.decode(data, allowMalformed: true);
+      _decodedOutput(_session!.stderr).listen((text) {
         if (_suppressOutput) {
           _suppressedBuffer.write(text);
         } else {
@@ -360,9 +358,8 @@ extension _SshMultiplexedRoutes on SshConnection {
   }
 
   void _wireSession(SSHSession session) {
-    _tracked(session.stdout).listen(
-      (data) {
-        final text = utf8.decode(data, allowMalformed: true);
+    _decodedOutput(session.stdout).listen(
+      (text) {
         _addOutput(text);
       },
       onDone: () {
@@ -380,8 +377,7 @@ extension _SshMultiplexedRoutes on SshConnection {
       },
     );
 
-    _tracked(session.stderr).listen((data) {
-      final text = utf8.decode(data, allowMalformed: true);
+    _decodedOutput(session.stderr).listen((text) {
       _addOutput(text);
     });
   }

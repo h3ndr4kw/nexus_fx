@@ -44,9 +44,8 @@ extension _SshShellHops on SshConnection {
         ),
       );
 
-      _tracked(_session!.stdout).listen(
-        (data) {
-          final text = utf8.decode(data, allowMalformed: true);
+      _decodedOutput(_session!.stdout).listen(
+        (text) {
           if (_suppressOutput) {
             _suppressedBuffer.write(text);
           } else {
@@ -69,8 +68,7 @@ extension _SshShellHops on SshConnection {
         },
       );
 
-      _tracked(_session!.stderr).listen((data) {
-        final text = utf8.decode(data, allowMalformed: true);
+      _decodedOutput(_session!.stderr).listen((text) {
         if (_suppressOutput) {
           _suppressedBuffer.write(text);
         } else {
