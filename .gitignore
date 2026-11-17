@@ -54,3 +54,6 @@ native/sftp_engine/target/
 # App runtime logs & sessions cache
 logs/
 sessions.json
+
+# Local archives
+rea.tar.bz2
