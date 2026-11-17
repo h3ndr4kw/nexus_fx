@@ -174,8 +174,8 @@ extension _NexusScreenView on NexusScreenState {
                               isRightPane: true,
                             ),
                           ),
-                          _buildCommandPaneToggleButton(),
-                          _buildFullscreenButton(),
+                          if (_tabs.length + _rightTabs.length > 1)
+                            _buildCommandPaneToggleButton(),
                           _buildSplitButton(),
                           if (_tabs.length + _rightTabs.length > 1)
                             _buildCloseAllButton(),
@@ -194,8 +194,8 @@ extension _NexusScreenView on NexusScreenState {
                         isRightPane: false,
                       ),
                     ),
-                    _buildCommandPaneToggleButton(),
-                    _buildFullscreenButton(),
+                    if (_tabs.length + _rightTabs.length > 1)
+                      _buildCommandPaneToggleButton(),
                     _buildSplitButton(),
                     if (_tabs.length + _rightTabs.length > 1)
                       _buildCloseAllButton(),

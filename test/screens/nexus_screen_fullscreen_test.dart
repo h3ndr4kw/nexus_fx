@@ -8,7 +8,9 @@ import 'package:nexus_fx/theme/app_theme.dart';
 import 'package:nexus_fx/widgets/session_fullscreen_overlay.dart';
 import 'package:nexus_fx/widgets/ssh_tab_view.dart';
 
-const _fsTooltip = 'Fullscreen session (Ctrl+Shift+Enter)';
+// The split button is always in the tab bar, so it marks the bar as visible.
+const _tabBarMarker = 'Split view';
+const _paneToggleTooltip = 'Show command pane (Ctrl+Shift+Space)';
 
 SshConnection _conn(String id) {
   final c = SshConnection(id: id, host: '10.0.0.1', port: 22, label: id.toUpperCase());
@@ -74,33 +76,43 @@ void main() {
     final nexus = await pumpNexus(tester);
     nexus.addConnectionForTesting(_conn('a'));
     await settle(tester);
-    expect(find.byTooltip(_fsTooltip), findsOneWidget);
+    expect(find.byTooltip(_tabBarMarker), findsOneWidget);
 
     nexus.toggleSessionFullscreen();
     await settle(tester);
     expect(nexus.isSessionFullscreen, isTrue);
-    expect(find.byTooltip(_fsTooltip), findsNothing);
+    expect(find.byTooltip(_tabBarMarker), findsNothing);
     expect(find.byType(SessionFullscreenOverlay), findsOneWidget);
     expect(log, [true]);
     expect(WindowStateService.instance.isFullScreen, isTrue);
 
     nexus.exitSessionFullscreen();
     await settle(tester);
-    expect(find.byTooltip(_fsTooltip), findsOneWidget);
+    expect(find.byTooltip(_tabBarMarker), findsOneWidget);
     expect(find.byType(SessionFullscreenOverlay), findsNothing);
     expect(log, [true, false]);
     expect(WindowStateService.instance.isFullScreen, isFalse);
   });
 
-  testWidgets('tab bar button enters fullscreen', (tester) async {
+  testWidgets('tab bar has no fullscreen button', (tester) async {
     final nexus = await pumpNexus(tester);
     nexus.addConnectionForTesting(_conn('a'));
     await settle(tester);
-    await tester.tap(find.byTooltip(_fsTooltip));
+    expect(find.byKey(const ValueKey('nexus_fullscreen_button')), findsNothing);
+    expect(find.byTooltip('Fullscreen session (Ctrl+Shift+Enter)'),
+        findsNothing);
+  });
+
+  testWidgets('command pane toggle shows only with more than one session',
+      (tester) async {
+    final nexus = await pumpNexus(tester);
+    nexus.addConnectionForTesting(_conn('a'));
     await settle(tester);
-    expect(nexus.isSessionFullscreen, isTrue);
-    nexus.exitSessionFullscreen();
-    await finishOverlayTimers(tester);
+    expect(find.byTooltip(_paneToggleTooltip), findsNothing);
+
+    nexus.addConnectionForTesting(_conn('b'));
+    await settle(tester);
+    expect(find.byTooltip(_paneToggleTooltip), findsOneWidget);
   });
 
   testWidgets('SshTabView state is preserved across enter and exit',
@@ -159,7 +171,7 @@ void main() {
     tester.widget<SshTabView>(find.byKey(GlobalObjectKey(a))).onClose();
     await settle(tester);
     expect(nexus.isSessionFullscreen, isFalse);
-    expect(find.byTooltip(_fsTooltip), findsOneWidget);
+    expect(find.byTooltip(_tabBarMarker), findsOneWidget);
     await finishOverlayTimers(tester);
   });
 
@@ -234,7 +246,7 @@ void main() {
     nexus.addConnectionForTesting(_conn('b'));
     await settle(tester);
     expect(nexus.isSessionFullscreen, isFalse);
-    expect(find.byTooltip(_fsTooltip), findsOneWidget);
+    expect(find.byTooltip(_tabBarMarker), findsOneWidget);
     await finishOverlayTimers(tester);
   });
 }

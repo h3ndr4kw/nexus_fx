@@ -734,34 +734,6 @@ extension _NexusCommandPane on NexusScreenState {
     return _buildDevopsToolbarCommandPane();
   }
 
-  Widget _buildFullscreenButton() {
-    final palette = AppTheme.activePalette;
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: palette.inputBorderColor),
-        ),
-      ),
-      child: Tooltip(
-        message: 'Fullscreen session (Ctrl+Shift+Enter)',
-        child: InkWell(
-          key: const ValueKey('nexus_fullscreen_button'),
-          onTap: _activeConnection == null ? null : toggleSessionFullscreen,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.fullscreen,
-              size: 18,
-              color: palette.dimText(0.7),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSplitButton() {
     final palette = AppTheme.activePalette;
     return Container(
