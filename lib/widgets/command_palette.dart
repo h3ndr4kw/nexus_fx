@@ -210,9 +210,10 @@ class _CommandPaletteState extends State<CommandPalette> {
       child: Container(
         width: 620,
         margin: const EdgeInsets.only(top: 60),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: AppTheme.bgSurface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppTheme.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -226,11 +227,11 @@ class _CommandPaletteState extends State<CommandPalette> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   const Icon(Icons.search, size: 20, color: AppTheme.accentPrimary),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: KeyboardListener(
                       focusNode: FocusNode(),
@@ -256,6 +257,7 @@ class _CommandPaletteState extends State<CommandPalette> {
                         style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
                         decoration: const InputDecoration(
                           hintText: 'Type a command or search sessions...',
+                          hintStyle: TextStyle(fontSize: 14, color: AppTheme.textMuted),
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
@@ -265,6 +267,8 @@ class _CommandPaletteState extends State<CommandPalette> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  _EscKeycap(onTap: () => Navigator.of(context).pop()),
                 ],
               ),
             ),
@@ -276,64 +280,164 @@ class _CommandPaletteState extends State<CommandPalette> {
                       padding: EdgeInsets.all(24),
                       child: Text('No matching commands or sessions', style: TextStyle(color: AppTheme.textMuted)),
                     )
-                  : ListView.builder(
+                  : ListView.separated(
                       shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding: EdgeInsets.zero,
                       itemCount: _filteredItems.length,
+                      separatorBuilder: (_, _) =>
+                          const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
                       itemBuilder: (ctx, idx) {
                         final item = _filteredItems[idx];
-                        final isSelected = idx == _selectedIndex;
-                        return InkWell(
+                        return _CommandRow(
+                          item: item,
+                          isSelected: idx == _selectedIndex,
                           onTap: () {
                             Navigator.of(context).pop();
                             widget.onSelect(item);
                           },
-                          child: Container(
-                            color: isSelected ? AppTheme.accentPrimary.withValues(alpha: 0.15) : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: Row(
-                              children: [
-                                Icon(item.icon, size: 18, color: isSelected ? AppTheme.accentPrimary : AppTheme.textSecondary),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.label,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                          color: isSelected ? AppTheme.accentPrimary : AppTheme.textPrimary,
-                                        ),
-                                      ),
-                                      Text(item.subtitle, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                                    ],
-                                  ),
-                                ),
-                                if (item.badge != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: (item.badgeColor ?? AppTheme.accentPrimary).withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      item.badge!,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: item.badgeColor ?? AppTheme.accentPrimary,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
                         );
                       },
                     ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EscKeycap extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _EscKeycap({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Close',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppTheme.bgSurfaceSecondary,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: AppTheme.inputOutline),
+          ),
+          child: const Text(
+            'ESC',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommandRow extends StatelessWidget {
+  final CommandItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CommandRow({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = AppTheme.accentPrimary;
+    final badgeColor = item.badgeColor ?? accent;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? accent.withValues(alpha: 0.08) : Colors.transparent,
+          border: Border(
+            left: BorderSide(
+              color: isSelected ? accent : Colors.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(13, 10, 16, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? accent.withValues(alpha: 0.15)
+                    : AppTheme.bgSurfaceSecondary,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isSelected ? accent.withValues(alpha: 0.35) : AppTheme.borderSubtle,
+                ),
+              ),
+              child: Icon(
+                item.icon,
+                size: 16,
+                color: isSelected ? accent : AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isSelected ? accent : AppTheme.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (item.badge != null) ...[
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: badgeColor.withValues(alpha: 0.45)),
+                ),
+                child: Text(
+                  item.badge!,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: badgeColor,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
