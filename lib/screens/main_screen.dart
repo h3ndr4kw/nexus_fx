@@ -1494,27 +1494,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           ),
           child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.folder_outlined, color: AppTheme.accentPrimary, size: 16),
-                    SizedBox(width: 8),
-                    Text(
-                      'FILE EXPLORER',
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(width: 1, height: 22, color: AppTheme.borderSubtle),
+              const SizedBox(width: 8),
               Expanded(
                 child: ListView.builder(
                   controller: _fileExplorerTabScrollController,

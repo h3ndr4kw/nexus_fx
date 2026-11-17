@@ -97,7 +97,6 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify File Explorer view is visible with tab header
-    expect(find.text('FILE EXPLORER'), findsWidgets);
     expect(find.text('Local Explorer'), findsOneWidget);
     expect(find.byKey(const ValueKey('file_explorer_new_tab_button')), findsOneWidget);
 
