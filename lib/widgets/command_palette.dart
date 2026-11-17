@@ -4,6 +4,7 @@ import '../models/nexus_tool.dart';
 import '../models/session_models.dart';
 import '../theme/app_theme.dart';
 import '../services/session_manager_service.dart';
+import 'palette_widgets.dart';
 
 enum CommandAction {
   connectSession,
@@ -64,7 +65,8 @@ class CommandPalette extends StatefulWidget {
 
 class _CommandPaletteState extends State<CommandPalette> {
   final TextEditingController _queryController = TextEditingController();
-  final FocusNode _queryFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  late final FocusNode _queryFocusNode = FocusNode(onKeyEvent: _handleKey);
   int _selectedIndex = 0;
   List<CommandItem> _filteredItems = [];
 
@@ -78,6 +80,7 @@ class _CommandPaletteState extends State<CommandPalette> {
   void dispose() {
     _queryController.dispose();
     _queryFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -94,7 +97,7 @@ class _CommandPaletteState extends State<CommandPalette> {
         icon: isLocal ? Icons.terminal : Icons.cloud_queue,
         action: CommandAction.connectSession,
         badge: isLocal ? 'LOCAL' : 'SSH',
-        badgeColor: isLocal ? const Color(0xFF64B5F6) : const Color(0xFFFF7043),
+        badgeColor: isLocal ? PaletteColors.local : PaletteColors.ssh,
         session: s,
       ));
     }
@@ -201,142 +204,70 @@ class _CommandPaletteState extends State<CommandPalette> {
     }
   }
 
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.arrowUp) {
+      if (_filteredItems.isNotEmpty) {
+        final delta = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+        setState(() {
+          _selectedIndex = (_selectedIndex + delta).clamp(0, _filteredItems.length - 1);
+        });
+        ensurePaletteRowVisible(_scrollController, _selectedIndex);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+      _onEnter();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      alignment: Alignment.topCenter,
-      child: Container(
-        width: 620,
-        margin: const EdgeInsets.only(top: 60),
-        decoration: BoxDecoration(
-          color: AppTheme.bgSurface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.borderSubtle),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, size: 20, color: AppTheme.accentPrimary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: KeyboardListener(
-                      focusNode: FocusNode(),
-                      onKeyEvent: (event) {
-                        if (event is KeyDownEvent) {
-                          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                            if (_selectedIndex < _filteredItems.length - 1) {
-                              setState(() => _selectedIndex++);
-                            }
-                          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                            if (_selectedIndex > 0) {
-                              setState(() => _selectedIndex--);
-                            }
-                          } else if (event.logicalKey == LogicalKeyboardKey.enter) {
-                            _onEnter();
-                          }
-                        }
-                      },
-                      child: TextField(
-                        controller: _queryController,
-                        focusNode: _queryFocusNode,
-                        autofocus: true,
-                        style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
-                        decoration: const InputDecoration(
-                          hintText: 'Type a command or search sessions...',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onChanged: _updateFilteredItems,
-                        onSubmitted: (_) => _onEnter(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 380),
-              child: _filteredItems.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text('No matching commands or sessions', style: TextStyle(color: AppTheme.textMuted)),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      itemCount: _filteredItems.length,
-                      itemBuilder: (ctx, idx) {
-                        final item = _filteredItems[idx];
-                        final isSelected = idx == _selectedIndex;
-                        return InkWell(
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            widget.onSelect(item);
-                          },
-                          child: Container(
-                            color: isSelected ? AppTheme.accentPrimary.withValues(alpha: 0.15) : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: Row(
-                              children: [
-                                Icon(item.icon, size: 18, color: isSelected ? AppTheme.accentPrimary : AppTheme.textSecondary),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.label,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                          color: isSelected ? AppTheme.accentPrimary : AppTheme.textPrimary,
-                                        ),
-                                      ),
-                                      Text(item.subtitle, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                                    ],
-                                  ),
-                                ),
-                                if (item.badge != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: (item.badgeColor ?? AppTheme.accentPrimary).withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      item.badge!,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: item.badgeColor ?? AppTheme.accentPrimary,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+    return PaletteFrame(
+      header: PaletteSearchHeader(
+        controller: _queryController,
+        focusNode: _queryFocusNode,
+        hintText: 'Type a command or search sessions...',
+        onChanged: _updateFilteredItems,
+        onClose: () => Navigator.of(context).pop(),
       ),
+      body: _filteredItems.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('No matching commands or sessions', style: TextStyle(color: AppTheme.textMuted)),
+            )
+          : ListView.builder(
+              controller: _scrollController,
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemExtent: PaletteRow.extent,
+              itemCount: _filteredItems.length,
+              itemBuilder: (ctx, idx) {
+                final item = _filteredItems[idx];
+                return PaletteRow(
+                  icon: item.icon,
+                  label: item.label,
+                  subtitle: item.subtitle,
+                  isSelected: idx == _selectedIndex,
+                  trailing: [
+                    if (item.badge != null)
+                      PaletteBadge(
+                        text: item.badge!,
+                        color: item.badgeColor ?? AppTheme.accentPrimary,
+                      ),
+                  ],
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    widget.onSelect(item);
+                  },
+                );
+              },
+            ),
     );
   }
 }

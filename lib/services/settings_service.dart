@@ -156,6 +156,8 @@ class SettingsService extends ChangeNotifier {
   FileExplorerDensity _fileExplorerDensity = FileExplorerDensity.standard;
   FileExplorerFontFamily _fileExplorerFontFamily = FileExplorerFontFamily.monospace;
   FileExplorerIconTheme _fileExplorerIconTheme = FileExplorerIconTheme.smart;
+  FileExplorerStatusBarStyle _fileExplorerStatusBarStyle =
+      FileExplorerStatusBarStyle.detailed;
   NexusTerminalFontFamily _nexusTerminalFontFamily = NexusTerminalFontFamily.jetbrainsMono;
   double _nexusTerminalFontSize = 14.0;
   double _nexusTerminalLineHeight = 1.25;
@@ -229,6 +231,8 @@ class SettingsService extends ChangeNotifier {
   FileExplorerDensity get fileExplorerDensity => _fileExplorerDensity;
   FileExplorerFontFamily get fileExplorerFontFamily => _fileExplorerFontFamily;
   FileExplorerIconTheme get fileExplorerIconTheme => _fileExplorerIconTheme;
+  FileExplorerStatusBarStyle get fileExplorerStatusBarStyle =>
+      _fileExplorerStatusBarStyle;
   NexusTerminalFontFamily get nexusTerminalFontFamily => _nexusTerminalFontFamily;
   double get nexusTerminalFontSize => _nexusTerminalFontSize;
   double get nexusTerminalLineHeight => _nexusTerminalLineHeight;
@@ -478,6 +482,13 @@ class SettingsService extends ChangeNotifier {
             }
           }
 
+          if (yaml['file_explorer_status_bar'] != null) {
+            final value = yaml['file_explorer_status_bar'].toString().trim().toLowerCase();
+            for (final style in FileExplorerStatusBarStyle.values) {
+              if (style.name == value) _fileExplorerStatusBarStyle = style;
+            }
+          }
+
           if (yaml['nexus_terminal_font_family'] != null) {
             final ff = _parseNexusTerminalFontFamily(yaml['nexus_terminal_font_family'].toString());
             if (ff != null) {
@@ -693,6 +704,13 @@ class SettingsService extends ChangeNotifier {
   Future<void> setFileExplorerIconTheme(FileExplorerIconTheme iconTheme) async {
     if (_fileExplorerIconTheme == iconTheme) return;
     _fileExplorerIconTheme = iconTheme;
+    notifyListeners();
+    await _saveSettings();
+  }
+
+  Future<void> setFileExplorerStatusBarStyle(FileExplorerStatusBarStyle style) async {
+    if (_fileExplorerStatusBarStyle == style) return;
+    _fileExplorerStatusBarStyle = style;
     notifyListeners();
     await _saveSettings();
   }
@@ -1009,6 +1027,7 @@ class SettingsService extends ChangeNotifier {
       buffer.writeln('file_explorer_density: "${_fileExplorerDensity.name}"');
       buffer.writeln('file_explorer_font_family: "${_fileExplorerFontFamily.name}"');
       buffer.writeln('file_explorer_icon_theme: "${_fileExplorerIconTheme.name}"');
+      buffer.writeln('file_explorer_status_bar: "${_fileExplorerStatusBarStyle.name}"');
       buffer.writeln('nexus_terminal_font_family: "${_nexusTerminalFontFamily.name}"');
       buffer.writeln('nexus_terminal_font_size: $_nexusTerminalFontSize');
       buffer.writeln('nexus_terminal_line_height: $_nexusTerminalLineHeight');

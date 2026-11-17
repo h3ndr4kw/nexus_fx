@@ -5,7 +5,7 @@
 
 part of 'nexus_screen.dart';
 
-/// Tab strip widgets: new-tab button, tab items, environment badges, empty and drop-zone states.
+/// Tab strip widgets: new-tab button, tab items, empty and drop-zone states.
 extension _NexusTabStrip on NexusScreenState {
   /// Opens an SSH-only command palette (OAM + FE hostnames). The selected
   /// target is opened as a new tab in the pane that owns the "+" button.
@@ -90,30 +90,6 @@ extension _NexusTabStrip on NexusScreenState {
             _buildTabItem(tabs[index], index, index == activeIndex, isRightPane),
           _buildNewTabButton(isRightPane: isRightPane),
         ],
-      ),
-    );
-  }
-
-  Widget _buildEnvironmentBadge(SessionEnvironment env) {
-    return Container(
-      key: ValueKey('tab_env_badge_${env.name}'),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: env.color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(3),
-        border: Border.all(
-          color: env.color.withValues(alpha: 0.4),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        env.label,
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: env.color,
-          letterSpacing: 0.5,
-        ),
       ),
     );
   }
@@ -224,8 +200,6 @@ extension _NexusTabStrip on NexusScreenState {
                 );
               },
             ),
-            const SizedBox(width: 6),
-            _buildEnvironmentBadge(conn.environment),
             const SizedBox(width: 8),
             InkWell(
               canRequestFocus: false,

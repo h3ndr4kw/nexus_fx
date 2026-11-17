@@ -65,6 +65,43 @@ void main() {
     expect(find.text('LOCAL'), findsNWidgets(2));
   });
 
+  testWidgets('arrow up past the first row does not move focus to the dialog title bar', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 800));
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.darkTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => SessionsDialog.show(
+              context,
+              sessionManager: service,
+              onConnectSessions: (sessions, {openInRightSplit = false}) {},
+              onOpenInFileExplorer: (session) {},
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final titleBarFocus = find.byWidgetPredicate(
+      (w) => w is Focus && w.onKeyEvent != null && w.child is MouseRegion,
+    );
+    expect(titleBarFocus, findsOneWidget);
+
+    for (var i = 0; i < 3; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+    }
+
+    final scope = Focus.of(tester.element(find.text('Sessions').first));
+    expect(scope.hasPrimaryFocus, isFalse);
+    final headerNode = Focus.maybeOf(tester.element(find.byIcon(Icons.close).first));
+    expect(headerNode?.hasPrimaryFocus ?? false, isFalse);
+  });
+
   testWidgets('drag and drop session to folder moves session into that folder', (tester) async {
     SessionFolder? folder;
     SessionProfile? session;

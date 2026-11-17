@@ -726,9 +726,32 @@ class _SessionsScreenState extends State<SessionsScreen> {
     }
   }
 
+  static final _navigationKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.pageUp,
+    LogicalKeyboardKey.pageDown,
+    LogicalKeyboardKey.home,
+    LogicalKeyboardKey.end,
+  };
+
+  /// The list is driven by the global key handler, so no widget in the dialog
+  /// owns these keys. Without this, Flutter's directional focus traversal also
+  /// acts on them and walks focus up onto the dialog title bar at the first row.
+  KeyEventResult _swallowNavigationKeys(FocusNode node, KeyEvent event) {
+    if (_searchFocusNode.hasFocus ||
+        HardwareKeyboard.instance.isAltPressed ||
+        !_navigationKeys.contains(event.logicalKey)) {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final content = Container(
       color: AppTheme.bgSurface,
       child: Column(
         children: [
@@ -738,6 +761,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
           if (widget.isDialogMode) _buildDialogFooter(),
         ],
       ),
+    );
+    if (!widget.isDialogMode) return content;
+    return Focus(
+      autofocus: true,
+      skipTraversal: true,
+      onKeyEvent: _swallowNavigationKeys,
+      child: content,
     );
   }
 
@@ -1587,27 +1617,6 @@ class _SessionsScreenState extends State<SessionsScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: session.environment.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(3),
-                      border: Border.all(
-                        color: session.environment.color.withValues(alpha: 0.4),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Text(
-                      session.environment.label,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: session.environment.color,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1636,6 +1645,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
     );
   }
 
+  void _setShowAtStartup(bool value) {
+    setState(() => _showAtStartup = value);
+    widget.onToggleShowAtStartup?.call(value);
+  }
+
   Widget _buildDialogFooter() {
     final selectedSession = _selectedSessionId != null
         ? _mgr.sessions.where((s) => s.id == _selectedSessionId).firstOrNull
@@ -1649,16 +1663,26 @@ class _SessionsScreenState extends State<SessionsScreen> {
       ),
       child: Row(
         children: [
-          Checkbox(
-            value: _showAtStartup,
-            onChanged: (val) {
-              setState(() => _showAtStartup = val ?? false);
-              widget.onToggleShowAtStartup?.call(_showAtStartup);
-            },
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => _setShowAtStartup(!_showAtStartup),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Checkbox(
+                  value: _showAtStartup,
+                  onChanged: (val) => _setShowAtStartup(val ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Show this dialog box at startup',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ),
           ),
-          const SizedBox(width: 6),
-          const Text('Show this dialog box at startup', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
           const Spacer(),
           ElevatedButton(
             style: ElevatedButton.styleFrom(

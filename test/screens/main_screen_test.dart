@@ -300,11 +300,11 @@ void main() {
     expect(find.byKey(const ValueKey('file_explorer_new_tab_button')), findsOneWidget);
     expect(find.byKey(const ValueKey('file_explorer_close_all_button')), findsNothing);
 
-    // Tap (+) new tab button -> opens SELECT BROWSE TARGET node picker dialog
+    // Tap (+) new tab button -> opens SELECT NODE node picker dialog
     await tester.tap(find.byKey(const ValueKey('file_explorer_new_tab_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('SELECT BROWSE TARGET'), findsOneWidget);
+    expect(find.text('Connect Custom SSH Node...'), findsOneWidget);
 
     // Select the Local Filesystem target
     await tester.tap(find.text('Local Filesystem').last);

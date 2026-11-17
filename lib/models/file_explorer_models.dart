@@ -243,6 +243,19 @@ enum FileExplorerIconTheme {
   const FileExplorerIconTheme(this.label);
 }
 
+/// What the File Explorer status bar shows while nothing is happening.
+enum FileExplorerStatusBarStyle {
+  /// Active pane summary (node, items, selection size) and an F1 hint.
+  detailed('Detailed'),
+
+  /// A status dot and "Ready", muted.
+  minimal('Minimal');
+
+  final String label;
+
+  const FileExplorerStatusBarStyle(this.label);
+}
+
 enum ExplorerInputMode {
   normal,
   search,

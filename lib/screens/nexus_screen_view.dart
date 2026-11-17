@@ -203,44 +203,6 @@ extension _NexusScreenView on NexusScreenState {
                 ),
         ),
 
-        // Production Guardrail Warning Banner
-        if (_activeConnection?.environment.isProduction == true)
-          Container(
-            key: const ValueKey('prod_guardrail_banner'),
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFFEF4444).withValues(alpha: 0.2),
-                  const Color(0xFFEF4444).withValues(alpha: 0.05),
-                ],
-              ),
-              border: const Border(
-                bottom: BorderSide(
-                  color: Color(0xFFEF4444),
-                  width: 1.5,
-                ),
-              ),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFEF4444)),
-                SizedBox(width: 6),
-                Text(
-                  'PRODUCTION ENVIRONMENT: EXECUTE COMMANDS WITH CAUTION',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                    color: Color(0xFFEF4444),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
         // Terminal view
         Expanded(
           child: Stack(

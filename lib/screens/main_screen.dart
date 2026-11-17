@@ -24,8 +24,9 @@ import '../widgets/keyboard_shortcuts_dialog.dart';
 import '../widgets/sidebar_icon.dart';
 import '../widgets/transfer_status_bar.dart';
 import '../widgets/window_caption_buttons.dart';
-import 'nexus_screen.dart';
+import '../widgets/window_drag_area.dart';
 import '../controllers/session_fullscreen_controller.dart';
+import 'nexus_screen.dart';
 import 'sessions_screen.dart';
 
 enum AppTab {
@@ -1075,27 +1076,36 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     return Container(
       height: 38,
       color: AppTheme.activePalette.background,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.only(right: 12),
       child: Row(
         children: [
-          const Icon(Icons.bolt, size: 18, color: AppTheme.accentPrimary),
-          const SizedBox(width: 6),
-          Text(
-            widget.appTitle,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Window drag-to-move area across middle of top bar
+          // Drag-to-move area: icon, title and the empty space up to the
+          // buttons, like a native caption bar.
           Expanded(
-            child: DragToMoveArea(
-              child: Container(
+            child: WindowDragArea(
+              child: SizedBox(
                 height: 38,
-                color: Colors.transparent,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.bolt, size: 18, color: AppTheme.accentPrimary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          widget.appTitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1578,19 +1588,20 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             _focusActiveFileExplorer();
           });
         },
+        // Active tab: a rounded outlined pill; inactive tabs sit flat on the strip.
         child: Container(
           constraints: const BoxConstraints(maxWidth: 240),
+          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: isActive
-                ? AppTheme.accentPrimary.withValues(alpha: 0.14)
+                ? AppTheme.accentPrimary.withValues(alpha: 0.10)
                 : Colors.transparent,
-            border: Border(
-              right: const BorderSide(color: AppTheme.borderSubtle),
-              bottom: BorderSide(
-                color: isActive ? AppTheme.accentPrimary : Colors.transparent,
-                width: 2,
-              ),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isActive
+                  ? AppTheme.accentPrimary.withValues(alpha: 0.4)
+                  : Colors.transparent,
             ),
           ),
           child: Row(
@@ -1610,9 +1621,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                   style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11.5,
-                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 12.5,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                     color: isActive ? Colors.white : AppTheme.textSecondary,
                   ),
                 ),
@@ -1653,16 +1663,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         child: Container(
           width: 34,
           height: 38,
-          decoration: const BoxDecoration(
-            border: Border(
-              right: BorderSide(color: AppTheme.borderSubtle),
-            ),
-          ),
           alignment: Alignment.center,
           child: const Icon(
             Icons.add,
-            size: 16,
-            color: AppTheme.accentPrimary,
+            size: 18,
+            color: AppTheme.textSecondary,
           ),
         ),
       ),

@@ -184,13 +184,13 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pumpAndSettle();
 
-      expect(find.text('DRAG & DROP TRANSFER'), findsOneWidget);
-      expect(find.text('[c] Copy'), findsOneWidget);
-      expect(find.text('[m] Move'), findsOneWidget);
-      expect(find.text('[Esc] Cancel'), findsOneWidget);
+      expect(find.text('Drag & Drop Transfer'), findsOneWidget);
+      expect(find.text('Copy'), findsOneWidget);
+      expect(find.text('Move'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
 
       // Tap Copy
-      await tester.tap(find.text('[c] Copy'));
+      await tester.tap(find.text('Copy'));
       await tester.pumpAndSettle();
 
       expect(result, equals(FileDropAction.copy));

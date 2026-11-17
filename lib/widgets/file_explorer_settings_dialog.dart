@@ -7,200 +7,150 @@ class FileExplorerSettingsDialog extends StatefulWidget {
   const FileExplorerSettingsDialog({super.key});
 
   @override
-  State<FileExplorerSettingsDialog> createState() => _FileExplorerSettingsDialogState();
+  State<FileExplorerSettingsDialog> createState() =>
+      _FileExplorerSettingsDialogState();
 }
 
-class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog> {
+class _FileExplorerSettingsDialogState
+    extends State<FileExplorerSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.escape ||
-                event.logicalKey == LogicalKeyboardKey.enter ||
-                event.logicalKey == LogicalKeyboardKey.keyQ) {
-              Navigator.of(context).pop();
-              return KeyEventResult.handled;
-            }
+    return Focus(
+      autofocus: true,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.escape ||
+              event.logicalKey == LogicalKeyboardKey.keyQ) {
+            Navigator.of(context).pop();
+            return KeyEventResult.handled;
           }
-          return KeyEventResult.ignored;
-        },
-        child: Container(
-          width: 600,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E222B),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: const Color(0xFF56B6C2),
-              width: 1.8,
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 16,
-                offset: Offset(0, 8),
-              ),
-            ],
+        }
+        return KeyEventResult.ignored;
+      },
+      child: _DialogShell(
+        title: 'EXPLORER APPEARANCE & FONT SETTINGS',
+        icon: Icons.tune,
+        width: 600,
+        onClose: () => Navigator.of(context).pop(),
+        footerLeading: const Text(
+          'Ctrl +/- to zoom  ·  Changes are saved automatically',
+          style: TextStyle(fontSize: 11, color: _Dlg.textMuted),
+        ),
+        actions: [
+          _TerminalButton(
+            label: 'Close',
+            shortcut: 'Esc',
+            isSelected: true,
+            highlightColor: _Dlg.accent,
+            onTap: () => Navigator.of(context).pop(),
           ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title bar with horizontal lines
-              Padding(
-                padding: const EdgeInsets.only(top: 10, bottom: 6),
-                child: Row(
-                  children: const [
-                    Expanded(
-                      child: Divider(
-                        color: Color(0xFF56B6C2),
-                        thickness: 1.5,
-                        indent: 14,
-                        endIndent: 8,
-                      ),
+              _buildSectionHeader('DENSITY & SIZE', Icons.format_size_rounded),
+              const SizedBox(height: 8),
+              Row(
+                children: FileExplorerDensity.values.map((d) {
+                  final isSelected = settings.fileExplorerDensity == d;
+                  return Expanded(
+                    child: _buildOptionTile(
+                      label: d.label,
+                      subtitle:
+                          '${d.rowHeight.toInt()}px · font ${d.fontSize} · icon ${d.iconSize.toInt()}px',
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          settings.setFileExplorerDensity(d);
+                        });
+                      },
                     ),
-                    Text(
-                      'EXPLORER APPEARANCE & FONT SETTINGS',
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF56B6C2),
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    Expanded(
-                      child: Divider(
-                        color: Color(0xFF56B6C2),
-                        thickness: 1.5,
-                        indent: 8,
-                        endIndent: 14,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                }).toList(),
               ),
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Section 1: Density & Size
-                    _buildSectionHeader('DENSITY & SIZE', Icons.format_size_rounded),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: FileExplorerDensity.values.map((d) {
-                        final isSelected = settings.fileExplorerDensity == d;
-                        return Expanded(
-                          child: _buildOptionTile(
-                            label: d.label,
-                            subtitle: '${d.rowHeight.toInt()}px · font ${d.fontSize} · icon ${d.iconSize.toInt()}px',
-                            isSelected: isSelected,
-                            onTap: () {
-                              setState(() {
-                                settings.setFileExplorerDensity(d);
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
+              const SizedBox(height: 16),
+
+              _buildSectionHeader('FONT FAMILY', Icons.font_download_outlined),
+              const SizedBox(height: 8),
+              Row(
+                children: FileExplorerFontFamily.values.map((f) {
+                  final isSelected = settings.fileExplorerFontFamily == f;
+                  return Expanded(
+                    child: _buildOptionTile(
+                      label: f.label,
+                      subtitle: f == FileExplorerFontFamily.monospace
+                          ? 'Fixed-width terminal style'
+                          : 'Modern clean system font',
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          settings.setFileExplorerFontFamily(f);
+                        });
+                      },
                     ),
-
-                    const SizedBox(height: 14),
-
-                    // Section 2: Font Family
-                    _buildSectionHeader('FONT FAMILY', Icons.font_download_outlined),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: FileExplorerFontFamily.values.map((f) {
-                        final isSelected = settings.fileExplorerFontFamily == f;
-                        return Expanded(
-                          child: _buildOptionTile(
-                            label: f.label,
-                            subtitle: f == FileExplorerFontFamily.monospace
-                                ? 'Fixed-width terminal style'
-                                : 'Modern clean system font',
-                            isSelected: isSelected,
-                            onTap: () {
-                              setState(() {
-                                settings.setFileExplorerFontFamily(f);
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // Section 3: Icon Theme
-                    _buildSectionHeader('ICON THEME', Icons.palette_outlined),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: FileExplorerIconTheme.values.map((t) {
-                        final isSelected = settings.fileExplorerIconTheme == t;
-                        return Expanded(
-                          child: _buildOptionTile(
-                            label: t.label,
-                            subtitle: t == FileExplorerIconTheme.smart
-                                ? 'Color-coded by extension'
-                                : 'Uniform folder & file icons',
-                            isSelected: isSelected,
-                            onTap: () {
-                              setState(() {
-                                settings.setFileExplorerIconTheme(t);
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // Section 4: Live Preview
-                    _buildSectionHeader('LIVE PREVIEW', Icons.remove_red_eye_outlined),
-                    const SizedBox(height: 6),
-                    _buildPreviewBox(settings),
-                  ],
-                ),
+                  );
+                }).toList(),
               ),
 
-              const Divider(color: Color(0xFF3E4452), thickness: 1, indent: 20, endIndent: 20),
+              const SizedBox(height: 16),
 
-              // Bottom footer
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Shortcuts: [Ctrl +/-] Zoom  ·  Auto-saved to config',
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Color(0xFF5C6370),
-                        ),
-                      ),
+              _buildSectionHeader('ICON THEME', Icons.palette_outlined),
+              const SizedBox(height: 8),
+              Row(
+                children: FileExplorerIconTheme.values.map((t) {
+                  final isSelected = settings.fileExplorerIconTheme == t;
+                  return Expanded(
+                    child: _buildOptionTile(
+                      label: t.label,
+                      subtitle: t == FileExplorerIconTheme.smart
+                          ? 'Color-coded by extension'
+                          : 'Uniform folder & file icons',
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          settings.setFileExplorerIconTheme(t);
+                        });
+                      },
                     ),
-                    const SizedBox(width: 8),
-                    _TerminalButton(
-                      label: '[Esc] Close',
-                      isSelected: true,
-                      highlightColor: const Color(0xFF56B6C2),
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+                  );
+                }).toList(),
               ),
+
+              const SizedBox(height: 16),
+
+              _buildSectionHeader('STATUS BAR', Icons.info_outline),
+              const SizedBox(height: 8),
+              Row(
+                children: FileExplorerStatusBarStyle.values.map((s) {
+                  final isSelected = settings.fileExplorerStatusBarStyle == s;
+                  return Expanded(
+                    child: _buildOptionTile(
+                      label: s.label,
+                      subtitle: s == FileExplorerStatusBarStyle.detailed
+                          ? 'Pane summary and F1 help hint'
+                          : 'Status dot and "Ready" only',
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          settings.setFileExplorerStatusBarStyle(s);
+                        });
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildSectionHeader('LIVE PREVIEW', Icons.remove_red_eye_outlined),
+              const SizedBox(height: 8),
+              _buildPreviewBox(settings),
             ],
           ),
         ),
@@ -211,15 +161,14 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: const Color(0xFFE5C07B)),
+        Icon(icon, size: 14, color: _Dlg.textMuted),
         const SizedBox(width: 6),
         Text(
           title,
           style: const TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFFE5C07B),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: _Dlg.textMuted,
             letterSpacing: 0.8,
           ),
         ),
@@ -233,18 +182,27 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _FocusableOptionTile(
+      label: '$label, $subtitle',
+      isSelected: isSelected,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Container(
+      builder: (focused, hovered) => Container(
         margin: const EdgeInsets.symmetric(horizontal: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2B3A4A) : const Color(0xFF181B20),
-          borderRadius: BorderRadius.circular(4),
+          color: isSelected
+              ? _Dlg.selected
+              : hovered
+              ? _Dlg.divider
+              : _Dlg.field,
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? const Color(0xFF56B6C2) : const Color(0xFF2C313C),
-            width: isSelected ? 1.5 : 1.0,
+            color: focused
+                ? Colors.white
+                : isSelected
+                ? _Dlg.accent
+                : _Dlg.outline,
+            width: focused ? 2 : 1,
           ),
         ),
         child: Column(
@@ -253,19 +211,20 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
             Row(
               children: [
                 Icon(
-                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  isSelected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
                   size: 14,
-                  color: isSelected ? const Color(0xFF56B6C2) : const Color(0xFF5C6370),
+                  color: isSelected ? _Dlg.accent : _Dlg.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     label,
                     style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF61AFEF) : const Color(0xFFD8DEE9),
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: _Dlg.textPrimary,
                     ),
                   ),
                 ),
@@ -274,10 +233,9 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
             const SizedBox(height: 3),
             Text(
               subtitle,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 10,
-                color: Color(0xFF828997),
+              style: TextStyle(
+                fontSize: 10.5,
+                color: isSelected ? _Dlg.accent : _Dlg.textMuted,
               ),
             ),
           ],
@@ -293,9 +251,9 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF13161C),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFF2C313C)),
+        color: _Dlg.editor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _Dlg.divider),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
@@ -308,7 +266,14 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
               children: [
                 const SizedBox(
                   width: 20,
-                  child: Text('[ ]', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF5C6370))),
+                  child: Text(
+                    '[ ]',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: _Dlg.textSecondary,
+                    ),
+                  ),
                 ),
                 Icon(
                   Icons.folder_rounded,
@@ -328,12 +293,20 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
                 ),
                 Text(
                   '-',
-                  style: TextStyle(fontFamily: fontFamily, fontSize: density.fontSize, color: const Color(0xFFABB2BF)),
+                  style: TextStyle(
+                    fontFamily: fontFamily,
+                    fontSize: density.fontSize,
+                    color: _Dlg.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 20),
                 Text(
                   'Oct 21 00:04',
-                  style: TextStyle(fontFamily: fontFamily, fontSize: density.fontSize, color: const Color(0xFFABB2BF)),
+                  style: TextStyle(
+                    fontFamily: fontFamily,
+                    fontSize: density.fontSize,
+                    color: _Dlg.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -341,18 +314,30 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
           // Sample Row 2: File
           Container(
             height: density.rowHeight,
-            color: const Color(0xFF2B3A4A),
+            color: _Dlg.selected,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
                 const SizedBox(
                   width: 20,
-                  child: Text('[*]', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF98C379), fontWeight: FontWeight.bold)),
+                  child: Text(
+                    '[*]',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: Color(0xFF98C379),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 Icon(
-                  iconTheme == FileExplorerIconTheme.smart ? Icons.tune_rounded : Icons.insert_drive_file_outlined,
+                  iconTheme == FileExplorerIconTheme.smart
+                      ? Icons.tune_rounded
+                      : Icons.insert_drive_file_outlined,
                   size: density.iconSize,
-                  color: iconTheme == FileExplorerIconTheme.smart ? const Color(0xFFE5C07B) : const Color(0xFFD8DEE9),
+                  color: iconTheme == FileExplorerIconTheme.smart
+                      ? const Color(0xFFE5C07B)
+                      : _Dlg.textPrimary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -362,23 +347,86 @@ class _FileExplorerSettingsDialogState extends State<FileExplorerSettingsDialog>
                       fontFamily: fontFamily,
                       fontSize: density.fontSize,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFFD8DEE9),
+                      color: _Dlg.textPrimary,
                     ),
                   ),
                 ),
                 Text(
                   '4.2 KB',
-                  style: TextStyle(fontFamily: fontFamily, fontSize: density.fontSize, color: const Color(0xFFABB2BF)),
+                  style: TextStyle(
+                    fontFamily: fontFamily,
+                    fontSize: density.fontSize,
+                    color: _Dlg.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 20),
                 Text(
                   'Oct 21 00:04',
-                  style: TextStyle(fontFamily: fontFamily, fontSize: density.fontSize, color: const Color(0xFFABB2BF)),
+                  style: TextStyle(
+                    fontFamily: fontFamily,
+                    fontSize: density.fontSize,
+                    color: _Dlg.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One choice in a settings radio group. A tab stop: Enter/Space select it, a
+/// white ring marks keyboard focus, and it reports as a checked radio button.
+class _FocusableOptionTile extends StatefulWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Widget Function(bool focused, bool hovered) builder;
+
+  const _FocusableOptionTile({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.builder,
+  });
+
+  @override
+  State<_FocusableOptionTile> createState() => _FocusableOptionTileState();
+}
+
+class _FocusableOptionTileState extends State<_FocusableOptionTile> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      checked: widget.isSelected,
+      focusable: true,
+      focused: _focused,
+      label: widget.label,
+      onTap: widget.onTap,
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (v) => setState(() => _focused = v),
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: widget.builder(_focused, _hovered),
+        ),
       ),
     );
   }

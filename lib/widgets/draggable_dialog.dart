@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 
 /// A modal dialog container with a draggable desktop-style title bar.
@@ -79,7 +80,49 @@ class _DraggableDialogState extends State<DraggableDialog> {
     );
   }
 
+  bool _headerFocused = false;
+
+  /// Alt+arrows nudge the dialog (Alt+Shift for bigger steps) and Alt+Home puts
+  /// it back, so repositioning does not need a mouse. Alt is required because
+  /// the content (e.g. the sessions list) uses plain arrows and Home itself, and
+  /// the title bar can hold focus when the dialog opens.
+  KeyEventResult _onHeaderKey(FocusNode node, KeyEvent event) {
+    if (!node.hasPrimaryFocus ||
+        event is KeyUpEvent ||
+        !HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final step = HardwareKeyboard.instance.isShiftPressed ? 64.0 : 16.0;
+    final key = event.logicalKey;
+    Offset? delta;
+    if (key == LogicalKeyboardKey.arrowLeft) delta = Offset(-step, 0);
+    if (key == LogicalKeyboardKey.arrowRight) delta = Offset(step, 0);
+    if (key == LogicalKeyboardKey.arrowUp) delta = Offset(0, -step);
+    if (key == LogicalKeyboardKey.arrowDown) delta = Offset(0, step);
+    if (delta != null) {
+      setState(() => _offset += delta!);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.home) {
+      setState(() => _offset = Offset.zero);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   Widget _buildHeader() {
+    return Semantics(
+      label: '${widget.title} title bar',
+      hint: 'Alt plus arrow keys move the dialog, Alt plus Home resets its position',
+      child: Focus(
+        onFocusChange: (f) => setState(() => _headerFocused = f),
+        onKeyEvent: _onHeaderKey,
+        child: _buildHeaderBar(),
+      ),
+    );
+  }
+
+  Widget _buildHeaderBar() {
     return MouseRegion(
       cursor: SystemMouseCursors.move,
       child: GestureDetector(
@@ -97,14 +140,25 @@ class _DraggableDialogState extends State<DraggableDialog> {
         child: Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.bgSurfaceSecondary,
-            border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+            border: Border(
+              bottom: BorderSide(
+                color: _headerFocused
+                    ? AppTheme.accentPrimary
+                    : AppTheme.borderSubtle,
+                width: _headerFocused ? 2 : 1,
+              ),
+            ),
           ),
           child: Row(
             children: [
               if (widget.icon != null) ...[
-                Icon(widget.icon, size: 16, color: widget.iconColor ?? AppTheme.accentPrimary),
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: widget.iconColor ?? AppTheme.accentPrimary,
+                ),
                 const SizedBox(width: 8),
               ],
               Text(
@@ -118,7 +172,11 @@ class _DraggableDialogState extends State<DraggableDialog> {
               const Spacer(),
               if (widget.actions != null) ...widget.actions!,
               IconButton(
-                icon: const Icon(Icons.close, size: 16, color: AppTheme.textSecondary),
+                icon: const Icon(
+                  Icons.close,
+                  size: 16,
+                  color: AppTheme.textSecondary,
+                ),
                 tooltip: 'Close',
                 splashRadius: 14,
                 padding: EdgeInsets.zero,

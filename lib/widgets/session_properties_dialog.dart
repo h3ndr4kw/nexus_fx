@@ -102,7 +102,6 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   late final TextEditingController _scrollbackController;
 
   SessionProtocol _protocol = SessionProtocol.ssh;
-  SessionEnvironment _environment = SessionEnvironment.dev;
   String _sshMacs = 'auto';
   AuthMethod _authMethod = AuthMethod.password;
   JumpHostMode _jumpHostMode = JumpHostMode.direct;
@@ -120,7 +119,6 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     final s = widget.initialSession;
     _parentFolderId = s?.parentId ?? widget.parentFolderId;
     _protocol = s?.protocol ?? SessionProtocol.ssh;
-    _environment = s?.environment ?? SessionEnvironment.dev;
     _sshMacs = s?.sshMacs ?? 'auto';
     _authMethod = s?.authMethod ?? AuthMethod.password;
     _jumpHostMode = s?.jumpHostMode ?? JumpHostMode.direct;
@@ -223,7 +221,6 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       parentId: parentId,
       name: name,
       protocol: _protocol,
-      environment: _environment,
       host: _hostController.text.trim(),
       port: int.tryParse(_portController.text.trim()) ?? 22,
       fallbackHost: _fallbackHostController.text.trim().isEmpty ? null : _fallbackHostController.text.trim(),
@@ -515,34 +512,6 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
                   itemLabel: (p) => p == SessionProtocol.ssh ? 'SSH' : 'LOCAL (System Shell)',
                   onChanged: (val) {
                     if (val != null) setState(() => _protocol = val);
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const SizedBox(
-                width: 110,
-                child: Text('Environment:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-              ),
-              Expanded(
-                child: FuzzySearchableDropdown<SessionEnvironment>(
-                  items: SessionEnvironment.values,
-                  selectedItem: _environment,
-                  itemLabel: (env) {
-                    switch (env) {
-                      case SessionEnvironment.dev:
-                        return 'DEV (Development / Sandbox)';
-                      case SessionEnvironment.staging:
-                        return 'STAGING (Pre-production / QA)';
-                      case SessionEnvironment.prod:
-                        return 'PROD (Production / Live Critical)';
-                    }
-                  },
-                  onChanged: (val) {
-                    if (val != null) setState(() => _environment = val);
                   },
                 ),
               ),

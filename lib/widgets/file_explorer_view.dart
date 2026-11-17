@@ -8,6 +8,7 @@ import '../services/file_explorer_service.dart';
 import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
 import '../services/settings_service.dart';
+import '../theme/app_theme.dart';
 
 
 class FileExplorerIconHelper {
@@ -350,8 +351,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   bool _isDualPane = true;
   PaneSide _activePane = PaneSide.left;
-  String _statusMessage = 'Ready. Press [F1] or [?] for Shortcuts Help.';
-  Color _statusColor = const Color(0xFF5C6370);
+  static const double _paneControlHeight = 30;
+  static const String _defaultStatus = 'Ready';
+  static const Color _defaultStatusColor = Color(0xFFD8DEE9);
+  static const Color _errorStatusColor = Color(0xFFE06C75);
+  String _statusMessage = _defaultStatus;
+  Color _statusColor = _defaultStatusColor;
+  Timer? _statusTimer;
 
   int _lastClickTime = 0;
   int? _lastClickIndex;
@@ -432,6 +438,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   @override
   void dispose() {
     SettingsService.instance.removeListener(_handleSettingsChanged);
+    _statusTimer?.cancel();
     _transferSub?.cancel();
     _internalFocusNode?.dispose();
     _leftPane.dispose();
@@ -541,14 +548,22 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   }
 
   void _setStatus(String msg, {bool isError = false, bool isSuccess = false}) {
+    _statusTimer?.cancel();
+    _statusTimer = Timer(Duration(seconds: isError ? 8 : 4), () {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = _defaultStatus;
+        _statusColor = _defaultStatusColor;
+      });
+    });
     setState(() {
       _statusMessage = msg;
       if (isError) {
-        _statusColor = const Color(0xFFE06C75);
+        _statusColor = _errorStatusColor;
       } else if (isSuccess) {
         _statusColor = const Color(0xFF98C379);
       } else {
-        _statusColor = const Color(0xFFABB2BF);
+        _statusColor = _defaultStatusColor;
       }
     });
   }
@@ -847,76 +862,75 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF1E222B),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-              side: const BorderSide(color: Color(0xFF56B6C2), width: 1.5),
-            ),
-            title: Row(
-              children: [
-                const Icon(Icons.key, color: Color(0xFF56B6C2), size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'CREDENTIALS FOR ${pane.target.label}',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 360,
+          InputDecoration field(String label, {Widget? suffixIcon}) {
+            OutlineInputBorder outline(Color color, [double width = 1]) =>
+                OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: color, width: width),
+                );
+            return InputDecoration(
+              labelText: label,
+              labelStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              filled: true,
+              fillColor: AppTheme.bgSurfaceSecondary,
+              isDense: true,
+              suffixIcon: suffixIcon,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: outline(const Color(0xFF6B7280)),
+              enabledBorder: outline(const Color(0xFF6B7280)),
+              focusedBorder: outline(AppTheme.accentPrimary, 1.5),
+            );
+          }
+
+          void connect() {
+            final newTarget = pane.target.copyWith(
+              username: userCtrl.text.trim(),
+              password: passCtrl.text,
+            );
+            Navigator.pop(ctx, newTarget);
+          }
+
+          return FileExplorerDialogFrame(
+            title: 'Credentials for ${pane.target.label}',
+            icon: Icons.key,
+            width: 420,
+            onClose: () => Navigator.pop(ctx),
+            actions: [
+              FileExplorerDialogButton(
+                label: 'Cancel',
+                onTap: () => Navigator.pop(ctx),
+              ),
+              FileExplorerDialogButton(
+                label: 'Connect',
+                primary: true,
+                onTap: connect,
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: userCtrl,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      labelStyle: TextStyle(color: Color(0xFF5C6370)),
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF2C313C)),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF56B6C2)),
-                      ),
-                    ),
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                    decoration: field('Username'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: passCtrl,
                     obscureText: obscure,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      labelStyle: const TextStyle(color: Color(0xFF5C6370)),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF2C313C)),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF56B6C2)),
-                      ),
+                    style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                    onSubmitted: (_) => connect(),
+                    decoration: field(
+                      'Password',
                       suffixIcon: IconButton(
+                        tooltip: obscure ? 'Show password' : 'Hide password',
                         icon: Icon(
                           obscure ? Icons.visibility_off : Icons.visibility,
                           size: 16,
-                          color: const Color(0xFF5C6370),
+                          color: AppTheme.textSecondary,
                         ),
                         onPressed: () => setDialogState(() => obscure = !obscure),
                       ),
@@ -925,26 +939,6 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF5C6370))),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF56B6C2),
-                  foregroundColor: const Color(0xFF1E222B),
-                ),
-                onPressed: () {
-                  final newTarget = pane.target.copyWith(
-                    username: userCtrl.text.trim(),
-                    password: passCtrl.text,
-                  );
-                  Navigator.pop(ctx, newTarget);
-                },
-                child: const Text('Connect', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
           );
         },
       ),
@@ -1061,7 +1055,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           title: 'MOVE TO FOLDER',
           message1: msg,
           message2: 'Destination: $destDirPath',
-          borderColor: const Color(0xFF56B6C2),
+          confirmText: 'Move',
+          cancelText: 'Cancel',
         ),
       );
 
@@ -1177,7 +1172,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ? 'Are you sure you want to copy ${targets.length} items?'
             : "Are you sure you want to copy '${targets.first.name}'?",
         message2: 'To: ${dest.currentPath} (${dest.target.label})',
-        borderColor: const Color(0xFF98C379),
+        confirmText: 'Copy',
+        cancelText: 'Cancel',
       ),
     );
 
@@ -1209,7 +1205,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ? 'Are you sure you want to move ${targets.length} items?'
             : "Are you sure you want to move '${targets.first.name}'?",
         message2: 'To: ${dest.currentPath} (${dest.target.label})',
-        borderColor: const Color(0xFF56B6C2),
+        confirmText: 'Move',
+        cancelText: 'Cancel',
       ),
     );
 
@@ -1241,6 +1238,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             : "Are you sure you want to delete '${targets.first.name}'?",
         message2: 'This operation is permanent and cannot be undone.',
         borderColor: const Color(0xFFE06C75),
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
         defaultYes: false,
       ),
     );
@@ -1859,49 +1858,6 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           color: const Color(0xFF171B24), // Slate dark terminal background
         child: Column(
           children: [
-            // Subtitle header to satisfy test: "Remote & Local File Explorer"
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              color: const Color(0xFF13161C),
-              child: Row(
-                children: [
-                  const Text(
-                    'Remote & Local File Explorer',
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF56B6C2),
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const Spacer(),
-                  // Dual pane toggle button
-                  IconButton(
-                    tooltip: 'Toggle Dual Pane [Ctrl+d]',
-                    icon: Icon(
-                      _isDualPane ? Icons.view_column : Icons.view_agenda,
-                      size: 18,
-                      color: _isDualPane ? const Color(0xFF56B6C2) : const Color(0xFF5C6370),
-                    ),
-                    onPressed: _toggleDualPane,
-                  ),
-                  // Appearance & Font Settings button
-                  IconButton(
-                    tooltip: 'Appearance & Font Settings [Ctrl+Shift+S]',
-                    icon: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF56B6C2)),
-                    onPressed: _showSettingsDialog,
-                  ),
-                  // Help button
-                  IconButton(
-                    tooltip: 'Help (Shortcuts) [F1/?]',
-                    icon: const Icon(Icons.help_outline, size: 18, color: Color(0xFF98C379)),
-                    onPressed: _showHelpDialog,
-                  ),
-                ],
-              ),
-            ),
-
             // Panes Area
             Expanded(
               child: Row(
@@ -2120,6 +2076,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                               )
                             : _buildItemsList(pane, side, isActive: isActive),
                   ),
+                  _buildPaneFooter(pane),
                 ],
               ),
             ),
@@ -2129,56 +2086,209 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
   }
 
+  Future<void> _promptChangeDirectory(_PaneController pane, PaneSide side) async {
+    if (_activePane != side) {
+      setState(() => _activePane = side);
+    }
+    _focusNode.requestFocus();
+    final newPath = await showDialog<String>(
+      context: context,
+      builder: (ctx) => FileExplorerPromptDialog(
+        title: 'CHANGE DIRECTORY',
+        promptLabel: 'Enter absolute path:',
+        initialValue: pane.currentPath,
+        validator: (value) {
+          final localWindows = pane.target.isLocal && Platform.isWindows;
+          final ok = localWindows
+              ? RegExp(r'^([A-Za-z]:[\\/]|\\\\)').hasMatch(value)
+              : value.startsWith('/') || (!pane.target.isLocal && value.startsWith('~'));
+          if (ok) return null;
+          return localWindows
+              ? r'Use an absolute path, e.g. C:\Users or \\server\share.'
+              : 'Use an absolute path starting with /.';
+        },
+      ),
+    );
+    if (newPath != null && newPath.trim().isNotEmpty && mounted) {
+      pane.currentPath = newPath.trim();
+      await _loadPane(pane);
+    }
+  }
+
+  Widget _buildBreadcrumbs(_PaneController pane, PaneSide side, {required bool isActive}) {
+    final crumbs = splitPathCrumbs(
+      pane.currentPath,
+      windowsStyle: pane.target.isLocal && Platform.isWindows,
+    );
+    final fontFamily = SettingsService.instance.fileExplorerFontFamily.fontFamily;
+    final children = <Widget>[];
+    for (var i = 0; i < crumbs.length; i++) {
+      final crumb = crumbs[i];
+      final isLast = i == crumbs.length - 1;
+      // The POSIX root crumb "/" reads as the leading slash of the first folder.
+      if (i > 1 || (i == 1 && crumbs.first.label != '/')) {
+        children.add(
+          Text(
+            '/',
+            style: TextStyle(
+              fontFamily: fontFamily,
+              fontSize: 12,
+              color: const Color(0xFF5C6370),
+            ),
+          ),
+        );
+      }
+      children.add(
+        InkWell(
+          borderRadius: BorderRadius.circular(2),
+          onTap: () {
+            if (_activePane != side) {
+              setState(() => _activePane = side);
+            }
+            _focusNode.requestFocus();
+            if (crumb.path != pane.currentPath) {
+              pane.currentPath = crumb.path;
+              _loadPane(pane);
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+            child: Text(
+              crumb.label,
+              style: TextStyle(
+                fontFamily: fontFamily,
+                fontSize: 12,
+                fontWeight: isLast && isActive ? FontWeight.bold : FontWeight.normal,
+                color: isLast && isActive ? const Color(0xFFE5E9F0) : const Color(0xFFABB2BF),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    // reverse: the deepest folder stays visible when the path is longer than the bar.
+    // The minWidth keeps short paths flush left; reverse only matters on overflow.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        reverse: true,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: Row(children: children),
+        ),
+      ),
+    );
+  }
+
+  /// Local panes read blue, SSH panes green; the same color tints the path bar
+  /// of the active pane and the node selector.
+  static const Color _localAccent = Color(0xFF61AFEF);
+  static const Color _remoteAccent = Color(0xFF98C379);
+  static const Color _controlSurface = Color(0xFF21252B);
+  static const Color _controlBorder = Color(0xFF3E4451);
+  static const Color _columnTextColor = Color(0xFF8B93A1);
+  static const Color _cursorAccent = Color(0xFF61AFEF);
+
+  /// Outline alpha for accent-bordered controls, matching the selected
+  /// left-sidebar item, so the outline marks state without competing with
+  /// the file list.
+  static const double _accentOutlineAlpha = 0.4;
+
+  String _nodeSelectorLabel(_PaneController pane) {
+    if (!pane.target.isLocal) return 'SFTP: ${pane.target.label}';
+    final drive = RegExp(r'^[A-Za-z]:').firstMatch(pane.currentPath)?.group(0);
+    if (Platform.isWindows && drive != null) {
+      return 'Local Drive (${drive.toUpperCase()})';
+    }
+    return 'Local';
+  }
+
   Widget _buildPaneHeader(_PaneController pane, PaneSide side, {required bool isActive}) {
+    final accent = pane.target.isLocal ? _localAccent : _remoteAccent;
     return Row(
       children: [
-        // Path pill matching image 1 & 2
+        // Path bar: each segment is a link to that folder; the pencil (or the empty
+        // space) opens the typed-path dialog. The active pane gets an accent outline
+        // and brighter text, so the file list stays the focal point.
         Expanded(
+          child: Container(
+            height: _paneControlHeight,
+            padding: const EdgeInsets.only(left: 10),
+            decoration: BoxDecoration(
+              color: _controlSurface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isActive
+                    ? accent.withValues(alpha: _accentOutlineAlpha)
+                    : _controlBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  pane.target.isLocal
+                      ? Icons.storage_rounded
+                      : Icons.cloud_outlined,
+                  size: 16,
+                  color: isActive ? accent : const Color(0xFF8B93A1),
+                ),
+                const SizedBox(width: 6),
+                Expanded(child: _buildBreadcrumbs(pane, side, isActive: isActive)),
+                IconButton(
+                  tooltip: 'Type a path',
+                  icon: const Icon(Icons.edit_outlined, size: 14, color: Color(0xFF8B93A1)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () => _promptChangeDirectory(pane, side),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+
+        // Node selector: same height and radius as the path bar, outlined in the
+        // node's accent (blue local, green SSH).
+        Tooltip(
+          message: 'Change source (local or SSH host)',
           child: InkWell(
-            onTap: () async {
+            borderRadius: BorderRadius.circular(6),
+            onTap: () {
               if (_activePane != side) {
                 setState(() => _activePane = side);
               }
               _focusNode.requestFocus();
-              final newPath = await showDialog<String>(
-                context: context,
-                builder: (ctx) => FileExplorerPromptDialog(
-                  title: 'CHANGE DIRECTORY',
-                  promptLabel: 'Enter absolute path:',
-                  initialValue: pane.currentPath,
-                ),
-              );
-              if (newPath != null && newPath.trim().isNotEmpty && mounted) {
-                pane.currentPath = newPath.trim();
-                await _loadPane(pane);
-              }
+              _selectNodeTarget(pane);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              height: _paneControlHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: isActive ? const Color(0xFF56B6C2) : const Color(0xFF2C313C),
-                borderRadius: BorderRadius.circular(2),
+                color: _controlSurface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: accent.withValues(alpha: _accentOutlineAlpha),
+                ),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isActive ? Icons.folder_open_rounded : Icons.folder_rounded,
-                    size: 16,
-                    color: isActive ? Colors.black87 : const Color(0xFFE5C07B),
+                    pane.target.isLocal ? Icons.storage_rounded : Icons.cloud_outlined,
+                    size: 14,
+                    color: accent,
                   ),
                   const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      pane.currentPath,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: SettingsService.instance.fileExplorerFontFamily.fontFamily,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isActive ? Colors.black : const Color(0xFFABB2BF),
-                      ),
+                  Text(
+                    _nodeSelectorLabel(pane),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFE5E9F0),
                     ),
                   ),
+                  const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF8B93A1)),
                 ],
               ),
             ),
@@ -2186,55 +2296,22 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         ),
         const SizedBox(width: 6),
 
-        // Node Selector Pill
-        InkWell(
-          onTap: () {
-            if (_activePane != side) {
-              setState(() => _activePane = side);
-            }
-            _focusNode.requestFocus();
-            _selectNodeTarget(pane);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E222B),
-              borderRadius: BorderRadius.circular(2),
-              border: Border.all(
-                color: pane.target.isLocal ? const Color(0xFF98C379) : const Color(0xFF61AFEF),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  pane.target.isLocal ? Icons.computer : Icons.cloud_outlined,
-                  size: 13,
-                  color: pane.target.isLocal ? const Color(0xFF98C379) : const Color(0xFF61AFEF),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  pane.target.label,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: pane.target.isLocal ? const Color(0xFF98C379) : const Color(0xFF61AFEF),
-                  ),
-                ),
-                const Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFF5C6370)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-
         // Refresh icon
         IconButton(
-          icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF5C6370)),
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh, size: 16, color: Color(0xFFABB2BF)),
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
+          constraints: const BoxConstraints(
+            minWidth: _paneControlHeight,
+            minHeight: _paneControlHeight,
+          ),
+          style: IconButton.styleFrom(
+            backgroundColor: _controlSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+              side: const BorderSide(color: _controlBorder),
+            ),
+          ),
           onPressed: () {
             if (_activePane != side) {
               setState(() => _activePane = side);
@@ -2313,51 +2390,37 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   Widget _buildTableHeader() {
     final density = SettingsService.instance.fileExplorerDensity;
-    final fontFamily = SettingsService.instance.fileExplorerFontFamily.fontFamily;
     final sizeWidth = density == FileExplorerDensity.large ? 95.0 : 80.0;
     final modWidth = density == FileExplorerDensity.large ? 130.0 : 110.0;
 
+    final style = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: density.fontSize - 1,
+      fontWeight: FontWeight.w600,
+      color: _columnTextColor,
+    );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
       child: Row(
         children: [
           SizedBox(width: 22 + density.iconSize + 6), // Spacer for Checkbox (22) + Icon + Padding (6)
           Expanded(
-            child: Text(
-              'Name',
-              style: TextStyle(
-                fontFamily: fontFamily,
-                fontSize: density.fontSize,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF5C6370),
-              ),
+            child: Row(
+              children: [
+                Text('Name', style: style),
+                const SizedBox(width: 4),
+                // Listings are always sorted by name, folders first.
+                const Icon(Icons.arrow_downward, size: 12, color: _columnTextColor),
+              ],
             ),
           ),
           SizedBox(
             width: sizeWidth,
-            child: Text(
-              'Size',
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontFamily: fontFamily,
-                fontSize: density.fontSize,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF5C6370),
-              ),
-            ),
+            child: Text('Size', textAlign: TextAlign.right, style: style),
           ),
           SizedBox(
             width: modWidth,
-            child: Text(
-              'Mod',
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontFamily: fontFamily,
-                fontSize: density.fontSize,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF5C6370),
-              ),
-            ),
+            child: Text('Modified', textAlign: TextAlign.right, style: style),
           ),
         ],
       ),
@@ -2418,23 +2481,60 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           final isFocused = idx == pane.selectedIndex;
           final isSelected = pane.multiSelected.contains(item.path);
 
+          final isParent = item.isParentDir;
+          // The cursor row in the active pane is tinted blue; in the other pane it
+          // only gets a neutral lift. Multi-selection keeps its green.
+          final isCursor = isFocused && isActive && !isSelected;
+
           Color rowBg;
           if (isSelected) {
             rowBg = const Color(0xFF22352A);
           } else if (isFocused) {
-            rowBg = isActive ? const Color(0xFF2B3A4A) : const Color(0xFF1F242C);
+            rowBg = isActive ? const Color(0xFF1B2B40) : const Color(0xFF242932);
           } else {
             rowBg = Colors.transparent;
           }
 
           final textColor = isSelected
               ? const Color(0xFF98C379)
-              : item.isDir
-                  ? const Color(0xFFE5C07B)
-                  : const Color(0xFFD8DEE9);
+              : isCursor || isParent
+                  ? _cursorAccent
+                  : item.isDir
+                      ? const Color(0xFFE5E9F0)
+                      : const Color(0xFFD8DEE9);
+          final columnColor = isSelected
+              ? const Color(0xFF98C379)
+              : isCursor
+                  ? _cursorAccent
+                  : _columnTextColor;
+          final columnStyle = TextStyle(
+            fontFamily: 'monospace',
+            fontSize: density.fontSize - 1,
+            color: columnColor,
+          );
+
+          final String sizeText;
+          final String modText;
+          if (isParent) {
+            sizeText = '[DIR]';
+            modText = '–';
+          } else if (item.isDir) {
+            sizeText = '[DIR]';
+            modText = item.modifiedDateTime != null
+                ? FileExplorerItem.formatDateTime(item.modifiedDateTime!)
+                : '–';
+          } else {
+            sizeText = FileExplorerItem.formatSize(item.size);
+            modText = item.modified;
+          }
 
           final rowContent = Container(
-            color: rowBg,
+            decoration: BoxDecoration(
+              color: rowBg,
+              border: const Border(
+                bottom: BorderSide(color: Color(0xFF1F232B)),
+              ),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
@@ -2464,11 +2564,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 // Icon
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
-                  child: Icon(
-                    FileExplorerIconHelper.getIconData(item, iconTheme),
-                    size: density.iconSize,
-                    color: FileExplorerIconHelper.getIconColor(item, iconTheme, isSelected),
-                  ),
+                  child: isParent
+                      ? Icon(Icons.arrow_upward, size: density.iconSize, color: _cursorAccent)
+                      : Icon(
+                          FileExplorerIconHelper.getIconData(item, iconTheme),
+                          size: density.iconSize,
+                          color: FileExplorerIconHelper.getIconColor(item, iconTheme, isSelected),
+                        ),
                 ),
 
                 // Name
@@ -2488,29 +2590,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 // Size
                 SizedBox(
                   width: sizeWidth,
-                  child: Text(
-                    item.isDir ? '-' : FileExplorerItem.formatSize(item.size),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: fontFamily,
-                      fontSize: density.fontSize,
-                      color: const Color(0xFFABB2BF),
-                    ),
-                  ),
+                  child: Text(sizeText, textAlign: TextAlign.right, style: columnStyle),
                 ),
 
-                // Mod
+                // Modified
                 SizedBox(
                   width: modWidth,
-                  child: Text(
-                    item.modified,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: fontFamily,
-                      fontSize: density.fontSize,
-                      color: const Color(0xFFABB2BF),
-                    ),
-                  ),
+                  child: Text(modText, textAlign: TextAlign.right, style: columnStyle),
                 ),
               ],
             ),
@@ -2638,7 +2724,138 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
   }
 
+  /// Selection and item count for one pane. Without a multi-selection the cursor
+  /// row counts as the selection, matching what keyboard actions operate on.
+  Widget _buildPaneFooter(_PaneController pane) {
+    final entries = pane.filteredItems.where((i) => !i.isParentDir).toList();
+    final List<FileExplorerItem> selected;
+    if (pane.multiSelected.isNotEmpty) {
+      selected = entries.where((i) => pane.multiSelected.contains(i.path)).toList();
+    } else {
+      final idx = pane.selectedIndex;
+      final cursor = idx >= 0 && idx < pane.filteredItems.length
+          ? pane.filteredItems[idx]
+          : null;
+      selected = cursor == null || cursor.isParentDir ? const [] : [cursor];
+    }
+    final n = selected.length;
+    final noun = n > 0 && selected.every((i) => i.isDir) ? 'folder' : 'item';
+    final selectionText = '$n $noun${n == 1 ? '' : 's'} selected';
+    final totalText = '${entries.length} item${entries.length == 1 ? '' : 's'} total';
+    final hasSelection = n > 0;
+
+    const textStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 11,
+      color: _columnTextColor,
+    );
+    return Container(
+      padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFF2C313C))),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            hasSelection ? Icons.check_circle_outline : Icons.radio_button_unchecked,
+            size: 13,
+            color: hasSelection ? _cursorAccent : _columnTextColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            selectionText,
+            style: textStyle.copyWith(
+              color: hasSelection ? _cursorAccent : _columnTextColor,
+            ),
+          ),
+          const Text('  |  ', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF3E4451))),
+          Expanded(
+            child: Text(totalText, overflow: TextOverflow.ellipsis, style: textStyle),
+          ),
+          if (!pane.target.isLocal)
+            Flexible(
+              child: Text(
+                'Server: ${pane.target.label}',
+                overflow: TextOverflow.ellipsis,
+                style: textStyle,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Muted text for the status bar while no message is showing (4.7:1 on the
+  /// bar background).
+  static const Color _idleStatusColor = Color(0xFF8A919D);
+
+  /// Idle line for [FileExplorerStatusBarStyle.detailed]: the active pane's
+  /// node, item count, and selection with its size.
+  String _idleStatusText(FileExplorerStatusBarStyle style) {
+    if (style == FileExplorerStatusBarStyle.minimal) return _defaultStatus;
+    final pane = activePaneState;
+    final entries = pane.filteredItems.where((i) => !i.isParentDir).toList();
+    final parts = <String>[
+      pane.target.label,
+      '${entries.length} item${entries.length == 1 ? '' : 's'}',
+    ];
+    if (pane.multiSelected.isNotEmpty) {
+      final selected =
+          entries.where((i) => pane.multiSelected.contains(i.path)).toList();
+      final bytes = selected
+          .where((i) => !i.isDir)
+          .fold<int>(0, (sum, i) => sum + i.size);
+      parts.add('${selected.length} selected');
+      if (bytes > 0) parts.add(FileExplorerItem.formatSize(bytes));
+    }
+    return parts.join('  ·  ');
+  }
+
+  /// `[F1] Help` keycap; opens the shortcut reference.
+  Widget _helpKeyHint() {
+    return Tooltip(
+      message: 'Keyboard shortcuts [F1/?]',
+      child: InkWell(
+        onTap: _showHelpDialog,
+        canRequestFocus: false,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16181F),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF6B7280)),
+                ),
+                child: const Text(
+                  'F1',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF9AA0A6),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Help',
+                style: TextStyle(fontSize: 11, color: _idleStatusColor),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomStatusBar() {
+    final style = SettingsService.instance.fileExplorerStatusBarStyle;
+    final idle = _statusMessage == _defaultStatus;
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF13161C),
@@ -2647,38 +2864,132 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
-          Text(
-            'STATUS: ',
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: _statusColor,
+          // The dot is green unless the last message is an error.
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _statusColor == _errorStatusColor
+                  ? _errorStatusColor
+                  : const Color(0xFF98C379),
             ),
           ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _statusMessage,
+              idle ? _idleStatusText(style) : _statusMessage,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: _statusColor,
+                // Idle text recedes; only events (info, success, error) stand out.
+                color: idle
+                    ? _idleStatusColor
+                    : _statusColor == _errorStatusColor ||
+                          _statusColor == const Color(0xFF98C379)
+                    ? _statusColor
+                    : _defaultStatusColor,
               ),
             ),
           ),
-          if (activePaneState.multiSelected.isNotEmpty)
-            Text(
-              '[${activePaneState.multiSelected.length} sel]',
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF98C379),
-              ),
-            ),
+          const SizedBox(width: 8),
+          if (style == FileExplorerStatusBarStyle.detailed) ...[
+            _helpKeyHint(),
+            const SizedBox(width: 8),
+          ],
+          // Global controls. Only the toggle carries the accent: it is the one
+          // control with a state. On = filled chip + accent icon, never color alone.
+          _statusBarButton(
+            tooltip: 'Toggle Dual Pane [Ctrl+d]',
+            icon: _isDualPane ? Icons.view_column : Icons.view_agenda,
+            selected: _isDualPane,
+            onPressed: _toggleDualPane,
+          ),
+          _statusBarButton(
+            tooltip: 'Appearance & Font Settings [Ctrl+Shift+S]',
+            icon: Icons.tune_rounded,
+            onPressed: _showSettingsDialog,
+          ),
+          _statusBarButton(
+            tooltip: 'Help (Shortcuts) [F1/?]',
+            icon: Icons.help_outline,
+            onPressed: _showHelpDialog,
+          ),
         ],
       ),
     );
   }
+
+  Widget _statusBarButton({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+    bool? selected,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      isSelected: selected,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      style: IconButton.styleFrom(
+        backgroundColor:
+            selected == true ? const Color(0xFF2C313C) : Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+      ),
+      icon: Icon(
+        icon,
+        size: 16,
+        color: selected == true ? const Color(0xFF56B6C2) : const Color(0xFFABB2BF),
+      ),
+      onPressed: onPressed,
+    );
+  }
+}
+
+
+/// One clickable segment of a pane's path bar.
+class PathCrumb {
+  const PathCrumb(this.label, this.path);
+  final String label;
+  final String path;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PathCrumb && other.label == label && other.path == path;
+
+  @override
+  int get hashCode => Object.hash(label, path);
+
+  @override
+  String toString() => 'PathCrumb($label, $path)';
+}
+
+/// Splits [path] into cumulative segments, root first. [windowsStyle] accepts both
+/// `\` and `/` and treats a leading `C:` as the root; otherwise paths are POSIX.
+List<PathCrumb> splitPathCrumbs(String path, {required bool windowsStyle}) {
+  const bs = '\\';
+  final parts = path
+      .split(windowsStyle ? RegExp('[\\\\/]') : '/')
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (windowsStyle) {
+    if (parts.isEmpty) return const [];
+    final root = parts.first.endsWith(':') ? '${parts.first}$bs' : parts.first;
+    final crumbs = <PathCrumb>[PathCrumb(parts.first, root)];
+    var acc = root.endsWith(bs) ? root : '$root$bs';
+    for (var i = 1; i < parts.length; i++) {
+      acc = i == 1 ? '$acc${parts[i]}' : '$acc$bs${parts[i]}';
+      crumbs.add(PathCrumb(parts[i], acc));
+    }
+    return crumbs;
+  }
+  final crumbs = <PathCrumb>[const PathCrumb('/', '/')];
+  var acc = '';
+  for (final part in parts) {
+    acc = '$acc/$part';
+    crumbs.add(PathCrumb(part, acc));
+  }
+  return crumbs;
 }

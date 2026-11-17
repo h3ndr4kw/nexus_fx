@@ -2,7 +2,7 @@ part of 'file_explorer_dialogs.dart';
 
 // View-file and open-with dialogs.
 
-/// 5. View/Edit File Modal Dialog
+/// Edits (or only shows, when read-only) a file's text and saves through [onSave].
 class FileExplorerViewFileDialog extends StatefulWidget {
   final String fileName;
   final String initialContent;
@@ -18,12 +18,15 @@ class FileExplorerViewFileDialog extends StatefulWidget {
   });
 
   @override
-  State<FileExplorerViewFileDialog> createState() => _FileExplorerViewFileDialogState();
+  State<FileExplorerViewFileDialog> createState() =>
+      _FileExplorerViewFileDialogState();
 }
 
-class _FileExplorerViewFileDialogState extends State<FileExplorerViewFileDialog> {
+class _FileExplorerViewFileDialogState
+    extends State<FileExplorerViewFileDialog> {
   late TextEditingController _controller;
   bool _isSaving = false;
+  String? _saveError;
 
   @override
   void initState() {
@@ -39,114 +42,126 @@ class _FileExplorerViewFileDialogState extends State<FileExplorerViewFileDialog>
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
+    return _DialogShell(
+      title: widget.fileName,
+      rawTitle: true,
+      icon: Icons.description_outlined,
+      width: 860,
+      height: 600,
       insetPadding: const EdgeInsets.all(24),
-      child: Container(
-        width: 860,
-        height: 600,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E222B),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: const Color(0xFF56B6C2), width: 1.5),
-          boxShadow: const [
-            BoxShadow(color: Colors.black54, blurRadius: 16, offset: Offset(0, 8)),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFF2C313C))),
-              ),
+      onClose: () => Navigator.pop(context),
+      child: Column(
+        children: [
+          if (!widget.readOnly && widget.onSave != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(
                 children: [
-                  const Icon(Icons.description_outlined, color: Color(0xFF56B6C2), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.fileName,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF56B6C2),
-                    ),
-                  ),
                   const Spacer(),
-                  if (!widget.readOnly && widget.onSave != null)
-                    ElevatedButton.icon(
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                            )
-                          : const Icon(Icons.save, size: 16),
-                      label: const Text('Save'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF98C379),
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ElevatedButton.icon(
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 16),
+                    label: const Text('Save'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _Dlg.accent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                      onPressed: _isSaving
-                          ? null
-                          : () async {
-                              setState(() => _isSaving = true);
-                              try {
-                                await widget.onSave!(_controller.text);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('File saved successfully')),
-                                  );
-                                }
-                              } finally {
-                                if (mounted) setState(() => _isSaving = false);
-                              }
-                            },
                     ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18, color: Color(0xFF5C6370)),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isSaving ? null : _save,
                   ),
                 ],
               ),
             ),
-
-            // Content
-            Expanded(
+          if (_saveError != null)
+            Semantics(
+              liveRegion: true,
               child: Container(
-                color: const Color(0xFF14171E),
-                padding: const EdgeInsets.all(12),
-                child: TextField(
-                  controller: _controller,
-                  maxLines: null,
-                  expands: true,
-                  readOnly: widget.readOnly,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Color(0xFFD8DEE9),
-                    height: 1.4,
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
+                width: double.infinity,
+                color: const Color(0xFF2B1D20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 16,
+                      color: _Dlg.danger,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _saveError!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _Dlg.danger,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          Expanded(
+            child: Container(
+              color: _Dlg.editor,
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _controller,
+                maxLines: null,
+                expands: true,
+                readOnly: widget.readOnly,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: _Dlg.textPrimary,
+                  height: 1.4,
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  Future<void> _save() async {
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+    try {
+      await widget.onSave!(_controller.text);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File saved successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _saveError = 'Save failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 }
 
-/// 8. Open With Dialog for *.log and *.txt files
+/// Picks the editor for a .log or .txt file; keys 1-5, j/k and Enter work without the mouse.
 class FileExplorerOpenWithDialog extends StatefulWidget {
   final String fileName;
   final ExternalEditor defaultEditor;
@@ -158,10 +173,12 @@ class FileExplorerOpenWithDialog extends StatefulWidget {
   });
 
   @override
-  State<FileExplorerOpenWithDialog> createState() => _FileExplorerOpenWithDialogState();
+  State<FileExplorerOpenWithDialog> createState() =>
+      _FileExplorerOpenWithDialogState();
 }
 
-class _FileExplorerOpenWithDialogState extends State<FileExplorerOpenWithDialog> {
+class _FileExplorerOpenWithDialogState
+    extends State<FileExplorerOpenWithDialog> {
   static const List<ExternalEditor> _options = [
     ExternalEditor.notepadPlusPlus,
     ExternalEditor.nvim,
@@ -185,261 +202,138 @@ class _FileExplorerOpenWithDialogState extends State<FileExplorerOpenWithDialog>
 
   @override
   Widget build(BuildContext context) {
-    const borderColor = Color(0xFF56B6C2); // Cyan border
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
-                event.logicalKey == LogicalKeyboardKey.keyJ) {
-              setState(() {
-                _selectedIndex = (_selectedIndex + 1) % _options.length;
-              });
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                event.logicalKey == LogicalKeyboardKey.keyK) {
-              setState(() {
-                _selectedIndex = (_selectedIndex - 1 + _options.length) % _options.length;
-              });
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.enter) {
-              _submit(_options[_selectedIndex]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.digit1 ||
-                event.logicalKey == LogicalKeyboardKey.numpad1) {
-              _submit(_options[0]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.digit2 ||
-                event.logicalKey == LogicalKeyboardKey.numpad2) {
-              _submit(_options[1]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.digit3 ||
-                event.logicalKey == LogicalKeyboardKey.numpad3) {
-              _submit(_options[2]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.digit4 ||
-                event.logicalKey == LogicalKeyboardKey.numpad4) {
-              _submit(_options[3]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.digit5 ||
-                event.logicalKey == LogicalKeyboardKey.numpad5) {
-              _submit(_options[4]);
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.escape ||
-                event.logicalKey == LogicalKeyboardKey.keyQ) {
-              Navigator.of(context).pop(null);
-              return KeyEventResult.handled;
-            }
+    return Focus(
+      autofocus: true,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+              event.logicalKey == LogicalKeyboardKey.keyJ) {
+            setState(() {
+              _selectedIndex = (_selectedIndex + 1) % _options.length;
+            });
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+              event.logicalKey == LogicalKeyboardKey.keyK) {
+            setState(() {
+              _selectedIndex =
+                  (_selectedIndex - 1 + _options.length) % _options.length;
+            });
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+            _submit(_options[_selectedIndex]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.digit1 ||
+              event.logicalKey == LogicalKeyboardKey.numpad1) {
+            _submit(_options[0]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.digit2 ||
+              event.logicalKey == LogicalKeyboardKey.numpad2) {
+            _submit(_options[1]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.digit3 ||
+              event.logicalKey == LogicalKeyboardKey.numpad3) {
+            _submit(_options[2]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.digit4 ||
+              event.logicalKey == LogicalKeyboardKey.numpad4) {
+            _submit(_options[3]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.digit5 ||
+              event.logicalKey == LogicalKeyboardKey.numpad5) {
+            _submit(_options[4]);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.escape ||
+              event.logicalKey == LogicalKeyboardKey.keyQ) {
+            Navigator.of(context).pop(null);
+            return KeyEventResult.handled;
           }
-          return KeyEventResult.ignored;
-        },
-        child: Container(
-          width: 500,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E222B),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: borderColor, width: 1.8),
-            boxShadow: const [
-              BoxShadow(color: Colors.black54, blurRadius: 16, offset: Offset(0, 8)),
-            ],
+        }
+        return KeyEventResult.ignored;
+      },
+      child: _DialogShell(
+        title: 'OPEN WITH',
+        icon: Icons.open_in_new,
+        width: 520,
+        onClose: () => Navigator.of(context).pop(null),
+        footerLeading: const Text(
+          '↑/↓ or j/k to move  ·  1-5 to choose  ·  Enter to open',
+          style: TextStyle(fontSize: 11, color: _Dlg.textMuted),
+        ),
+        actions: [
+          _TerminalButton(
+            label: 'Cancel',
+            shortcut: 'Esc',
+            isSelected: false,
+            highlightColor: _Dlg.accent,
+            onTap: () => Navigator.of(context).pop(null),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Title bar
-              Padding(
-                padding: const EdgeInsets.only(top: 10, bottom: 6),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Divider(
-                        color: borderColor,
-                        thickness: 1.5,
-                        indent: 14,
-                        endIndent: 8,
-                      ),
-                    ),
-                    const Text(
-                      'OPEN WITH',
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: borderColor,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const Expanded(
-                      child: Divider(
-                        color: borderColor,
-                        thickness: 1.5,
-                        indent: 8,
-                        endIndent: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Target filename info
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF282C34),
-                    borderRadius: BorderRadius.circular(3),
+        ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.insert_drive_file_outlined,
+                    size: 14,
+                    color: _Dlg.textSecondary,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.insert_drive_file_outlined, size: 14, color: Color(0xFF98C379)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.fileName,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            color: Color(0xFFE5C07B),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.fileName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: _Dlg.textPrimary,
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
+            ),
+            const Divider(height: 1, thickness: 1, color: _Dlg.divider),
+            for (var idx = 0; idx < _options.length; idx++)
+              _buildOption(idx),
+          ],
+        ),
+      ),
+    );
+  }
 
-              // Options list
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                child: Column(
-                  children: List.generate(_options.length, (idx) {
-                    final opt = _options[idx];
-                    final isSelected = idx == _selectedIndex;
-                    final isDefault = opt == widget.defaultEditor;
+  Widget _buildOption(int idx) {
+    final opt = _options[idx];
+    final isDefault = opt == widget.defaultEditor;
+    final icon = switch (opt) {
+      ExternalEditor.notepadPlusPlus => Icons.edit_note,
+      ExternalEditor.nvim => Icons.terminal,
+      ExternalEditor.vscode => Icons.code,
+      ExternalEditor.zed => Icons.bolt,
+      ExternalEditor.internalViewer => Icons.visibility,
+    };
 
-                    IconData icon;
-                    switch (opt) {
-                      case ExternalEditor.notepadPlusPlus:
-                        icon = Icons.edit_note;
-                        break;
-                      case ExternalEditor.nvim:
-                        icon = Icons.terminal;
-                        break;
-                      case ExternalEditor.vscode:
-                        icon = Icons.code;
-                        break;
-                      case ExternalEditor.zed:
-                        icon = Icons.bolt;
-                        break;
-                      case ExternalEditor.internalViewer:
-                        icon = Icons.visibility;
-                        break;
-                    }
-
-                    return InkWell(
-                      onTap: () => _submit(opt),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 2),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF3E4452) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(3),
-                          border: Border.all(
-                            color: isSelected ? borderColor : Colors.transparent,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              '[${idx + 1}]',
-                              style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? const Color(0xFF61AFEF) : const Color(0xFF5C6370),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Icon(
-                              icon,
-                              size: 16,
-                              color: isSelected ? borderColor : const Color(0xFFABB2BF),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                opt.label,
-                                style: TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  color: isSelected ? Colors.white : const Color(0xFFDCDFE4),
-                                ),
-                              ),
-                            ),
-                            if (isDefault)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0x3398C379),
-                                  borderRadius: BorderRadius.circular(2),
-                                  border: Border.all(color: const Color(0xFF98C379), width: 0.8),
-                                ),
-                                child: const Text(
-                                  '[Default]',
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF98C379),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-
-              const Divider(color: Color(0xFF3E4452), thickness: 1, indent: 20, endIndent: 20),
-
-              // Bottom footer hint & cancel button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        '[↑/↓/j/k] Move  [1-5] Choose  [Enter] Open',
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Color(0xFF5C6370),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _TerminalButton(
-                      label: '[Esc] Cancel',
-                      isSelected: false,
-                      highlightColor: const Color(0xFFE06C75),
-                      onTap: () => Navigator.of(context).pop(null),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    return Semantics(
+      button: true,
+      selected: idx == _selectedIndex,
+      label: '${idx + 1}. ${opt.label}${isDefault ? ', default' : ''}',
+      onTap: () => _submit(opt),
+      excludeSemantics: true,
+      child: SizedBox(
+        height: PaletteRow.extent,
+        child: PaletteRow(
+          icon: icon,
+          label: opt.label,
+          isSelected: idx == _selectedIndex,
+          onTap: () => _submit(opt),
+          trailing: [
+            if (isDefault)
+              const PaletteBadge(text: 'DEFAULT', color: _Dlg.accent),
+            _Keycap('${idx + 1}'),
+          ],
         ),
       ),
     );

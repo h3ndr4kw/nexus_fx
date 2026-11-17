@@ -57,7 +57,6 @@ class SshConnection {
   final SshLogService? logService;
   final DateTime? logTimestamp;
   final bool enableLogging;
-  final SessionEnvironment environment;
   final String sshMacs;
   final String customSshOptions;
   bool isLocalShell;
@@ -222,7 +221,6 @@ class SshConnection {
     bool? isOam,
     this.isLocalShell = false,
     this.enableLogging = true,
-    this.environment = SessionEnvironment.dev,
     this.sshMacs = 'auto',
     this.customSshOptions = '',
     this.logService,
@@ -272,7 +270,6 @@ class SshConnection {
       logService: logService,
       enableLogging: shouldLog,
       logTimestamp: shouldLog ? DateTime.now() : null,
-      environment: profile.environment,
       sshMacs: profile.sshMacs,
       customSshOptions: profile.customSshOptions,
       tunnelMode: profile.tunnelMode,

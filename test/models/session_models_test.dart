@@ -65,31 +65,18 @@ void main() {
       expect(upgradedJson['password'], startsWith('enc:v1:'));
     });
 
-    test('SessionProfile handles SessionEnvironment dev, staging, and prod serialization', () {
-      final devProfile = SessionProfile(
-        id: 'sess_dev',
-        name: 'Dev Node',
-        protocol: SessionProtocol.ssh,
-        host: '127.0.0.1',
-        environment: SessionEnvironment.dev,
-        modifiedAt: DateTime.utc(2026, 1, 1),
-      );
-      expect(devProfile.environment, SessionEnvironment.dev);
-      expect(devProfile.environment.isProduction, isFalse);
-      expect(devProfile.toJson()['environment'], 'dev');
-
-      final prodProfile = devProfile.copyWith(environment: SessionEnvironment.prod);
-      expect(prodProfile.environment, SessionEnvironment.prod);
-      expect(prodProfile.environment.isProduction, isTrue);
-      expect(prodProfile.toJson()['environment'], 'prod');
-
-      final restoredProd = SessionProfile.fromJson(prodProfile.toJson());
-      expect(restoredProd.environment, SessionEnvironment.prod);
-
-      // Sesi lama tanpa field environment otomatis default ke dev
-      final oldJsonWithoutEnv = {'id': 's1', 'name': 'Old', 'protocol': 'ssh', 'host': '1.1.1.1', 'modifiedAt': '2026-01-01'};
-      final restoredOld = SessionProfile.fromJson(oldJsonWithoutEnv);
-      expect(restoredOld.environment, SessionEnvironment.dev);
+    test('SessionProfile ignores the legacy environment key in saved JSON', () {
+      final legacyJson = {
+        'id': 's1',
+        'name': 'Old',
+        'protocol': 'ssh',
+        'host': '1.1.1.1',
+        'environment': 'prod',
+        'modifiedAt': '2026-01-01',
+      };
+      final restored = SessionProfile.fromJson(legacyJson);
+      expect(restored.name, 'Old');
+      expect(restored.toJson().containsKey('environment'), isFalse);
     });
 
     test('SessionFolder serializes and deserializes correctly', () {
