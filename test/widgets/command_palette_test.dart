@@ -23,10 +23,11 @@ void main() {
     return manager;
   }
 
-  Future<List<CommandItem>> pumpPalette(WidgetTester tester) async {
+  Future<List<CommandItem>> pumpPalette(WidgetTester tester, {ThemeData? theme}) async {
     final manager = await buildSessions();
     final selected = <CommandItem>[];
     await tester.pumpWidget(MaterialApp(
+      theme: theme,
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(
@@ -78,5 +79,25 @@ void main() {
 
     expect(find.byType(CommandPalette), findsNothing);
     expect(selected, isEmpty);
+  });
+
+  testWidgets('search field has no outline even when the theme sets one', (tester) async {
+    const outline = OutlineInputBorder(borderSide: BorderSide(color: Colors.red));
+    await pumpPalette(
+      tester,
+      theme: ThemeData(
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          enabledBorder: outline,
+          focusedBorder: outline,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final decoration = field.decoration!;
+    expect(decoration.enabledBorder, InputBorder.none);
+    expect(decoration.focusedBorder, InputBorder.none);
+    expect(decoration.filled, isFalse);
   });
 }

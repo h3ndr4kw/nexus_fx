@@ -258,7 +258,15 @@ class _CommandPaletteState extends State<CommandPalette> {
                         decoration: const InputDecoration(
                           hintText: 'Type a command or search sessions...',
                           hintStyle: TextStyle(fontSize: 14, color: AppTheme.textMuted),
+                          // Theme sets enabled/focused outlines; the palette
+                          // card is the field, so suppress every state.
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
