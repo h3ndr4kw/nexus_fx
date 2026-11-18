@@ -92,6 +92,8 @@ class SessionProfile {
   final String sshMacs;
   final String customSshOptions;
   final String description;
+  /// Management web UI address. Empty means `https://<host>`.
+  final String webUrl;
   final bool autoReconnect;
   final int reconnectIntervalSec;
   final int reconnectLimitMin;
@@ -126,6 +128,24 @@ class SessionProfile {
 
   bool get isLocal => protocol == SessionProtocol.local;
 
+  /// URL opened by the "WEB" action, or null when there is nothing to open.
+  /// A bare host or `host:port` in [webUrl] is given an `https://` scheme.
+  String? get resolvedWebUrl {
+    if (isLocal) return null;
+    final raw = webUrl.trim().isNotEmpty ? webUrl.trim() : host.trim();
+    if (raw.isEmpty) return null;
+    final withScheme = raw.contains('://') ? raw : 'https://$raw';
+    final uri = Uri.tryParse(withScheme);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.toString();
+  }
+
+  /// The browser runs on this PC, so a target only reachable through a jump
+  /// host cannot be opened directly unless an explicit [webUrl] is set.
+  bool get canOpenWeb =>
+      resolvedWebUrl != null &&
+      (jumpHostMode == JumpHostMode.direct || webUrl.trim().isNotEmpty);
+
   const SessionProfile({
     required this.id,
     this.parentId,
@@ -137,6 +157,7 @@ class SessionProfile {
     this.sshMacs = 'auto',
     this.customSshOptions = '',
     this.description = '',
+    this.webUrl = '',
     this.autoReconnect = false,
     this.reconnectIntervalSec = 30,
     this.reconnectLimitMin = 0,
@@ -174,6 +195,7 @@ class SessionProfile {
     String? sshMacs,
     String? customSshOptions,
     String? description,
+    String? webUrl,
     bool? autoReconnect,
     int? reconnectIntervalSec,
     int? reconnectLimitMin,
@@ -209,6 +231,7 @@ class SessionProfile {
       sshMacs: sshMacs ?? this.sshMacs,
       customSshOptions: customSshOptions ?? this.customSshOptions,
       description: description ?? this.description,
+      webUrl: webUrl ?? this.webUrl,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       reconnectIntervalSec: reconnectIntervalSec ?? this.reconnectIntervalSec,
       reconnectLimitMin: reconnectLimitMin ?? this.reconnectLimitMin,
@@ -246,6 +269,7 @@ class SessionProfile {
       'sshMacs': sshMacs,
       'customSshOptions': customSshOptions,
       'description': description,
+      'webUrl': webUrl,
       'autoReconnect': autoReconnect,
       'reconnectIntervalSec': reconnectIntervalSec,
       'reconnectLimitMin': reconnectLimitMin,
@@ -286,6 +310,7 @@ class SessionProfile {
       sshMacs: json['sshMacs'] as String? ?? 'auto',
       customSshOptions: json['customSshOptions'] as String? ?? '',
       description: json['description'] as String? ?? '',
+      webUrl: json['webUrl'] as String? ?? '',
       autoReconnect: json['autoReconnect'] as bool? ?? false,
       reconnectIntervalSec: (json['reconnectIntervalSec'] as num?)?.toInt() ?? 30,
       reconnectLimitMin: (json['reconnectLimitMin'] as num?)?.toInt() ?? 0,
