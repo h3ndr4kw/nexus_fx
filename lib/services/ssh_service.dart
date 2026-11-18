@@ -277,6 +277,37 @@ class SshConnection {
     return conn;
   }
 
+  /// A fresh, unconnected connection to the same target, shown as [newLabel].
+  SshConnection duplicate({required String newLabel, String? newFallbackLabel}) {
+    return SshConnection(
+      id: '${newLabel}_${DateTime.now().microsecondsSinceEpoch}',
+      host: host,
+      port: port,
+      label: newLabel,
+      fallbackHost: fallbackHost,
+      fallbackLabel: newFallbackLabel,
+      targetUsername: targetUsername,
+      targetPassword: targetPassword,
+      targetPrivateKey: targetPrivateKey,
+      jumpClusterHost: jumpClusterHost,
+      jumpClusterPort: jumpClusterPort,
+      jumpClusterFallback: jumpClusterFallback,
+      jumpClusterUsername: jumpClusterUsername,
+      jumpClusterPassword: jumpClusterPassword,
+      jumpClusterPrivateKey: jumpClusterPrivateKey,
+      feHostname: feHostname,
+      clusterName: clusterName,
+      isOam: isOam,
+      isLocalShell: isLocalShell,
+      enableLogging: enableLogging,
+      logService: logService,
+      logTimestamp: enableLogging ? DateTime.now() : null,
+      sshMacs: sshMacs,
+      customSshOptions: customSshOptions,
+      tunnelMode: _tunnelMode,
+    );
+  }
+
   static bool _resolveIsOam(
     String targetHost,
     String? jcHost,
@@ -997,6 +1028,14 @@ class SshService extends ChangeNotifier {
     onConnectionCreated?.call(conn);
     notifyListeners();
     return conn;
+  }
+
+  /// Tracks a connection built outside [createConnection] (e.g. a duplicated
+  /// tab) so closing it disconnects gracefully and flushes its log.
+  void registerConnection(SshConnection conn) {
+    _connections[conn.id] = conn;
+    onConnectionCreated?.call(conn);
+    notifyListeners();
   }
 
   Future<void> removeConnection(String id, {bool graceful = false}) async {

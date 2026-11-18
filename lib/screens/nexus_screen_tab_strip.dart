@@ -60,6 +60,27 @@ extension _NexusTabStrip on NexusScreenState {
     required ScrollController controller,
     required bool isRightPane,
   }) {
+    // Drops outside any tab land at the end of the strip; tabs are inner
+    // targets, so they win while the pointer is over one.
+    return _buildTabDropTarget(
+      isRightPane: isRightPane,
+      index: tabs.length,
+      splitHalves: false,
+      child: _buildTabListContent(
+        tabs: tabs,
+        activeIndex: activeIndex,
+        controller: controller,
+        isRightPane: isRightPane,
+      ),
+    );
+  }
+
+  Widget _buildTabListContent({
+    required List<SshConnection> tabs,
+    required int activeIndex,
+    required ScrollController controller,
+    required bool isRightPane,
+  }) {
     if (tabs.isEmpty) {
       return Row(
         children: [
@@ -105,6 +126,10 @@ extension _NexusTabStrip on NexusScreenState {
       canRequestFocus: false,
       key: ValueKey(conn.id),
       onTap: () {
+        if (_registerTabClick(conn)) {
+          _duplicateTab(conn, isRightPane: isRightPane);
+          return;
+        }
         setState(() {
           _lastActivePaneIsRight = isRightPane;
           if (isRightPane) {
@@ -217,16 +242,30 @@ extension _NexusTabStrip on NexusScreenState {
       ),
     );
 
-    return Draggable<_TabDragData>(
+    final clickTimedTab = Listener(
+      onPointerDown: (event) => _tabPointerDownAt = event.timeStamp,
+      child: tabItemWidget,
+    );
+
+    final draggable = Draggable<_TabDragData>(
       data: _TabDragData(connection: conn, fromRightPane: isRightPane),
+      // Feedback sits at the pointer, so drop targets read the pointer
+      // position from the drag offset.
+      dragAnchorStrategy: pointerDragAnchorStrategy,
       onDragStarted: () {
         setState(() => _isDraggingTab = true);
       },
       onDragEnd: (_) {
-        setState(() => _isDraggingTab = false);
+        setState(() {
+          _isDraggingTab = false;
+          _tabDropSlot = null;
+        });
       },
       onDraggableCanceled: (velocity, offset) {
-        setState(() => _isDraggingTab = false);
+        setState(() {
+          _isDraggingTab = false;
+          _tabDropSlot = null;
+        });
       },
       feedback: Material(
         color: Colors.transparent,
@@ -272,8 +311,90 @@ extension _NexusTabStrip on NexusScreenState {
         opacity: 0.35,
         child: tabItemWidget,
       ),
-      child: tabItemWidget,
+      child: clickTimedTab,
     );
+
+    return _buildTabDropTarget(
+      isRightPane: isRightPane,
+      index: index,
+      splitHalves: true,
+      child: draggable,
+    );
+  }
+
+  /// Makes [child] a drop target for reordering tabs. A tab ([splitHalves])
+  /// maps its left half to gap [index] and its right half to [index] + 1;
+  /// the whole strip, outside any tab, maps to gap [index] (its end).
+  Widget _buildTabDropTarget({
+    required bool isRightPane,
+    required int index,
+    required bool splitHalves,
+    required Widget child,
+  }) {
+    return Builder(builder: (targetContext) {
+      int slotFor(Offset globalPointer) {
+        if (!splitHalves) return index;
+        final box = targetContext.findRenderObject() as RenderBox?;
+        if (box == null || !box.hasSize) return index;
+        final dx = box.globalToLocal(globalPointer).dx;
+        return dx < box.size.width / 2 ? index : index + 1;
+      }
+
+      // A drop next to the dragged tab itself would not move it.
+      bool isNoOp(_TabDragData data, int slot) {
+        if (data.fromRightPane != isRightPane) return false;
+        final list = isRightPane ? _rightTabs : _tabs;
+        final from = list.indexWhere((c) => c.id == data.connection.id);
+        return slot == from || slot == from + 1;
+      }
+
+      return DragTarget<_TabDragData>(
+        onMove: (details) {
+          final slot = slotFor(details.offset);
+          final next = isNoOp(details.data, slot)
+              ? null
+              : (isRightPane: isRightPane, index: slot);
+          if (_tabDropSlot != next) setState(() => _tabDropSlot = next);
+        },
+        onLeave: (_) {
+          if (_tabDropSlot != null) setState(() => _tabDropSlot = null);
+        },
+        onAcceptWithDetails: (details) {
+          final slot = slotFor(details.offset);
+          if (isNoOp(details.data, slot)) {
+            setState(() => _tabDropSlot = null);
+            return;
+          }
+          _moveTabToSlot(details.data.connection, toRightPane: isRightPane, toIndex: slot);
+        },
+        builder: (context, candidateData, rejectedData) {
+          // One bar per gap: tabs draw it on their left edge, the last tab
+          // also on its right edge for the end gap; the strip itself draws
+          // it only when the pane has no tabs.
+          final slot = _tabDropSlot;
+          final paneLength = (isRightPane ? _rightTabs : _tabs).length;
+          if (slot == null || slot.isRightPane != isRightPane) return child;
+          final atLeftEdge = splitHalves ? slot.index == index : paneLength == 0;
+          final atRightEdge =
+              splitHalves && slot.index == index + 1 && index + 1 == paneLength;
+          if (!atLeftEdge && !atRightEdge) return child;
+          return Stack(
+            children: [
+              child,
+              Positioned(
+                key: const ValueKey('nexus_tab_drop_indicator'),
+                top: 4,
+                bottom: 4,
+                left: atRightEdge ? null : 0,
+                right: atRightEdge ? 0 : null,
+                width: 2,
+                child: ColoredBox(color: AppTheme.activePalette.primaryColor),
+              ),
+            ],
+          );
+        },
+      );
+    });
   }
 
   Widget _buildEmptyPaneState(String message) {

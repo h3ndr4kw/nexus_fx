@@ -358,7 +358,7 @@ extension _NexusScreenView on NexusScreenState {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Press Ctrl+Space to quick-connect to a node\nor select a node from the Nodes view',
+              'Press Ctrl+Space to quick-connect to a node',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppTheme.textColor,
