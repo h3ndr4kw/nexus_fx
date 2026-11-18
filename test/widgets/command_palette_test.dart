@@ -18,6 +18,7 @@ void main() {
       id: 'debian',
       name: 'Debian',
       host: '192.168.100.130',
+      webEnabled: true,
       modifiedAt: DateTime(2026),
     ));
     await manager.createSession(SessionProfile(
@@ -26,6 +27,13 @@ void main() {
       host: '10.0.0.9',
       jumpHostMode: JumpHostMode.existingSession,
       jumpSessionId: 'debian',
+      webEnabled: true,
+      modifiedAt: DateTime(2026),
+    ));
+    await manager.createSession(SessionProfile(
+      id: 'web-off',
+      name: 'WebOff',
+      host: '10.0.0.10',
       modifiedAt: DateTime(2026),
     ));
     return manager;
@@ -73,7 +81,8 @@ void main() {
     expect(find.text('Local System Shell'), findsOneWidget);
     expect(find.text('Debian'), findsOneWidget);
     expect(find.text('Connect SSH to 192.168.100.130:22'), findsOneWidget);
-    expect(find.text('SSH'), findsNWidgets(2));
+    expect(find.text('SSH'), findsNWidgets(3));
+    // WebOff has Web disabled, so only Debian and BehindJump show WEB.
     expect(find.text('WEB'), findsNWidgets(2));
   });
 

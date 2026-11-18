@@ -136,16 +136,24 @@ void main() {
       String webUrl = '',
       SessionProtocol protocol = SessionProtocol.ssh,
       JumpHostMode jump = JumpHostMode.direct,
+      bool enabled = true,
     }) =>
         SessionProfile(
           id: 's',
           name: 'n',
           host: host,
+          webEnabled: enabled,
           webUrl: webUrl,
           protocol: protocol,
           jumpHostMode: jump,
           modifiedAt: DateTime(2026),
         );
+
+    test('is off unless enabled, even with a Web URL set', () {
+      expect(p(enabled: false).resolvedWebUrl, isNull);
+      expect(p(enabled: false, webUrl: 'https://x').canOpenWeb, isFalse);
+      expect(SessionProfile(id: 's', name: 'n', host: 'h', modifiedAt: DateTime(2026)).webEnabled, isFalse);
+    });
 
     test('defaults to https://<host>', () {
       expect(p().resolvedWebUrl, 'https://10.89.100.11');
@@ -175,8 +183,13 @@ void main() {
     test('round-trips through JSON and defaults to empty for old data', () {
       final restored = SessionProfile.fromJson(p(webUrl: 'https://x:8443').toJson());
       expect(restored.webUrl, 'https://x:8443');
-      final json = p().toJson()..remove('webUrl');
-      expect(SessionProfile.fromJson(json).webUrl, '');
+      expect(restored.webEnabled, isTrue);
+      final json = p().toJson()
+        ..remove('webUrl')
+        ..remove('webEnabled');
+      final old = SessionProfile.fromJson(json);
+      expect(old.webUrl, '');
+      expect(old.webEnabled, isFalse);
     });
   });
 }

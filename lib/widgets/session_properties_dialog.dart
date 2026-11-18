@@ -110,6 +110,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   String? _parentFolderId;
   TunnelMode _tunnelMode = TunnelMode.multiplexed;
   bool _autoReconnect = false;
+  bool _webEnabled = false;
   bool _enableLogging = false;
   bool _obscurePassword = true;
   String? _errorMessage;
@@ -126,6 +127,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _selectedJumpSessionId = s?.jumpSessionId;
     _tunnelMode = s?.tunnelMode ?? TunnelMode.multiplexed;
     _autoReconnect = s?.autoReconnect ?? false;
+    _webEnabled = s?.webEnabled ?? false;
     _enableLogging = s?.enableSessionLogging ?? true;
 
     _nameController = TextEditingController(text: s?.name ?? 'New Session');
@@ -230,6 +232,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       sshMacs: _sshMacs,
       customSshOptions: _customSshOptionsController.text.trim(),
       description: _descriptionController.text.trim(),
+      webEnabled: _webEnabled,
       webUrl: _webUrlController.text.trim(),
       autoReconnect: _autoReconnect,
       reconnectIntervalSec: int.tryParse(_reconnectIntervalController.text.trim()) ?? 30,
@@ -254,7 +257,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       modifiedAt: DateTime.now(),
     );
 
-    if (session.webUrl.isNotEmpty && session.resolvedWebUrl == null) {
+    if (session.webEnabled && session.webUrl.isNotEmpty && session.resolvedWebUrl == null) {
       setState(() => _errorMessage = 'Web URL is not a valid address.');
       return false;
     }
@@ -533,8 +536,23 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
             _buildTextField('Port Number:', _portController, width: 100),
             const SizedBox(height: 10),
             _buildTextField('Fallback Host:', _fallbackHostController, hintText: 'Optional secondary IP/host'),
-            const SizedBox(height: 10),
-            _buildTextField('Web URL:', _webUrlController, hintText: 'Optional, defaults to https://<Host>'),
+            const SizedBox(height: 6),
+            Material(
+              type: MaterialType.transparency,
+              child: CheckboxListTile(
+                title: const Text(
+                  'Enable Web (show WEB in Ctrl+Space to open the device web UI)',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                ),
+                value: _webEnabled,
+                onChanged: (val) => setState(() => _webEnabled = val ?? false),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+            if (_webEnabled)
+              _buildTextField('Web URL:', _webUrlController, hintText: 'Optional, defaults to https://<Host>'),
             const SizedBox(height: 10),
             Row(
               children: [

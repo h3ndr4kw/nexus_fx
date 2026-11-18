@@ -92,6 +92,8 @@ class SessionProfile {
   final String sshMacs;
   final String customSshOptions;
   final String description;
+  /// Shows the "WEB" action for this session in the quick-connect palette.
+  final bool webEnabled;
   /// Management web UI address. Empty means `https://<host>`.
   final String webUrl;
   final bool autoReconnect;
@@ -131,7 +133,7 @@ class SessionProfile {
   /// URL opened by the "WEB" action, or null when there is nothing to open.
   /// A bare host or `host:port` in [webUrl] is given an `https://` scheme.
   String? get resolvedWebUrl {
-    if (isLocal) return null;
+    if (isLocal || !webEnabled) return null;
     final raw = webUrl.trim().isNotEmpty ? webUrl.trim() : host.trim();
     if (raw.isEmpty) return null;
     final withScheme = raw.contains('://') ? raw : 'https://$raw';
@@ -157,6 +159,7 @@ class SessionProfile {
     this.sshMacs = 'auto',
     this.customSshOptions = '',
     this.description = '',
+    this.webEnabled = false,
     this.webUrl = '',
     this.autoReconnect = false,
     this.reconnectIntervalSec = 30,
@@ -195,6 +198,7 @@ class SessionProfile {
     String? sshMacs,
     String? customSshOptions,
     String? description,
+    bool? webEnabled,
     String? webUrl,
     bool? autoReconnect,
     int? reconnectIntervalSec,
@@ -231,6 +235,7 @@ class SessionProfile {
       sshMacs: sshMacs ?? this.sshMacs,
       customSshOptions: customSshOptions ?? this.customSshOptions,
       description: description ?? this.description,
+      webEnabled: webEnabled ?? this.webEnabled,
       webUrl: webUrl ?? this.webUrl,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       reconnectIntervalSec: reconnectIntervalSec ?? this.reconnectIntervalSec,
@@ -269,6 +274,7 @@ class SessionProfile {
       'sshMacs': sshMacs,
       'customSshOptions': customSshOptions,
       'description': description,
+      'webEnabled': webEnabled,
       'webUrl': webUrl,
       'autoReconnect': autoReconnect,
       'reconnectIntervalSec': reconnectIntervalSec,
@@ -310,6 +316,7 @@ class SessionProfile {
       sshMacs: json['sshMacs'] as String? ?? 'auto',
       customSshOptions: json['customSshOptions'] as String? ?? '',
       description: json['description'] as String? ?? '',
+      webEnabled: json['webEnabled'] as bool? ?? false,
       webUrl: json['webUrl'] as String? ?? '',
       autoReconnect: json['autoReconnect'] as bool? ?? false,
       reconnectIntervalSec: (json['reconnectIntervalSec'] as num?)?.toInt() ?? 30,
