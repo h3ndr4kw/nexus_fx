@@ -50,9 +50,8 @@ extension _SshDirectRoutes on SshConnection {
       _wasConnected = true;
       _setConnectionState(true);
 
-      _tracked(_session!.stdout).listen(
-        (data) =>
-            _addOutput(utf8.decode(data, allowMalformed: true)),
+      _decodedOutput(_session!.stdout).listen(
+        (text) => _addOutput(text),
         onDone: () {
           disconnect();
           if (_isUserExiting || _wasConnected) {
@@ -68,8 +67,8 @@ extension _SshDirectRoutes on SshConnection {
         },
       );
 
-      _tracked(_session!.stderr).listen((data) {
-        _addOutput(utf8.decode(data, allowMalformed: true));
+      _decodedOutput(_session!.stderr).listen((text) {
+        _addOutput(text);
       });
 
       return true;

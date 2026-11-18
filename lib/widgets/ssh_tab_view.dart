@@ -251,12 +251,27 @@ class SshTabViewState extends State<SshTabView> {
     );
   }
 
+  /// Off-screen tabs get only a small share of the terminal output budget.
+  /// IndexedStack hides children through a Visibility scope; Offstage
+  /// disables tickers.
+  void _syncForeground() {
+    widget.connection.isForeground =
+        Visibility.of(context) && TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncForeground();
+  }
+
   @override
   void didUpdateWidget(SshTabView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.connection != oldWidget.connection) {
       oldWidget.connection.logFailure.removeListener(_onLogFailure);
       widget.connection.logFailure.addListener(_onLogFailure);
+      _syncForeground();
     }
     if (widget.isActive &&
         (!oldWidget.isActive || widget.connection != oldWidget.connection)) {

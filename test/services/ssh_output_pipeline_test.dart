@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/services/ssh_log_service.dart';
@@ -130,5 +132,60 @@ void main() {
     // Output keeps flowing to the terminal.
     conn.simulateOutputForTesting('still alive\r\n');
     expect(_terminalText(conn), contains('still alive'));
+  });
+
+  test('a hidden terminal queues output instead of writing it synchronously',
+      () async {
+    final conn = _conn();
+    addTearDown(conn.dispose);
+    conn.isForeground = false;
+
+    conn.enqueueOutputForTesting('${'h' * 8000}\r\n');
+
+    expect(conn.pendingTerminalCharsForTesting, greaterThan(0),
+        reason: 'hidden tabs go through the shared, throttled queue');
+    await _until(() => conn.pendingTerminalCharsForTesting == 0);
+  });
+
+  test('the visible terminal is drained ahead of a busy hidden one', () async {
+    final visible = _conn();
+    final hidden = _conn();
+    addTearDown(visible.dispose);
+    addTearDown(hidden.dispose);
+    hidden.isForeground = false;
+
+    // ~3 MB each, well past the high-water mark.
+    final burst = List.generate(60000, (i) => 'line $i ${'x' * 40}\r\n');
+    for (final l in burst) {
+      hidden.enqueueOutputForTesting(l);
+      visible.enqueueOutputForTesting(l);
+    }
+
+    await _until(() => visible.pendingTerminalCharsForTesting == 0);
+    expect(hidden.pendingTerminalCharsForTesting, greaterThan(0));
+    expect(hidden.isOutputPausedForTesting, isTrue,
+        reason: 'back-pressure holds the hidden session at the server');
+
+    hidden.isForeground = true;
+    await _until(() => hidden.pendingTerminalCharsForTesting == 0);
+  });
+
+  test('a UTF-8 character split across SSH packets is decoded intact',
+      () async {
+    final conn = _conn();
+    addTearDown(conn.dispose);
+    final bytes = utf8.encode('café \u{1F600}');
+    final packets = StreamController<Uint8List>();
+    final out = <String>[];
+    conn.decodeOutputForTesting(packets.stream).listen(out.add);
+
+    // Split inside the two-byte é and inside the four-byte emoji.
+    packets.add(Uint8List.fromList(bytes.sublist(0, 4)));
+    packets.add(Uint8List.fromList(bytes.sublist(4, 8)));
+    packets.add(Uint8List.fromList(bytes.sublist(8)));
+    await packets.close();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(out.join(), 'café \u{1F600}');
   });
 }
