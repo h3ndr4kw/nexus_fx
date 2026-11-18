@@ -305,6 +305,15 @@ class SshTabViewState extends State<SshTabView> {
     }
   }
 
+  /// Sends the current terminal selection to the shell as input, leaving the
+  /// system clipboard untouched.
+  void _pasteSelection() {
+    final text = _selectedText;
+    if (text == null || text.isEmpty) return;
+    _terminal.paste(text);
+    _controller.clearSelection();
+  }
+
   void _selectAll() {
     if (_terminal.buffer.lines.length == 0) return;
     final lastLineIndex = _terminal.buffer.lines.length - 1;
@@ -369,6 +378,12 @@ class SshTabViewState extends State<SshTabView> {
         _copySelection();
         return KeyEventResult.handled;
       }
+      return KeyEventResult.handled;
+    }
+
+    // Alt+Insert: Paste the selection
+    if (isAlt && !isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.insert) {
+      _pasteSelection();
       return KeyEventResult.handled;
     }
 
@@ -558,6 +573,35 @@ class SshTabViewState extends State<SshTabView> {
                 const SizedBox(width: 8),
                 const Text(
                   'Ctrl+V',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'paste_selection',
+            height: 36,
+            enabled: hasSelection,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.content_paste_go,
+                  size: 14,
+                  color: hasSelection ? AppTheme.textColor : Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Paste the selection',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: hasSelection ? AppTheme.textColor : Colors.grey,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Alt+Insert',
                   style: TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ],
@@ -766,6 +810,9 @@ class SshTabViewState extends State<SshTabView> {
               );
             }
           }
+          break;
+        case 'paste_selection':
+          _pasteSelection();
           break;
         case 'select_all':
           _selectAll();
