@@ -129,4 +129,54 @@ void main() {
       expect(restoredOld.customSshOptions, '');
     });
   });
+
+  group('SessionProfile web URL', () {
+    SessionProfile p({
+      String host = '10.89.100.11',
+      String webUrl = '',
+      SessionProtocol protocol = SessionProtocol.ssh,
+      JumpHostMode jump = JumpHostMode.direct,
+    }) =>
+        SessionProfile(
+          id: 's',
+          name: 'n',
+          host: host,
+          webUrl: webUrl,
+          protocol: protocol,
+          jumpHostMode: jump,
+          modifiedAt: DateTime(2026),
+        );
+
+    test('defaults to https://<host>', () {
+      expect(p().resolvedWebUrl, 'https://10.89.100.11');
+      expect(p().canOpenWeb, isTrue);
+    });
+
+    test('uses an explicit Web URL, adding https when no scheme is given', () {
+      expect(p(webUrl: 'https://10.0.0.5:8443/ui').resolvedWebUrl, 'https://10.0.0.5:8443/ui');
+      expect(p(webUrl: 'http://10.0.0.5').resolvedWebUrl, 'http://10.0.0.5');
+      expect(p(webUrl: '10.0.0.5:8443').resolvedWebUrl, 'https://10.0.0.5:8443');
+    });
+
+    test('has no URL for local shells or an empty host', () {
+      expect(p(protocol: SessionProtocol.local).resolvedWebUrl, isNull);
+      expect(p(host: '').resolvedWebUrl, isNull);
+    });
+
+    test('jump host sessions need an explicit Web URL to open', () {
+      expect(p(jump: JumpHostMode.existingSession).canOpenWeb, isFalse);
+      expect(p(jump: JumpHostMode.customJumpHost).canOpenWeb, isFalse);
+      expect(
+        p(jump: JumpHostMode.existingSession, webUrl: 'https://127.0.0.1:9443').canOpenWeb,
+        isTrue,
+      );
+    });
+
+    test('round-trips through JSON and defaults to empty for old data', () {
+      final restored = SessionProfile.fromJson(p(webUrl: 'https://x:8443').toJson());
+      expect(restored.webUrl, 'https://x:8443');
+      final json = p().toJson()..remove('webUrl');
+      expect(SessionProfile.fromJson(json).webUrl, '');
+    });
+  });
 }

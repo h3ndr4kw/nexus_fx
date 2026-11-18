@@ -20,8 +20,20 @@ void main() {
       host: '192.168.100.130',
       modifiedAt: DateTime(2026),
     ));
+    await manager.createSession(SessionProfile(
+      id: 'behind-jump',
+      name: 'BehindJump',
+      host: '10.0.0.9',
+      jumpHostMode: JumpHostMode.existingSession,
+      jumpSessionId: 'debian',
+      modifiedAt: DateTime(2026),
+    ));
     return manager;
   }
+
+  final opened = <String>[];
+
+  setUp(opened.clear);
 
   Future<List<CommandItem>> pumpPalette(WidgetTester tester, {ThemeData? theme}) async {
     final manager = await buildSessions();
@@ -37,6 +49,10 @@ void main() {
                 sessionsOnly: true,
                 sessionManager: manager,
                 onSelect: selected.add,
+                openUrl: (url) async {
+                  opened.add(url);
+                  return true;
+                },
               ),
             ),
             child: const Text('open'),
@@ -57,7 +73,52 @@ void main() {
     expect(find.text('Local System Shell'), findsOneWidget);
     expect(find.text('Debian'), findsOneWidget);
     expect(find.text('Connect SSH to 192.168.100.130:22'), findsOneWidget);
-    expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('SSH'), findsNWidgets(2));
+    expect(find.text('WEB'), findsNWidgets(2));
+  });
+
+  testWidgets('tapping WEB opens https://<host> without connecting SSH', (tester) async {
+    final selected = await pumpPalette(tester);
+
+    await tester.tap(find.text('WEB').first);
+    await tester.pumpAndSettle();
+
+    expect(opened, ['https://192.168.100.130']);
+    expect(selected, isEmpty);
+    expect(find.byType(CommandPalette), findsNothing);
+  });
+
+  testWidgets('ctrl+enter opens the web UI of the selected session', (tester) async {
+    final selected = await pumpPalette(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(opened, ['https://192.168.100.130']);
+    expect(selected, isEmpty);
+  });
+
+  testWidgets('WEB is disabled for a session behind a jump host', (tester) async {
+    await pumpPalette(tester);
+
+    await tester.tap(find.text('WEB').last);
+    await tester.pumpAndSettle();
+
+    expect(opened, isEmpty);
+    expect(find.byType(CommandPalette), findsOneWidget);
+  });
+
+  testWidgets('tapping the SSH badge connects the session', (tester) async {
+    final selected = await pumpPalette(tester);
+
+    await tester.tap(find.text('SSH').first);
+    await tester.pumpAndSettle();
+
+    expect(selected.single.session?.id, 'debian');
+    expect(opened, isEmpty);
   });
 
   testWidgets('arrow down + enter selects the second session', (tester) async {

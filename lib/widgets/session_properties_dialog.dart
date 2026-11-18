@@ -83,6 +83,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
   late final TextEditingController _fallbackHostController;
   late final TextEditingController _customSshOptionsController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _webUrlController;
   late final TextEditingController _reconnectIntervalController;
   late final TextEditingController _reconnectLimitController;
 
@@ -133,6 +134,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _fallbackHostController = TextEditingController(text: s?.fallbackHost ?? '');
     _customSshOptionsController = TextEditingController(text: s?.customSshOptions ?? '');
     _descriptionController = TextEditingController(text: s?.description ?? '');
+    _webUrlController = TextEditingController(text: s?.webUrl ?? '');
     _reconnectIntervalController = TextEditingController(text: (s?.reconnectIntervalSec ?? 30).toString());
     _reconnectLimitController = TextEditingController(text: (s?.reconnectLimitMin ?? 0).toString());
 
@@ -160,6 +162,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _fallbackHostController.dispose();
     _customSshOptionsController.dispose();
     _descriptionController.dispose();
+    _webUrlController.dispose();
     _reconnectIntervalController.dispose();
     _reconnectLimitController.dispose();
 
@@ -227,6 +230,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       sshMacs: _sshMacs,
       customSshOptions: _customSshOptionsController.text.trim(),
       description: _descriptionController.text.trim(),
+      webUrl: _webUrlController.text.trim(),
       autoReconnect: _autoReconnect,
       reconnectIntervalSec: int.tryParse(_reconnectIntervalController.text.trim()) ?? 30,
       reconnectLimitMin: int.tryParse(_reconnectLimitController.text.trim()) ?? 0,
@@ -249,6 +253,11 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       enableSessionLogging: _enableLogging,
       modifiedAt: DateTime.now(),
     );
+
+    if (session.webUrl.isNotEmpty && session.resolvedWebUrl == null) {
+      setState(() => _errorMessage = 'Web URL is not a valid address.');
+      return false;
+    }
 
     Navigator.of(context).pop(SessionPropertiesResult(savedSession: session, connectNow: connectNow));
     return true;
@@ -524,6 +533,8 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
             _buildTextField('Port Number:', _portController, width: 100),
             const SizedBox(height: 10),
             _buildTextField('Fallback Host:', _fallbackHostController, hintText: 'Optional secondary IP/host'),
+            const SizedBox(height: 10),
+            _buildTextField('Web URL:', _webUrlController, hintText: 'Optional, defaults to https://<Host>'),
             const SizedBox(height: 10),
             Row(
               children: [

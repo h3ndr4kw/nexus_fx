@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 class PaletteColors {
   static const Color local = Color(0xFF64B5F6);
   static const Color ssh = Color(0xFFFF7043);
+  static const Color web = Color(0xFF4DB6AC);
 }
 
 /// Top-anchored card holding a [PaletteSearchHeader], a list and an optional
@@ -172,10 +173,38 @@ class PaletteBadge extends StatelessWidget {
   final String text;
   final Color color;
 
-  const PaletteBadge({super.key, required this.text, required this.color});
+  /// Makes the badge its own click target, separate from the row.
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final bool enabled;
+
+  const PaletteBadge({
+    super.key,
+    required this.text,
+    required this.color,
+    this.onTap,
+    this.tooltip,
+    this.enabled = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    Widget badge = _buildBox(enabled ? color : AppTheme.textMuted);
+    if (onTap != null) {
+      // A disabled badge still swallows the tap so it doesn't fall through
+      // to the row's own action.
+      badge = MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
+        child: GestureDetector(onTap: enabled ? onTap : () {}, child: badge),
+      );
+    }
+    if (tooltip != null) {
+      badge = Tooltip(message: tooltip!, child: badge);
+    }
+    return badge;
+  }
+
+  Widget _buildBox(Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(

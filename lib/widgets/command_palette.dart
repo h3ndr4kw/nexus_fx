@@ -4,6 +4,7 @@ import '../models/nexus_tool.dart';
 import '../models/session_models.dart';
 import '../theme/app_theme.dart';
 import '../services/session_manager_service.dart';
+import '../services/web_launcher.dart';
 import 'palette_widgets.dart';
 
 enum CommandAction {
@@ -50,6 +51,9 @@ class CommandPalette extends StatefulWidget {
   final NexusToolContext? toolContext;
   final SessionManagerService? sessionManager;
 
+  /// Opens a session's web UI. Defaults to the system browser.
+  final Future<bool> Function(String url) openUrl;
+
   const CommandPalette({
     super.key,
     required this.onSelect,
@@ -57,6 +61,7 @@ class CommandPalette extends StatefulWidget {
     this.customTools = const [],
     this.toolContext,
     this.sessionManager,
+    this.openUrl = WebLauncher.open,
   });
 
   @override
@@ -204,6 +209,47 @@ class _CommandPaletteState extends State<CommandPalette> {
     }
   }
 
+  void _openWeb(SessionProfile session) {
+    final url = session.resolvedWebUrl;
+    if (url == null || !session.canOpenWeb) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    Navigator.of(context).pop();
+    widget.openUrl(url).then((ok) {
+      if (!ok) {
+        messenger?.showSnackBar(SnackBar(content: Text('Could not open $url in the browser.')));
+      }
+    });
+  }
+
+  void _onCtrlEnter() {
+    if (_selectedIndex >= _filteredItems.length) return;
+    final session = _filteredItems[_selectedIndex].session;
+    if (session != null) _openWeb(session);
+  }
+
+  List<Widget> _sessionBadges(CommandItem item, SessionProfile session) {
+    return [
+      PaletteBadge(
+        text: item.badge!,
+        color: item.badgeColor ?? AppTheme.accentPrimary,
+        onTap: () {
+          Navigator.of(context).pop();
+          widget.onSelect(item);
+        },
+      ),
+      if (session.resolvedWebUrl != null)
+        PaletteBadge(
+          text: 'WEB',
+          color: PaletteColors.web,
+          enabled: session.canOpenWeb,
+          tooltip: session.canOpenWeb
+              ? 'Open ${session.resolvedWebUrl} (Ctrl+Enter)'
+              : 'Reachable only through a jump host. Set a Web URL in Properties.',
+          onTap: () => _openWeb(session),
+        ),
+    ];
+  }
+
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -220,7 +266,11 @@ class _CommandPaletteState extends State<CommandPalette> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
-      _onEnter();
+      if (HardwareKeyboard.instance.isControlPressed) {
+        _onCtrlEnter();
+      } else {
+        _onEnter();
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -255,7 +305,9 @@ class _CommandPaletteState extends State<CommandPalette> {
                   subtitle: item.subtitle,
                   isSelected: idx == _selectedIndex,
                   trailing: [
-                    if (item.badge != null)
+                    if (item.session != null && item.badge != null)
+                      ..._sessionBadges(item, item.session!)
+                    else if (item.badge != null)
                       PaletteBadge(
                         text: item.badge!,
                         color: item.badgeColor ?? AppTheme.accentPrimary,
