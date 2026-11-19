@@ -171,6 +171,17 @@ void main() {
       expect(p(host: '').resolvedWebUrl, isNull);
     });
 
+    test('adds the Fallback Host as a second candidate, keeping port and path', () {
+      SessionProfile withFb(String webUrl) => p(webUrl: webUrl).copyWith(fallbackHost: '10.89.200.11');
+      expect(withFb('').webUrlCandidates, ['https://10.89.100.11', 'https://10.89.200.11']);
+      expect(withFb('https://10.89.100.11:8443/ui').webUrlCandidates,
+          ['https://10.89.100.11:8443/ui', 'https://10.89.200.11:8443/ui']);
+      // A Web URL on a different host gets no guessed fallback.
+      expect(withFb('https://mgmt.example:8443').webUrlCandidates, ['https://mgmt.example:8443']);
+      expect(p().webUrlCandidates, ['https://10.89.100.11']);
+      expect(p(enabled: false).webUrlCandidates, isEmpty);
+    });
+
     test('jump host sessions need an explicit Web URL to open', () {
       expect(p(jump: JumpHostMode.existingSession).canOpenWeb, isFalse);
       expect(p(jump: JumpHostMode.customJumpHost).canOpenWeb, isFalse);

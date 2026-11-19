@@ -51,8 +51,9 @@ class CommandPalette extends StatefulWidget {
   final NexusToolContext? toolContext;
   final SessionManagerService? sessionManager;
 
-  /// Opens a session's web UI. Defaults to the system browser.
-  final Future<bool> Function(String url) openUrl;
+  /// Opens the first reachable of a session's web URLs. Defaults to the
+  /// system browser.
+  final Future<WebOpenResult> Function(List<String> urls) openWeb;
 
   const CommandPalette({
     super.key,
@@ -61,7 +62,7 @@ class CommandPalette extends StatefulWidget {
     this.customTools = const [],
     this.toolContext,
     this.sessionManager,
-    this.openUrl = WebLauncher.open,
+    this.openWeb = WebLauncher.openFirstReachable,
   });
 
   @override
@@ -210,15 +211,29 @@ class _CommandPaletteState extends State<CommandPalette> {
   }
 
   void _openWeb(SessionProfile session) {
-    final url = session.resolvedWebUrl;
-    if (url == null || !session.canOpenWeb) return;
+    final urls = session.webUrlCandidates;
+    if (urls.isEmpty || !session.canOpenWeb) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     Navigator.of(context).pop();
-    widget.openUrl(url).then((ok) {
-      if (!ok) {
-        messenger?.showSnackBar(SnackBar(content: Text('Could not open $url in the browser.')));
+    widget.openWeb(urls).then((result) {
+      final String? message;
+      if (result.url == null) {
+        message = 'Could not open ${urls.first} in the browser.';
+      } else if (result.usedFallback) {
+        message = '${urls.first} unreachable, opened fallback ${result.url}.';
+      } else if (result.noneReachable) {
+        message = 'No web address answered; opened ${result.url} anyway.';
+      } else {
+        message = null;
       }
+      if (message != null) messenger?.showSnackBar(SnackBar(content: Text(message)));
     });
+  }
+
+  String _webTooltip(SessionProfile session) {
+    final urls = session.webUrlCandidates;
+    final fallback = urls.length > 1 ? ', fallback ${urls[1]}' : '';
+    return 'Open ${urls.first}$fallback (Ctrl+Enter)';
   }
 
   void _onCtrlEnter() {
@@ -243,7 +258,7 @@ class _CommandPaletteState extends State<CommandPalette> {
           color: PaletteColors.web,
           enabled: session.canOpenWeb,
           tooltip: session.canOpenWeb
-              ? 'Open ${session.resolvedWebUrl} (Ctrl+Enter)'
+              ? _webTooltip(session)
               : 'Reachable only through a jump host. Set a Web URL in Properties.',
           onTap: () => _openWeb(session),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/models/session_models.dart';
 import 'package:nexus_fx/services/session_manager_service.dart';
+import 'package:nexus_fx/services/web_launcher.dart';
 import 'package:nexus_fx/widgets/command_palette.dart';
 
 void main() {
@@ -57,9 +58,9 @@ void main() {
                 sessionsOnly: true,
                 sessionManager: manager,
                 onSelect: selected.add,
-                openUrl: (url) async {
-                  opened.add(url);
-                  return true;
+                openWeb: (urls) async {
+                  opened.add(urls.first);
+                  return WebOpenResult(url: urls.first);
                 },
               ),
             ),

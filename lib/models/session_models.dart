@@ -142,6 +142,19 @@ class SessionProfile {
     return uri.toString();
   }
 
+  /// [resolvedWebUrl] followed by the same URL pointed at [fallbackHost],
+  /// tried in order like the SSH fallback. A Web URL that names a different
+  /// host than [host] gets no fallback, since the swap would be a guess.
+  List<String> get webUrlCandidates {
+    final primary = resolvedWebUrl;
+    if (primary == null) return const [];
+    final fb = fallbackHost?.trim() ?? '';
+    final uri = Uri.parse(primary);
+    if (fb.isEmpty || uri.host != host.trim()) return [primary];
+    final alt = uri.replace(host: fb).toString();
+    return alt == primary ? [primary] : [primary, alt];
+  }
+
   /// The browser runs on this PC, so a target only reachable through a jump
   /// host cannot be opened directly unless an explicit [webUrl] is set.
   bool get canOpenWeb =>
