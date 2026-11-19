@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/session_models.dart';
@@ -153,6 +154,16 @@ class NexusScreenState extends State<NexusScreen> {
   final TextEditingController _commandInputController = TextEditingController();
   final FocusNode _commandFocusNode = FocusNode();
 
+  // Double-click on a tab is detected by hand so a single click still
+  // switches tabs immediately (InkWell.onDoubleTap would delay every onTap).
+  // Gap in a tab strip where a dragged tab would land; drawn as a bar.
+  ({bool isRightPane, int index})? _tabDropSlot;
+
+  // Times are pointer-event timestamps, not wall-clock reads.
+  String? _lastTabClickId;
+  Duration? _lastTabClickAt;
+  Duration _tabPointerDownAt = Duration.zero;
+
   bool _isRunbookSending = false;
   bool _isRunbookCancelled = false;
   bool _isRunbookCompleted = false;
@@ -180,7 +191,7 @@ class NexusScreenState extends State<NexusScreen> {
     widget.onRightSidebarChanged?.call(_isRightSidebarVisible);
   }
 
-  void _addTab(SshConnection conn, {bool isRightPane = false}) {
+  void _addTab(SshConnection conn, {bool isRightPane = false, int? insertIndex}) {
     conn.onClosed = () {
       if (mounted) {
         if (SettingsService.instance.nexusAutoCloseTabOnDisconnect) {
@@ -189,7 +200,7 @@ class NexusScreenState extends State<NexusScreen> {
       }
     };
     setState(() {
-      _tabController.addTab(conn, isRightPane: isRightPane);
+      _tabController.addTab(conn, isRightPane: isRightPane, insertIndex: insertIndex);
       _broadcastCoordinator.handleNewConnection(conn, isRightPane: isRightPane);
     });
   }

@@ -535,6 +535,12 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
       source: 'Nexus Terminal',
     ),
     ShortcutEntry(
+      command: 'Terminal: Paste the Selection',
+      keys: ['Alt', 'Insert'],
+      when: 'terminalFocus',
+      source: 'Nexus Terminal',
+    ),
+    ShortcutEntry(
       command: 'Terminal: Zoom In',
       keys: ['Ctrl', 'Shift', '+ / Scroll Up'],
       when: 'terminalFocus',

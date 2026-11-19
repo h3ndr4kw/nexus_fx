@@ -15,6 +15,7 @@ import 'settings_service.dart';
 import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
 import 'ssh_algorithm_helper.dart';
+import 'terminal_output_scheduler.dart';
 
 export 'ssh_algorithm_helper.dart';
 
@@ -174,20 +175,25 @@ class SshConnection {
   final StringBuffer _suppressedBuffer = StringBuffer();
 
   // Terminal output pipeline
-  // Remote output is queued and fed to xterm in time-boxed slices so a burst
-  // (e.g. `cat` of a big file) cannot monopolise the UI isolate. When the
-  // queue grows past [outputHighWaterChars] the SSH/process output streams are
-  // paused; dartssh2 then stops granting window, so the server stops sending
-  // until the terminal has caught up below [outputLowWaterChars].
+  // Remote output is queued and fed to xterm by [TerminalOutputScheduler],
+  // which shares one time budget across all sessions and favours the visible
+  // ones, so a burst (e.g. `cat` of a big file, or several `tail -f`) cannot
+  // monopolise the UI isolate. When the queue grows past
+  // [outputHighWaterChars] the SSH/process output streams are paused;
+  // dartssh2 then stops granting window, so the server stops sending until
+  // the terminal has caught up below [outputLowWaterChars].
   static const int outputHighWaterChars = 1024 * 1024;
   static const int outputLowWaterChars = 256 * 1024;
-  static const int _terminalSliceChars = 16 * 1024;
-  static const Duration _terminalSliceBudget = Duration(milliseconds: 8);
+
+  /// Output written straight to xterm per ~frame while nothing is queued
+  /// (keeps typing echo immediate). Hidden sessions get a small allowance.
+  static const int _syncWriteCharsForeground = 16 * 1024;
+  static const int _syncWriteCharsBackground = 1024;
 
   final ListQueue<String> _pendingChunks = ListQueue<String>();
   int _pendingHeadOffset = 0;
   int _pendingChars = 0;
-  Timer? _terminalDrainTimer;
+  late final _ConnectionDrainSink _drainSink = _ConnectionDrainSink(this);
   final Stopwatch _syncWriteClock = Stopwatch()..start();
   int _syncWindowStartUs = -1000000;
   int _syncWindowChars = 0;
@@ -277,6 +283,37 @@ class SshConnection {
     return conn;
   }
 
+  /// A fresh, unconnected connection to the same target, shown as [newLabel].
+  SshConnection duplicate({required String newLabel, String? newFallbackLabel}) {
+    return SshConnection(
+      id: '${newLabel}_${DateTime.now().microsecondsSinceEpoch}',
+      host: host,
+      port: port,
+      label: newLabel,
+      fallbackHost: fallbackHost,
+      fallbackLabel: newFallbackLabel,
+      targetUsername: targetUsername,
+      targetPassword: targetPassword,
+      targetPrivateKey: targetPrivateKey,
+      jumpClusterHost: jumpClusterHost,
+      jumpClusterPort: jumpClusterPort,
+      jumpClusterFallback: jumpClusterFallback,
+      jumpClusterUsername: jumpClusterUsername,
+      jumpClusterPassword: jumpClusterPassword,
+      jumpClusterPrivateKey: jumpClusterPrivateKey,
+      feHostname: feHostname,
+      clusterName: clusterName,
+      isOam: isOam,
+      isLocalShell: isLocalShell,
+      enableLogging: enableLogging,
+      logService: logService,
+      logTimestamp: enableLogging ? DateTime.now() : null,
+      sshMacs: sshMacs,
+      customSshOptions: customSshOptions,
+      tunnelMode: _tunnelMode,
+    );
+  }
+
   static bool _resolveIsOam(
     String targetHost,
     String? jcHost,
@@ -358,10 +395,24 @@ class SshConnection {
   /// in order with remote output that is still queued.
   void writeLocal(String text) => _enqueueTerminal(text);
 
+  /// Whether this session's terminal is on screen. Hidden sessions get a
+  /// small share of the output budget; set by the tab view.
+  bool get isForeground => _drainSink.isForeground;
+  set isForeground(bool value) {
+    if (_drainSink.isForeground == value) return;
+    _drainSink.isForeground = value;
+    if (_pendingChars > 0 && !_isDisposed) {
+      TerminalOutputScheduler.instance.request(_drainSink);
+    }
+  }
+
+  @visibleForTesting
+  Stream<String> decodeOutputForTesting(Stream<Uint8List> source) =>
+      _decodedOutput(source);
+
   /// Synchronously writes all queued output to the terminal.
   void flushTerminalOutput() {
-    _terminalDrainTimer?.cancel();
-    _terminalDrainTimer = null;
+    TerminalOutputScheduler.instance.cancel(_drainSink);
     _drainTerminal(_pendingChars);
   }
 
@@ -425,16 +476,14 @@ class SshConnection {
           _isConnected = true;
           _setConnectionState(true);
           _addOutput('\r\n--- Local Shell Ready ($executable) ---\r\n\r\n');
-          _tracked(_localProcess!.stdout).listen((bytes) {
-            final s = utf8.decode(bytes, allowMalformed: true);
+          _decodedOutput(_localProcess!.stdout).listen((s) {
             var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
             if (Platform.isWindows) {
               normalized = normalized.replaceAll('\b', '\b \b');
             }
             _addOutput(normalized);
           });
-          _tracked(_localProcess!.stderr).listen((bytes) {
-            final s = utf8.decode(bytes, allowMalformed: true);
+          _decodedOutput(_localProcess!.stderr).listen((s) {
             var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
             if (Platform.isWindows) {
               normalized = normalized.replaceAll('\b', '\b \b');
@@ -892,8 +941,7 @@ class SshConnection {
     _resizeDebounceTimer?.cancel();
     _resizeDebounceTimer = null;
     disconnect();
-    _terminalDrainTimer?.cancel();
-    _terminalDrainTimer = null;
+    TerminalOutputScheduler.instance.cancel(_drainSink);
     _pendingChunks.clear();
     _pendingHeadOffset = 0;
     _pendingChars = 0;
@@ -997,6 +1045,14 @@ class SshService extends ChangeNotifier {
     onConnectionCreated?.call(conn);
     notifyListeners();
     return conn;
+  }
+
+  /// Tracks a connection built outside [createConnection] (e.g. a duplicated
+  /// tab) so closing it disconnects gracefully and flushes its log.
+  void registerConnection(SshConnection conn) {
+    _connections[conn.id] = conn;
+    onConnectionCreated?.call(conn);
+    notifyListeners();
   }
 
   Future<void> removeConnection(String id, {bool graceful = false}) async {

@@ -27,7 +27,10 @@ extension _SshOutputPipeline on SshConnection {
         _syncWindowStartUs = nowUs;
         _syncWindowChars = 0;
       }
-      if (_syncWindowChars + data.length <= SshConnection._terminalSliceChars) {
+      final allowance = isForeground
+          ? SshConnection._syncWriteCharsForeground
+          : SshConnection._syncWriteCharsBackground;
+      if (_syncWindowChars + data.length <= allowance) {
         _syncWindowChars += data.length;
         terminal.write(data);
         return;
@@ -35,27 +38,23 @@ extension _SshOutputPipeline on SshConnection {
     }
     _pendingChunks.add(data);
     _pendingChars += data.length;
-    _terminalDrainTimer ??= Timer(Duration.zero, _drainTerminalTick);
+    TerminalOutputScheduler.instance.request(_drainSink);
     if (!_outputPaused && _pendingChars > SshConnection.outputHighWaterChars) {
       _setOutputPaused(true);
     }
   }
 
-  void _drainTerminalTick() {
-    _terminalDrainTimer = null;
-    if (_isDisposed) return;
-    final sw = Stopwatch()..start();
-    while (_pendingChars > 0 && sw.elapsed < SshConnection._terminalSliceBudget) {
-      _drainTerminal(SshConnection._terminalSliceChars);
-    }
-    if (_pendingChars > 0) {
-      // Yield to the event loop so frames and input get a turn.
-      _terminalDrainTimer = Timer(Duration.zero, _drainTerminalTick);
-    }
-  }
+  /// UTF-8 decoded, back-pressure tracked output of an SSH or process stream.
+  /// The decoder keeps state across chunks, so a character split between
+  /// two packets is not turned into U+FFFD.
+  /// (`cast` because SSH streams are `Stream<Uint8List>`, which cannot take a
+  /// `List<int>` transformer directly.)
+  Stream<String> _decodedOutput(Stream<List<int>> source) => _tracked(source
+      .cast<List<int>>()
+      .transform(const Utf8Decoder(allowMalformed: true)));
 
-  void _drainTerminal(int maxChars) {
-    if (_pendingChars == 0 || maxChars <= 0) return;
+  int _drainTerminal(int maxChars) {
+    if (_pendingChars == 0 || maxChars <= 0) return 0;
     final out = StringBuffer();
     var remaining = maxChars;
     while (remaining > 0 && _pendingChunks.isNotEmpty) {
@@ -88,6 +87,7 @@ extension _SshOutputPipeline on SshConnection {
     if (_outputPaused && _pendingChars <= SshConnection.outputLowWaterChars) {
       _setOutputPaused(false);
     }
+    return out.length;
   }
 
   Stream<T> _tracked<T>(Stream<T> source) =>
@@ -133,4 +133,22 @@ extension _SshOutputPipeline on SshConnection {
       _labelController.add(label);
     }
   }
+}
+
+/// Lets [TerminalOutputScheduler] drain a session's queue without exposing
+/// the drain on [SshConnection]'s public API.
+class _ConnectionDrainSink implements TerminalDrainSink {
+  _ConnectionDrainSink(this._connection);
+
+  final SshConnection _connection;
+
+  @override
+  bool isForeground = true;
+
+  @override
+  bool get hasPendingOutput =>
+      !_connection._isDisposed && _connection._pendingChars > 0;
+
+  @override
+  int drainOutput(int maxChars) => _connection._drainTerminal(maxChars);
 }

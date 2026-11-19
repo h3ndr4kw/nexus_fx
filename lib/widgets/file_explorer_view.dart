@@ -2811,48 +2811,6 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return parts.join('  ·  ');
   }
 
-  /// `[F1] Help` keycap; opens the shortcut reference.
-  Widget _helpKeyHint() {
-    return Tooltip(
-      message: 'Keyboard shortcuts [F1/?]',
-      child: InkWell(
-        onTap: _showHelpDialog,
-        canRequestFocus: false,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16181F),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: const Color(0xFF6B7280)),
-                ),
-                child: const Text(
-                  'F1',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                    color: Color(0xFF9AA0A6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Text(
-                'Help',
-                style: TextStyle(fontSize: 11, color: _idleStatusColor),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBottomStatusBar() {
     final style = SettingsService.instance.fileExplorerStatusBarStyle;
     final idle = _statusMessage == _defaultStatus;
@@ -2894,10 +2852,6 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ),
           ),
           const SizedBox(width: 8),
-          if (style == FileExplorerStatusBarStyle.detailed) ...[
-            _helpKeyHint(),
-            const SizedBox(width: 8),
-          ],
           // Global controls. Only the toggle carries the accent: it is the one
           // control with a state. On = filled chip + accent icon, never color alone.
           _statusBarButton(

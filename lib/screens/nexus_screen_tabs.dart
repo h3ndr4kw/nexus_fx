@@ -146,6 +146,56 @@ extension _NexusTabOps on NexusScreenState {
     return conn;
   }
 
+  /// Opens a new tab to the same target as [source], right after it in the
+  /// same pane, labelled `<label> #N`.
+  SshConnection? _duplicateTab(SshConnection source, {required bool isRightPane}) {
+    final targetList = isRightPane ? _rightTabs : _tabs;
+    final sourceIndex = targetList.indexWhere((c) => c.id == source.id);
+    if (sourceIndex == -1) return null;
+
+    final existing = [..._tabs, ..._rightTabs].map((c) => c.label);
+    final newLabel = TerminalTabController.nextDuplicateLabel(source.label, existing);
+    final suffix = newLabel.substring(newLabel.lastIndexOf(' #'));
+    final dup = source.duplicate(
+      newLabel: newLabel,
+      newFallbackLabel: source.fallbackLabel == null
+          ? null
+          : '${source.fallbackLabel!.replaceFirst(RegExp(r' #\d+$'), '')}$suffix',
+    );
+    final insertIndex = TerminalTabController.duplicateInsertIndex(
+      targetList.map((c) => c.label).toList(),
+      newLabel,
+      sourceIndex + 1,
+    );
+    _sshService.registerConnection(dup);
+    _addTab(dup, isRightPane: isRightPane, insertIndex: insertIndex);
+    _focusActiveTerminal();
+    return dup;
+  }
+
+  /// Drops a dragged tab into gap [toIndex] of a pane's tab strip.
+  void _moveTabToSlot(SshConnection conn, {required bool toRightPane, required int toIndex}) {
+    setState(() {
+      _tabDropSlot = null;
+      _tabController.moveTab(conn.id, toRightPane: toRightPane, toIndex: toIndex);
+      if (_rightTabs.isEmpty) {
+        _broadcastCoordinator.setTarget(BroadcastTarget.all, leftTabs: _tabs, rightTabs: _rightTabs);
+      }
+    });
+    _focusActiveTerminal();
+  }
+
+  /// Returns true when this click on [conn]'s tab completes a double-click.
+  bool _registerTabClick(SshConnection conn) {
+    final now = _tabPointerDownAt;
+    final isDouble = _lastTabClickId == conn.id &&
+        _lastTabClickAt != null &&
+        now - _lastTabClickAt! <= kDoubleTapTimeout;
+    _lastTabClickId = isDouble ? null : conn.id;
+    _lastTabClickAt = isDouble ? null : now;
+    return isDouble;
+  }
+
   void _closeTabForConnection(String id) {
     final leftIndex = _tabs.indexWhere((c) => c.id == id);
     if (leftIndex != -1) {
@@ -346,6 +396,17 @@ extension _NexusTabOps on NexusScreenState {
           ),
         ),
         const PopupMenuItem<String>(
+          value: 'duplicate',
+          height: 36,
+          child: Row(
+            children: [
+              Icon(Icons.control_point_duplicate, size: 14, color: AppTheme.textColor),
+              SizedBox(width: 8),
+              Text('Duplicate Tab', style: TextStyle(fontSize: 12, color: AppTheme.textColor)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
           value: 'close',
           height: 36,
           child: Row(
@@ -539,6 +600,9 @@ extension _NexusTabOps on NexusScreenState {
     switch (selected) {
       case 'fullscreen':
         toggleSessionFullscreen(conn);
+        break;
+      case 'duplicate':
+        _duplicateTab(conn, isRightPane: isRightPane);
         break;
       case 'close':
         _closeTabForConnection(conn.id);
