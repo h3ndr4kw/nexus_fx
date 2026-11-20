@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/session_models.dart';
 import '../theme/app_theme.dart';
+import '../theme/terminal_theme_helper.dart';
 import '../services/session_manager_service.dart';
 import '../services/ssh_service.dart';
 import '../services/settings_service.dart';
@@ -92,6 +93,9 @@ class NexusScreenState extends State<NexusScreen> {
   final ScrollController _tabScrollController = ScrollController();
   final ScrollController _rightTabScrollController = ScrollController();
   bool _isDraggingTab = false;
+
+  /// Tab under the mouse; pill tabs show their close button on hover.
+  String? _hoveredTabId;
 
   List<SshConnection> get _tabs => _tabController.tabs;
   List<SshConnection> get _rightTabs => _tabController.rightTabs;

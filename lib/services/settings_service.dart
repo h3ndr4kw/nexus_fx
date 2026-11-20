@@ -33,6 +33,18 @@ enum NexusPulseStyle {
   const NexusPulseStyle(this.label);
 }
 
+/// How the SSH session tab strip in the Nexus workspace is drawn.
+enum NexusTabStyle {
+  /// Compact pills with a host subtitle; close buttons on inactive tabs show on hover.
+  pill('Pill'),
+
+  /// Tabs that join the terminal below them, with a close button on every tab.
+  attached('Attached');
+
+  final String label;
+  const NexusTabStyle(this.label);
+}
+
 enum NexusPulseColor {
   emerald(
     label: 'Emerald (Cyber Green)',
@@ -128,6 +140,7 @@ class SettingsService extends ChangeNotifier {
   ToolsViewMode _toolsViewMode = ToolsViewMode.grid;
   NexusPulseStyle _nexusPulseStyle = NexusPulseStyle.neonSonarWave;
   NexusPulseColor _nexusPulseColor = NexusPulseColor.emerald;
+  NexusTabStyle _nexusTabStyle = NexusTabStyle.pill;
   String _gilanDashboardUrl = '';
   String _gilanDashboardUsername = '';
   String _gilanDashboardPassword = '';
@@ -212,6 +225,7 @@ class SettingsService extends ChangeNotifier {
   AppFontSize get appFontSize => _appFontSize;
   NexusPulseStyle get nexusPulseStyle => _nexusPulseStyle;
   NexusPulseColor get nexusPulseColor => _nexusPulseColor;
+  NexusTabStyle get nexusTabStyle => _nexusTabStyle;
   double get borderAnimationDuration => _borderAnimationDuration;
   Duration get borderAnimationDurationObj =>
       Duration(milliseconds: (_borderAnimationDuration * 1000).round());
@@ -371,6 +385,13 @@ class SettingsService extends ChangeNotifier {
             final pulseStyle = _parseNexusPulseStyle(yaml['nexus_pulse_style'].toString());
             if (pulseStyle != null) {
               _nexusPulseStyle = pulseStyle;
+            }
+          }
+
+          if (yaml['nexus_tab_style'] != null) {
+            final v = yaml['nexus_tab_style'].toString().trim().toLowerCase();
+            for (final style in NexusTabStyle.values) {
+              if (style.name.toLowerCase() == v) _nexusTabStyle = style;
             }
           }
 
@@ -656,6 +677,13 @@ class SettingsService extends ChangeNotifier {
   Future<void> setNexusPulseStyle(NexusPulseStyle style) async {
     if (_nexusPulseStyle == style) return;
     _nexusPulseStyle = style;
+    notifyListeners();
+    await _saveSettings();
+  }
+
+  Future<void> setNexusTabStyle(NexusTabStyle style) async {
+    if (_nexusTabStyle == style) return;
+    _nexusTabStyle = style;
     notifyListeners();
     await _saveSettings();
   }
@@ -1002,6 +1030,7 @@ class SettingsService extends ChangeNotifier {
       buffer.writeln('show_nodes_tab: $_showNodesTab');
       buffer.writeln('nexus_pulse_style: "${_nexusPulseStyle.name}"');
       buffer.writeln('nexus_pulse_color: "${_nexusPulseColor.name}"');
+      buffer.writeln('nexus_tab_style: "${_nexusTabStyle.name}"');
       buffer.writeln('floating_command_width: ${_floatingCommandWidth.round()}');
       buffer.writeln('right_sidebar_width: ${_rightSidebarWidth.round()}');
       buffer.writeln('left_sidebar_width: ${_leftSidebarWidth.round()}');

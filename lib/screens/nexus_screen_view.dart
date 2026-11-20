@@ -116,6 +116,39 @@ extension _NexusScreenView on NexusScreenState {
     );
   }
 
+  /// Tab bar background and bottom edge. In the attached style the edge is
+  /// painted behind the tabs so the active tab can cover it and join the
+  /// terminal below.
+  Widget _buildTabBarFrame(Widget bar) {
+    final palette = AppTheme.activePalette;
+    final edge = BorderSide(color: palette.inputBorderColor);
+    if (SettingsService.instance.nexusTabStyle == NexusTabStyle.pill) {
+      return Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: palette.surfaceColor,
+          border: Border(bottom: edge),
+        ),
+        child: bar,
+      );
+    }
+    return Container(
+      height: 36,
+      color: palette.surfaceColor,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(height: 1, color: palette.inputBorderColor),
+          ),
+          Positioned.fill(child: bar),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTerminalMainArea() {
     final fullscreenTarget = _fullscreen.target;
     if (fullscreenTarget != null) {
@@ -135,15 +168,10 @@ extension _NexusScreenView on NexusScreenState {
     return Column(
       children: [
         // Tab bar
-        Container(
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppTheme.activePalette.surfaceColor,
-            border: Border(
-              bottom: BorderSide(color: AppTheme.activePalette.inputBorderColor),
-            ),
-          ),
-          child: _isSplitView
+        ListenableBuilder(
+          listenable: SettingsService.instance,
+          builder: (context, _) => _buildTabBarFrame(
+            _isSplitView
               ? Row(
                   children: [
                     // Left Pane Tab Bar
@@ -201,6 +229,7 @@ extension _NexusScreenView on NexusScreenState {
                       _buildCloseAllButton(),
                   ],
                 ),
+          ),
         ),
 
         // Terminal view

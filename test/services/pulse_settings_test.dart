@@ -63,6 +63,17 @@ void main() {
       expect(settings.nexusPulseColor, NexusPulseColor.emerald);
     });
 
+    test('SettingsService tab style switches between pill and attached', () async {
+      final settings = SettingsService.instance;
+      expect(NexusTabStyle.values, [NexusTabStyle.pill, NexusTabStyle.attached]);
+
+      await settings.setNexusTabStyle(NexusTabStyle.attached);
+      expect(settings.nexusTabStyle, NexusTabStyle.attached);
+
+      await settings.setNexusTabStyle(NexusTabStyle.pill);
+      expect(settings.nexusTabStyle, NexusTabStyle.pill);
+    });
+
     test('SettingsService runbook auto close delay defaults to 1 and clamps to 0-30', () async {
       final settings = SettingsService.instance;
 

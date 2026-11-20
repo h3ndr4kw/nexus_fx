@@ -1904,6 +1904,41 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             controlAffinity: ListTileControlAffinity.leading,
           ),
           const SizedBox(height: 24),
+          _buildSettingsSection('SSH Session Tabs'),
+          const SizedBox(height: 8),
+          Text(
+            settings.nexusTabStyle == NexusTabStyle.pill
+                ? 'Tab aktif memakai pill terangkat dengan subtitle host/IP ringkas. '
+                    'Tombol tutup (×) pada tab tidak aktif hanya muncul saat hover agar bar tetap bersih.'
+                : 'Tab aktif menyatu langsung dengan area terminal di bawahnya, '
+                    'sedangkan tombol Close All dibuat netral agar tidak tertekan tidak sengaja.',
+            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 140,
+                child: Text('Tab Style:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ),
+              SizedBox(
+                width: 280,
+                child: FuzzySearchableDropdown<NexusTabStyle>(
+                  key: const ValueKey('settings_nexus_tab_style'),
+                  items: NexusTabStyle.values,
+                  selectedItem: settings.nexusTabStyle,
+                  itemLabel: (s) => s.label,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => settings.setNexusTabStyle(val));
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           _buildSettingsSection('SSH Session Tab Beacon Indicator'),
           const SizedBox(height: 8),
           const Text(

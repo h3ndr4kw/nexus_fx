@@ -54,6 +54,22 @@ extension _NexusTabStrip on NexusScreenState {
     );
   }
 
+  /// Host shown after the label on pill tabs, or null when it would add
+  /// nothing (local shells, or a label that already is the host).
+  String? _tabHostSubtitle(SshConnection conn) {
+    if (conn.isLocalShell) return null;
+    final host = conn.host.trim();
+    if (host.isEmpty || host.toLowerCase() == conn.label.trim().toLowerCase()) {
+      return null;
+    }
+    return host;
+  }
+
+  Color _terminalBackground() => TerminalThemeHelper.resolveTheme(
+        mode: SettingsService.instance.nexusTerminalThemeMode,
+        palette: AppTheme.activePalette,
+      ).background;
+
   Widget _buildTabListWidget({
     required List<SshConnection> tabs,
     required int activeIndex,
@@ -106,6 +122,9 @@ extension _NexusTabStrip on NexusScreenState {
         controller: controller,
         primary: false,
         scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.only(
+          left: SettingsService.instance.nexusTabStyle == NexusTabStyle.pill ? 4 : 0,
+        ),
         children: [
           for (int index = 0; index < tabs.length; index++)
             _buildTabItem(tabs[index], index, index == activeIndex, isRightPane),
@@ -122,123 +141,189 @@ extension _NexusTabStrip on NexusScreenState {
     bool isRightPane,
   ) {
     final palette = AppTheme.activePalette;
-    final tabItemWidget = InkWell(
-      canRequestFocus: false,
-      key: ValueKey(conn.id),
-      onTap: () {
-        if (_registerTabClick(conn)) {
-          _duplicateTab(conn, isRightPane: isRightPane);
-          return;
-        }
-        setState(() {
-          _lastActivePaneIsRight = isRightPane;
-          if (isRightPane) {
-            _activeRightTab = index;
-          } else {
-            _activeTab = index;
-          }
-        });
-        _focusActiveTerminal();
-      },
-      onSecondaryTapDown: (details) {
-        _lastActivePaneIsRight = isRightPane;
-        _showTabContextMenu(details.globalPosition, conn, isRightPane: isRightPane);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: isActive ? palette.background : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? palette.primaryColor : Colors.transparent,
-              width: 2,
-            ),
-            right: BorderSide(
-              color: palette.inputBorderColor,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            StreamBuilder<bool>(
-              stream: conn.connectionState,
-              initialData: conn.isConnected,
-              builder: (context, snapshot) {
-                final connected = snapshot.data ?? false;
-                if (connected && isActive) {
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () async {
-                      final next = await SettingsService.instance.cycleNexusPulseStyle();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Pulse Style: ${next.label}'),
-                            duration: const Duration(milliseconds: 1400),
-                            behavior: SnackBarBehavior.floating,
-                            width: 280,
-                          ),
-                        );
-                      }
-                    },
-                    child: Tooltip(
-                      message: 'Pulse: ${SettingsService.instance.nexusPulseStyle.label} • ${SettingsService.instance.nexusPulseColor.label}\nClick to cycle style',
-                      child: ListenableBuilder(
-                        listenable: SettingsService.instance,
-                        builder: (context, _) => RadarPulseIndicator(
-                          color: SettingsService.instance.nexusPulseColor.primary,
-                          size: 7.5,
-                          style: SettingsService.instance.nexusPulseStyle,
-                          pulseColor: SettingsService.instance.nexusPulseColor,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                return Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: connected
-                        ? palette.successColor
-                        : palette.errorColor,
+    final isPill = SettingsService.instance.nexusTabStyle == NexusTabStyle.pill;
+    final isHovered = _hoveredTabId == conn.id;
+
+    final statusIndicator = StreamBuilder<bool>(
+      stream: conn.connectionState,
+      initialData: conn.isConnected,
+      builder: (context, snapshot) {
+        final connected = snapshot.data ?? false;
+        if (connected && isActive) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () async {
+              final next = await SettingsService.instance.cycleNexusPulseStyle();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Pulse Style: ${next.label}'),
+                    duration: const Duration(milliseconds: 1400),
+                    behavior: SnackBarBehavior.floating,
+                    width: 280,
                   ),
                 );
-              },
-            ),
-            StreamBuilder<String>(
-              stream: conn.labelStream,
-              initialData: conn.currentLabel,
-              builder: (context, snapshot) {
-                return Text(
-                  snapshot.data ?? conn.currentLabel,
-                  style: TextStyle(
-                    color: isActive ? palette.textColor : palette.dimText(0.6),
-                    fontSize: 12,
-                    fontWeight:
-                        isActive ? FontWeight.bold : FontWeight.normal,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              canRequestFocus: false,
-              onTap: () => _closeTab(index, isRightPane: isRightPane),
-              child: Icon(
-                Icons.close,
-                size: 14,
-                color: isActive
-                    ? palette.textColor
-                    : palette.dimText(0.5),
+              }
+            },
+            child: Tooltip(
+              message: 'Pulse: ${SettingsService.instance.nexusPulseStyle.label} • ${SettingsService.instance.nexusPulseColor.label}\nClick to cycle style',
+              child: ListenableBuilder(
+                listenable: SettingsService.instance,
+                builder: (context, _) => RadarPulseIndicator(
+                  color: SettingsService.instance.nexusPulseColor.primary,
+                  size: 7.5,
+                  style: SettingsService.instance.nexusPulseStyle,
+                  pulseColor: SettingsService.instance.nexusPulseColor,
+                ),
               ),
             ),
-          ],
+          );
+        }
+        return Container(
+          width: 8,
+          height: 8,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: connected ? palette.successColor : palette.errorColor,
+          ),
+        );
+      },
+    );
+
+    final label = StreamBuilder<String>(
+      stream: conn.labelStream,
+      initialData: conn.currentLabel,
+      builder: (context, snapshot) {
+        return Text(
+          snapshot.data ?? conn.currentLabel,
+          style: TextStyle(
+            color: isActive ? palette.textColor : palette.dimText(0.6),
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        );
+      },
+    );
+
+    final subtitle = isPill ? _tabHostSubtitle(conn) : null;
+
+    // Pill tabs hide the close button on inactive tabs until hovered, but keep
+    // its space so tab widths do not shift under the mouse.
+    final closeButton = Visibility(
+      visible: !isPill || isActive || isHovered,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: InkWell(
+        canRequestFocus: false,
+        borderRadius: BorderRadius.circular(4),
+        hoverColor: palette.textColor.withValues(alpha: 0.1),
+        onTap: () => _closeTab(index, isRightPane: isRightPane),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            Icons.close,
+            size: 13,
+            color: isActive ? palette.dimText(0.8) : palette.dimText(0.5),
+          ),
         ),
+      ),
+    );
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        statusIndicator,
+        label,
+        if (subtitle != null) ...[
+          const SizedBox(width: 6),
+          Text(
+            '@$subtitle',
+            style: TextStyle(
+              color: palette.dimText(isActive ? 0.55 : 0.4),
+              fontSize: 11,
+              fontFamily: 'Consolas',
+              fontFamilyFallback: const ['Menlo', 'DejaVu Sans Mono', 'monospace'],
+            ),
+          ),
+        ],
+        SizedBox(width: isPill ? 6 : 8),
+        closeButton,
+      ],
+    );
+
+    final hoverFill = palette.textColor.withValues(alpha: 0.04);
+    final Widget tabBody;
+    if (isPill) {
+      tabBody = Container(
+        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+        padding: const EdgeInsets.only(left: 10, right: 5),
+        decoration: BoxDecoration(
+          color: isActive
+              ? palette.textColor.withValues(alpha: 0.08)
+              : (isHovered ? hoverFill : Colors.transparent),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isActive
+                ? palette.textColor.withValues(alpha: 0.12)
+                : Colors.transparent,
+          ),
+        ),
+        child: content,
+      );
+    } else {
+      // The active tab takes the terminal's background and has no bottom
+      // edge, so it reads as one surface with the terminal under it.
+      final edge = BorderSide(color: palette.inputBorderColor);
+      tabBody = Container(
+        margin: const EdgeInsets.only(top: 6, left: 2),
+        padding: const EdgeInsets.only(left: 12, right: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? _terminalBackground()
+              : (isHovered ? hoverFill : Colors.transparent),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+          border: isActive ? Border(top: edge, left: edge, right: edge) : null,
+        ),
+        child: content,
+      );
+    }
+
+    final tabItemWidget = MouseRegion(
+      onEnter: (_) {
+        if (_hoveredTabId != conn.id) setState(() => _hoveredTabId = conn.id);
+      },
+      onExit: (_) {
+        if (_hoveredTabId == conn.id) setState(() => _hoveredTabId = null);
+      },
+      child: InkWell(
+        canRequestFocus: false,
+        key: ValueKey(conn.id),
+        hoverColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        onTap: () {
+          if (_registerTabClick(conn)) {
+            _duplicateTab(conn, isRightPane: isRightPane);
+            return;
+          }
+          setState(() {
+            _lastActivePaneIsRight = isRightPane;
+            if (isRightPane) {
+              _activeRightTab = index;
+            } else {
+              _activeTab = index;
+            }
+          });
+          _focusActiveTerminal();
+        },
+        onSecondaryTapDown: (details) {
+          _lastActivePaneIsRight = isRightPane;
+          _showTabContextMenu(details.globalPosition, conn, isRightPane: isRightPane);
+        },
+        child: tabBody,
       ),
     );
 

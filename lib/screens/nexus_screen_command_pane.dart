@@ -9,13 +9,8 @@ part of 'nexus_screen.dart';
 extension _NexusCommandPane on NexusScreenState {
   Widget _buildCommandPaneToggleButton() {
     final palette = AppTheme.activePalette;
-    return Container(
+    return SizedBox(
       height: 36,
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: palette.inputBorderColor),
-        ),
-      ),
       child: Tooltip(
         message: _showCommandPane ? 'Hide command pane (Ctrl+Shift+Space)' : 'Show command pane (Ctrl+Shift+Space)',
         child: InkWell(
@@ -736,13 +731,8 @@ extension _NexusCommandPane on NexusScreenState {
 
   Widget _buildSplitButton() {
     final palette = AppTheme.activePalette;
-    return Container(
+    return SizedBox(
       height: 36,
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: palette.inputBorderColor),
-        ),
-      ),
       child: Tooltip(
         message: _isSplitView ? 'Close split view' : 'Split view',
         child: InkWell(
@@ -768,15 +758,14 @@ extension _NexusCommandPane on NexusScreenState {
 
   Widget _buildCloseAllButton() {
     final palette = AppTheme.activePalette;
+    // Pill style keeps a red outline; the attached style stays neutral so the
+    // button does not draw the eye, and only turns red on hover.
+    final isPill = SettingsService.instance.nexusTabStyle == NexusTabStyle.pill;
+    final fg = isPill ? palette.errorColor : palette.dimText(0.85);
     return Container(
       height: 36,
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: palette.inputBorderColor),
-        ),
-      ),
+      padding: const EdgeInsets.only(left: 4, right: 8),
       child: Tooltip(
         message: 'Close all tabs',
         child: Material(
@@ -789,31 +778,24 @@ extension _NexusCommandPane on NexusScreenState {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
               decoration: BoxDecoration(
-                color: palette.errorColor.withValues(alpha: 0.08),
+                color: isPill
+                    ? palette.errorColor.withValues(alpha: 0.08)
+                    : palette.textColor.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: palette.errorColor.withValues(alpha: 0.45),
+                  color: isPill
+                      ? palette.errorColor.withValues(alpha: 0.45)
+                      : palette.inputBorderColor,
                   width: 1,
                 ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.delete_outline_rounded,
-                    size: 14,
-                    color: palette.errorColor,
-                  ),
-                  const SizedBox(width: 4.5),
-                  Text(
-                    'Close All',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: palette.errorColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              child: Text(
+                'Close All',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: fg,
+                  fontWeight: isPill ? FontWeight.w600 : FontWeight.w500,
+                ),
               ),
             ),
           ),
