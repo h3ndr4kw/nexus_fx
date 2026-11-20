@@ -164,7 +164,9 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
 
   @override
   void dispose() {
-    _closeDropdown();
+    // No setState here: the element is being torn down.
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     super.dispose();
   }
 
@@ -237,8 +239,10 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
                       searchTerms: widget.searchTerms,
                       searchPlaceholder: widget.searchPlaceholder,
                       onSelected: (val) {
-                        widget.onChanged(val);
+                        // Close first so a failing onChanged cannot leave the
+                        // menu open with a stale check mark.
                         _closeDropdown();
+                        widget.onChanged(val);
                       },
                     ),
                   ),

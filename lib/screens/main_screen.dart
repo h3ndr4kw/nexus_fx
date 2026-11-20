@@ -1897,7 +1897,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             ),
             value: settings.reduceMotion,
             onChanged: (val) {
-              setState(() => settings.setReduceMotion(val ?? false));
+              settings.setReduceMotion(val ?? false);
+              setState(() {});
             },
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -1934,7 +1935,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   itemLabel: (s) => s.label,
                   onChanged: (val) {
                     if (val != null) {
-                      setState(() => settings.setNexusTabStyle(val));
+                      settings.setNexusTabStyle(val);
+                      setState(() {});
                     }
                   },
                 ),
@@ -1964,7 +1966,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   itemLabel: (s) => s.label,
                   onChanged: (val) {
                     if (val != null) {
-                      setState(() => settings.setNexusPulseStyle(val));
+                      settings.setNexusPulseStyle(val);
+                      setState(() {});
                     }
                   },
                 ),
@@ -2014,7 +2017,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   itemLabel: (c) => c.label,
                   onChanged: (val) {
                     if (val != null) {
-                      setState(() => settings.setNexusPulseColor(val));
+                      settings.setNexusPulseColor(val);
+                      setState(() {});
                     }
                   },
                 ),
@@ -2031,7 +2035,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
-                            setState(() => settings.setNexusPulseColor(pc));
+                            settings.setNexusPulseColor(pc);
+                            setState(() {});
                           },
                           child: Container(
                             width: 22,
@@ -2078,7 +2083,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             title: const Text('Show Sessions Manager dialog at startup', style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
             value: settings.showSessionDialogAtStartup,
             onChanged: (val) {
-              setState(() => settings.setShowSessionDialogAtStartup(val ?? true));
+              settings.setShowSessionDialogAtStartup(val ?? true);
+              setState(() {});
             },
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -2096,7 +2102,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             ),
             value: settings.transferNotifications,
             onChanged: (val) {
-              setState(() => settings.setTransferNotifications(val ?? true));
+              settings.setTransferNotifications(val ?? true);
+              setState(() {});
             },
             dense: true,
             contentPadding: EdgeInsets.zero,
