@@ -7,11 +7,11 @@ nexus_runbook_show_progress: true
 nexus_runbook_auto_close: true
 nexus_runbook_auto_close_delay: 1
 show_nodes_tab: false
-nexus_pulse_style: "classicRadar"
-nexus_pulse_color: "diamond"
+nexus_pulse_style: "telemetryHeartbeat"
+nexus_pulse_color: "sapphire"
 floating_command_width: 50
 right_sidebar_width: 440
-left_sidebar_width: 252
+left_sidebar_width: 185
 app_theme: "antigravity"
 app_font_size: "medium"
 border_animation_duration: 8.0

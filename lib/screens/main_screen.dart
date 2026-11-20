@@ -903,6 +903,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     final selected = await showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: position,
       color: AppTheme.surfaceColor,
       elevation: 6,

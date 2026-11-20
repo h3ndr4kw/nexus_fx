@@ -994,6 +994,7 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
 
     final selectedAction = await showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: RelativeRect.fromLTRB(
         position.dx,
         position.dy,
@@ -1143,6 +1144,7 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
 
     final selectedAction = await showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: RelativeRect.fromLTRB(
         position.dx,
         position.dy,

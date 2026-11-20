@@ -1006,6 +1006,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
     showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [
@@ -1102,6 +1103,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
     showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [
@@ -1195,6 +1197,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
   void _showEmptyAreaContextMenu(BuildContext context, Offset position) {
     showMenu<String>(
       context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [

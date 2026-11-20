@@ -312,13 +312,14 @@ class SshTabViewState extends State<SshTabView> {
     }
   }
 
-  Future<void> _pasteFromClipboard() async {
+  /// Returns false when the clipboard had no text to paste.
+  Future<bool> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
-    if (text != null && text.isNotEmpty) {
-      _terminal.paste(text);
-      _controller.clearSelection();
-    }
+    if (text == null || text.isEmpty) return false;
+    _terminal.paste(text);
+    _controller.clearSelection();
+    return true;
   }
 
   /// Sends the current terminal selection to the shell as input, leaving the
@@ -512,10 +513,8 @@ class SshTabViewState extends State<SshTabView> {
     try {
       _focusNode.requestFocus();
       final hasSelection = _controller.selection != null;
-      final clipData = await Clipboard.getData(Clipboard.kTextPlain);
-      final hasClipboard = clipData?.text != null && clipData!.text!.isNotEmpty;
-
-      if (!mounted) return;
+      // Clipboard is not read here: on Windows the read can stall the menu
+      // open. Paste checks for content when it is chosen instead.
 
       final overlay =
           Overlay.of(context).context.findRenderObject() as RenderBox?;
@@ -531,6 +530,7 @@ class SshTabViewState extends State<SshTabView> {
       final selected = await showMenu<String>(
         context: context,
         position: position,
+        popUpAnimationStyle: AnimationStyle.noAnimation,
         color: AppTheme.surfaceColor,
         elevation: 6,
         shape: RoundedRectangleBorder(
@@ -574,7 +574,7 @@ class SshTabViewState extends State<SshTabView> {
                 Icon(
                   Icons.paste,
                   size: 14,
-                  color: hasClipboard ? AppTheme.textColor : Colors.grey,
+                  color: AppTheme.textColor,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -582,7 +582,7 @@ class SshTabViewState extends State<SshTabView> {
                     'Paste',
                     style: TextStyle(
                       fontSize: 12,
-                      color: hasClipboard ? AppTheme.textColor : Colors.grey,
+                      color: AppTheme.textColor,
                     ),
                   ),
                 ),
@@ -813,9 +813,8 @@ class SshTabViewState extends State<SshTabView> {
           }
           break;
         case 'paste':
-          if (hasClipboard) {
-            await _pasteFromClipboard();
-          } else {
+          final pasted = await _pasteFromClipboard();
+          if (!pasted) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
