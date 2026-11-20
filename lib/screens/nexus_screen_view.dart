@@ -122,7 +122,7 @@ extension _NexusScreenView on NexusScreenState {
   Widget _buildTabBarFrame(Widget bar) {
     final palette = AppTheme.activePalette;
     final edge = BorderSide(color: palette.inputBorderColor);
-    if (SettingsService.instance.nexusTabStyle == NexusTabStyle.pill) {
+    if (SettingsService.instance.nexusTabStyle != NexusTabStyle.attached) {
       return Container(
         height: 36,
         decoration: BoxDecoration(

@@ -1907,11 +1907,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           _buildSettingsSection('SSH Session Tabs'),
           const SizedBox(height: 8),
           Text(
-            settings.nexusTabStyle == NexusTabStyle.pill
-                ? 'Tab aktif memakai pill terangkat dengan subtitle host/IP ringkas. '
-                    'Tombol tutup (×) pada tab tidak aktif hanya muncul saat hover agar bar tetap bersih.'
-                : 'Tab aktif menyatu langsung dengan area terminal di bawahnya, '
-                    'sedangkan tombol Close All dibuat netral agar tidak tertekan tidak sengaja.',
+            switch (settings.nexusTabStyle) {
+              NexusTabStyle.pill => 'Tab aktif memakai pill terangkat. '
+                  'Tombol tutup (×) pada tab tidak aktif hanya muncul saat hover agar bar tetap bersih.',
+              NexusTabStyle.classic => 'Tab datar dengan garis bawah berwarna pada tab aktif '
+                  'dan tombol tutup (×) di setiap tab.',
+              NexusTabStyle.attached => 'Tab aktif menyatu langsung dengan area terminal di bawahnya, '
+                  'sedangkan tombol Close All dibuat netral agar tidak tertekan tidak sengaja.',
+            },
             style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
           ),
           const SizedBox(height: 14),

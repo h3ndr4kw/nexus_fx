@@ -54,17 +54,6 @@ extension _NexusTabStrip on NexusScreenState {
     );
   }
 
-  /// Host shown after the label on pill tabs, or null when it would add
-  /// nothing (local shells, or a label that already is the host).
-  String? _tabHostSubtitle(SshConnection conn) {
-    if (conn.isLocalShell) return null;
-    final host = conn.host.trim();
-    if (host.isEmpty || host.toLowerCase() == conn.label.trim().toLowerCase()) {
-      return null;
-    }
-    return host;
-  }
-
   Color _terminalBackground() => TerminalThemeHelper.resolveTheme(
         mode: SettingsService.instance.nexusTerminalThemeMode,
         palette: AppTheme.activePalette,
@@ -141,7 +130,9 @@ extension _NexusTabStrip on NexusScreenState {
     bool isRightPane,
   ) {
     final palette = AppTheme.activePalette;
-    final isPill = SettingsService.instance.nexusTabStyle == NexusTabStyle.pill;
+    final tabStyle = SettingsService.instance.nexusTabStyle;
+    final isPill = tabStyle == NexusTabStyle.pill;
+    final isClassic = tabStyle == NexusTabStyle.classic;
     final isHovered = _hoveredTabId == conn.id;
 
     final statusIndicator = StreamBuilder<bool>(
@@ -201,13 +192,13 @@ extension _NexusTabStrip on NexusScreenState {
           style: TextStyle(
             color: isActive ? palette.textColor : palette.dimText(0.6),
             fontSize: 12,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            fontWeight: isActive
+                ? (isClassic ? FontWeight.bold : FontWeight.w600)
+                : FontWeight.normal,
           ),
         );
       },
     );
-
-    final subtitle = isPill ? _tabHostSubtitle(conn) : null;
 
     // Pill tabs hide the close button on inactive tabs until hovered, but keep
     // its space so tab widths do not shift under the mouse.
@@ -216,20 +207,30 @@ extension _NexusTabStrip on NexusScreenState {
       maintainSize: true,
       maintainAnimation: true,
       maintainState: true,
-      child: InkWell(
-        canRequestFocus: false,
-        borderRadius: BorderRadius.circular(4),
-        hoverColor: palette.textColor.withValues(alpha: 0.1),
-        onTap: () => _closeTab(index, isRightPane: isRightPane),
-        child: Padding(
-          padding: const EdgeInsets.all(2),
-          child: Icon(
-            Icons.close,
-            size: 13,
-            color: isActive ? palette.dimText(0.8) : palette.dimText(0.5),
-          ),
-        ),
-      ),
+      child: isClassic
+          ? InkWell(
+              canRequestFocus: false,
+              onTap: () => _closeTab(index, isRightPane: isRightPane),
+              child: Icon(
+                Icons.close,
+                size: 14,
+                color: isActive ? palette.textColor : palette.dimText(0.5),
+              ),
+            )
+          : InkWell(
+              canRequestFocus: false,
+              borderRadius: BorderRadius.circular(4),
+              hoverColor: palette.textColor.withValues(alpha: 0.1),
+              onTap: () => _closeTab(index, isRightPane: isRightPane),
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Icon(
+                  Icons.close,
+                  size: 13,
+                  color: isActive ? palette.dimText(0.8) : palette.dimText(0.5),
+                ),
+              ),
+            ),
     );
 
     final content = Row(
@@ -237,18 +238,6 @@ extension _NexusTabStrip on NexusScreenState {
       children: [
         statusIndicator,
         label,
-        if (subtitle != null) ...[
-          const SizedBox(width: 6),
-          Text(
-            '@$subtitle',
-            style: TextStyle(
-              color: palette.dimText(isActive ? 0.55 : 0.4),
-              fontSize: 11,
-              fontFamily: 'Consolas',
-              fontFamilyFallback: const ['Menlo', 'DejaVu Sans Mono', 'monospace'],
-            ),
-          ),
-        ],
         SizedBox(width: isPill ? 6 : 8),
         closeButton,
       ],
@@ -256,7 +245,22 @@ extension _NexusTabStrip on NexusScreenState {
 
     final hoverFill = palette.textColor.withValues(alpha: 0.04);
     final Widget tabBody;
-    if (isPill) {
+    if (isClassic) {
+      tabBody = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isActive ? palette.background : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? palette.primaryColor : Colors.transparent,
+              width: 2,
+            ),
+            right: BorderSide(color: palette.inputBorderColor),
+          ),
+        ),
+        child: content,
+      );
+    } else if (isPill) {
       tabBody = Container(
         margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
         padding: const EdgeInsets.only(left: 10, right: 5),
@@ -301,9 +305,9 @@ extension _NexusTabStrip on NexusScreenState {
       child: InkWell(
         canRequestFocus: false,
         key: ValueKey(conn.id),
-        hoverColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
+        hoverColor: isClassic ? null : Colors.transparent,
+        splashColor: isClassic ? null : Colors.transparent,
+        highlightColor: isClassic ? null : Colors.transparent,
         onTap: () {
           if (_registerTabClick(conn)) {
             _duplicateTab(conn, isRightPane: isRightPane);

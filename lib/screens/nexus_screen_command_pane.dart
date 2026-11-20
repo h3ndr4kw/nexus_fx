@@ -7,10 +7,20 @@ part of 'nexus_screen.dart';
 
 /// Command pane: broadcast input, history, snippets, node picker and the destructive-command guard.
 extension _NexusCommandPane on NexusScreenState {
+  /// Classic tab style separates toolbar buttons with a left edge; the other
+  /// styles leave them unframed.
+  BoxDecoration? _toolbarButtonDivider() {
+    if (SettingsService.instance.nexusTabStyle != NexusTabStyle.classic) return null;
+    return BoxDecoration(
+      border: Border(left: BorderSide(color: AppTheme.activePalette.inputBorderColor)),
+    );
+  }
+
   Widget _buildCommandPaneToggleButton() {
     final palette = AppTheme.activePalette;
-    return SizedBox(
+    return Container(
       height: 36,
+      decoration: _toolbarButtonDivider(),
       child: Tooltip(
         message: _showCommandPane ? 'Hide command pane (Ctrl+Shift+Space)' : 'Show command pane (Ctrl+Shift+Space)',
         child: InkWell(
@@ -731,8 +741,9 @@ extension _NexusCommandPane on NexusScreenState {
 
   Widget _buildSplitButton() {
     final palette = AppTheme.activePalette;
-    return SizedBox(
+    return Container(
       height: 36,
+      decoration: _toolbarButtonDivider(),
       child: Tooltip(
         message: _isSplitView ? 'Close split view' : 'Split view',
         child: InkWell(
@@ -758,14 +769,20 @@ extension _NexusCommandPane on NexusScreenState {
 
   Widget _buildCloseAllButton() {
     final palette = AppTheme.activePalette;
-    // Pill style keeps a red outline; the attached style stays neutral so the
-    // button does not draw the eye, and only turns red on hover.
-    final isPill = SettingsService.instance.nexusTabStyle == NexusTabStyle.pill;
-    final fg = isPill ? palette.errorColor : palette.dimText(0.85);
+    // Pill and classic keep a red outline (classic also its trash icon); the
+    // attached style stays neutral so the button does not draw the eye, and
+    // only turns red on hover.
+    final tabStyle = SettingsService.instance.nexusTabStyle;
+    final isClassic = tabStyle == NexusTabStyle.classic;
+    final isRed = tabStyle != NexusTabStyle.attached;
+    final fg = isRed ? palette.errorColor : palette.dimText(0.85);
     return Container(
       height: 36,
       alignment: Alignment.center,
-      padding: const EdgeInsets.only(left: 4, right: 8),
+      padding: isClassic
+          ? const EdgeInsets.symmetric(horizontal: 6)
+          : const EdgeInsets.only(left: 4, right: 8),
+      decoration: _toolbarButtonDivider(),
       child: Tooltip(
         message: 'Close all tabs',
         child: Material(
@@ -778,24 +795,33 @@ extension _NexusCommandPane on NexusScreenState {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
               decoration: BoxDecoration(
-                color: isPill
+                color: isRed
                     ? palette.errorColor.withValues(alpha: 0.08)
                     : palette.textColor.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: isPill
+                  color: isRed
                       ? palette.errorColor.withValues(alpha: 0.45)
                       : palette.inputBorderColor,
                   width: 1,
                 ),
               ),
-              child: Text(
-                'Close All',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: fg,
-                  fontWeight: isPill ? FontWeight.w600 : FontWeight.w500,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isClassic) ...[
+                    Icon(Icons.delete_outline_rounded, size: 14, color: fg),
+                    const SizedBox(width: 4.5),
+                  ],
+                  Text(
+                    'Close All',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: fg,
+                      fontWeight: isRed ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

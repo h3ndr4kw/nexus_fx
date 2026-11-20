@@ -35,8 +35,12 @@ enum NexusPulseStyle {
 
 /// How the SSH session tab strip in the Nexus workspace is drawn.
 enum NexusTabStyle {
-  /// Compact pills with a host subtitle; close buttons on inactive tabs show on hover.
+  /// Compact pills; close buttons on inactive tabs show on hover.
   pill('Pill'),
+
+  /// Flat tabs with a coloured underline on the active one and a close
+  /// button on every tab.
+  classic('Classic'),
 
   /// Tabs that join the terminal below them, with a close button on every tab.
   attached('Attached');

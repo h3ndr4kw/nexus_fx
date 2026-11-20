@@ -63,9 +63,13 @@ void main() {
       expect(settings.nexusPulseColor, NexusPulseColor.emerald);
     });
 
-    test('SettingsService tab style switches between pill and attached', () async {
+    test('SettingsService tab style switches between pill, classic and attached', () async {
       final settings = SettingsService.instance;
-      expect(NexusTabStyle.values, [NexusTabStyle.pill, NexusTabStyle.attached]);
+      expect(NexusTabStyle.values,
+          [NexusTabStyle.pill, NexusTabStyle.classic, NexusTabStyle.attached]);
+
+      await settings.setNexusTabStyle(NexusTabStyle.classic);
+      expect(settings.nexusTabStyle, NexusTabStyle.classic);
 
       await settings.setNexusTabStyle(NexusTabStyle.attached);
       expect(settings.nexusTabStyle, NexusTabStyle.attached);
