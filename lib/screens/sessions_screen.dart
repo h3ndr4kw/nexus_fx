@@ -853,13 +853,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
           const SizedBox(width: 8),
           _buildToolbarIcon(Icons.content_cut, 'Cut (Ctrl+X)', _selectedSessionId != null || _selectedFolderId != null ? _cutSelected : null),
           _buildToolbarIcon(Icons.copy_outlined, 'Copy (Ctrl+C)', _selectedSessionId != null || _selectedFolderId != null ? _copySelected : null),
-          _buildToolbarIcon(Icons.control_point_duplicate, 'Duplicate (Ctrl+D)', _selectedSessionId != null ? _duplicateSelected : null),
+          _buildToolbarIcon(Icons.file_copy_outlined, 'Duplicate (Ctrl+D)', _selectedSessionId != null ? _duplicateSelected : null),
           _buildToolbarIcon(Icons.paste_outlined, 'Paste (Ctrl+V)', _mgr.hasClipboardItem ? _paste : null),
           _buildToolbarIcon(Icons.delete_outline, 'Delete (Del)', _selectedSessionId != null || _selectedFolderId != null ? _deleteSelected : null),
           const SizedBox(width: 8),
           const SizedBox(height: 20, child: VerticalDivider(width: 1, color: AppTheme.borderSubtle)),
           const SizedBox(width: 8),
-          _buildToolbarIcon(Icons.settings_ethernet, 'Properties (Alt+Enter)', _selectedSessionId != null || _selectedFolderId != null ? _editSelectedProperties : null),
+          _buildToolbarIcon(Icons.tune, 'Properties (Alt+Enter)', _selectedSessionId != null || _selectedFolderId != null ? _editSelectedProperties : null),
           const Spacer(),
           SizedBox(
             width: 240,
@@ -913,13 +913,23 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
   Widget _buildToolbarIcon(IconData icon, String tooltip, VoidCallback? onPressed) {
     return IconButton(
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 16),
       tooltip: tooltip,
       onPressed: onPressed,
-      color: onPressed != null ? AppTheme.textPrimary : AppTheme.textMuted.withValues(alpha: 0.4),
-      splashRadius: 16,
-      padding: const EdgeInsets.all(6),
-      constraints: const BoxConstraints(),
+      style: IconButton.styleFrom(
+        hoverColor: AppTheme.textPrimary.withValues(alpha: 0.06),
+        highlightColor: AppTheme.textPrimary.withValues(alpha: 0.10),
+        padding: const EdgeInsets.all(7),
+        minimumSize: const Size(30, 30),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ).copyWith(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return AppTheme.textMuted.withValues(alpha: 0.35);
+          if (states.contains(WidgetState.hovered)) return AppTheme.textPrimary;
+          return AppTheme.textSecondary;
+        }),
+      ),
     );
   }
 
@@ -1119,7 +1129,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           value: 'duplicate',
           child: Row(
             children: [
-              Icon(Icons.control_point_duplicate, size: 16, color: AppTheme.textSecondary),
+              Icon(Icons.file_copy_outlined, size: 16, color: AppTheme.textSecondary),
               SizedBox(width: 8),
               Text('Duplicate (Ctrl+D)', style: TextStyle(fontSize: 12)),
             ],
@@ -1151,7 +1161,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           value: 'properties',
           child: Row(
             children: [
-              Icon(Icons.settings_ethernet, size: 16, color: AppTheme.textSecondary),
+              Icon(Icons.tune, size: 16, color: AppTheme.textSecondary),
               SizedBox(width: 8),
               Text('Properties (Alt+Enter)', style: TextStyle(fontSize: 12)),
             ],
@@ -1702,7 +1712,6 @@ class _SessionsScreenState extends State<SessionsScreen> {
           const SizedBox(width: 8),
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
               side: const BorderSide(color: AppTheme.borderSubtle),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
