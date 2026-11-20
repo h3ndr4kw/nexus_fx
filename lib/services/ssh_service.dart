@@ -16,6 +16,7 @@ import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
 import 'ssh_algorithm_helper.dart';
 import 'terminal_output_scheduler.dart';
+import 'windows_conpty.dart';
 
 export 'ssh_algorithm_helper.dart';
 
@@ -62,6 +63,9 @@ class SshConnection {
   final String customSshOptions;
   bool isLocalShell;
   Process? _localProcess;
+
+  /// Windows local shell, hosted in a pseudo console so programs see a TTY.
+  WindowsConPty? _localPty;
 
   TunnelMode _tunnelMode = TunnelMode.multiplexed;
   TunnelMode get tunnelMode => _tunnelMode;
@@ -443,59 +447,20 @@ class SshConnection {
           : (this.targetPassword ?? '');
 
       if (isLocalShell) {
-        String executable;
-        final List<String> args;
-        if (Platform.isWindows) {
-          const pwsh7Path = r'C:\Program Files\PowerShell\7\pwsh.exe';
-          if (File(pwsh7Path).existsSync()) {
-            executable = pwsh7Path;
-          } else {
-            executable = 'powershell.exe';
-          }
-          args = [
-            '-NoLogo',
-            '-NoExit',
-            '-Command',
-            r'function Clear-Host { [Console]::Write("$([char]27)[2J$([char]27)[H") }',
-          ];
-        } else {
-          executable = Platform.environment['SHELL'] ?? '/bin/bash';
-          args = ['-l'];
-        }
+        if (Platform.isWindows) return await _connectLocalConPty();
+        final executable = Platform.environment['SHELL'] ?? '/bin/bash';
         try {
-          try {
-            _localProcess = await Process.start(executable, args);
-          } catch (_) {
-            if (Platform.isWindows && executable != 'powershell.exe') {
-              executable = 'powershell.exe';
-              _localProcess = await Process.start(executable, args);
-            } else {
-              rethrow;
-            }
-          }
+          _localProcess = await Process.start(executable, const ['-l']);
           _isConnected = true;
           _setConnectionState(true);
           _addOutput('\r\n--- Local Shell Ready ($executable) ---\r\n\r\n');
           _decodedOutput(_localProcess!.stdout).listen((s) {
-            var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
-            if (Platform.isWindows) {
-              normalized = normalized.replaceAll('\b', '\b \b');
-            }
-            _addOutput(normalized);
+            _addOutput(s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));
           });
           _decodedOutput(_localProcess!.stderr).listen((s) {
-            var normalized = s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
-            if (Platform.isWindows) {
-              normalized = normalized.replaceAll('\b', '\b \b');
-            }
-            _addOutput(normalized);
+            _addOutput(s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));
           });
-          _localProcess!.exitCode.then((code) {
-            _isConnected = false;
-            _setConnectionState(false);
-            _addOutput('\r\n[Process terminated with code $code]\r\n');
-            onClosed?.call();
-          });
+          _localProcess!.exitCode.then(_onLocalShellExit);
           return true;
         } catch (e) {
           _isConnected = false;
@@ -557,6 +522,49 @@ class SshConnection {
     }
   }
 
+  Future<bool> _connectLocalConPty() async {
+    const pwsh7Path = r'C:\Program Files\PowerShell\7\pwsh.exe';
+    final candidates = [
+      if (File(pwsh7Path).existsSync()) pwsh7Path,
+      'powershell.exe',
+    ];
+    final columns = terminal.viewWidth > 0 ? terminal.viewWidth : 80;
+    final rows = terminal.viewHeight > 0 ? terminal.viewHeight : 24;
+    Object? lastError;
+    for (final executable in candidates) {
+      try {
+        final pty = await WindowsConPty.start(
+          executable,
+          const ['-NoLogo'],
+          columns: columns,
+          rows: rows,
+        );
+        _localPty = pty;
+        _lastSentPtyWidth = columns;
+        _lastSentPtyHeight = rows;
+        _isConnected = true;
+        _setConnectionState(true);
+        _decodedOutput(pty.output).listen(_addOutput);
+        pty.exitCode.then(_onLocalShellExit);
+        return true;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    _isConnected = false;
+    _setConnectionState(false);
+    _addOutput('\r\nFailed to start local shell: $lastError\r\n');
+    return false;
+  }
+
+  void _onLocalShellExit(int code) {
+    _localPty = null;
+    _isConnected = false;
+    _setConnectionState(false);
+    _addOutput('\r\n[Process terminated with code $code]\r\n');
+    onClosed?.call();
+  }
+
   /// The jump host the current forward runs through.
   String? _activeJumpHost;
 
@@ -606,21 +614,14 @@ class SshConnection {
   }
 
   void _sendRaw(String data) {
-    if (isLocalShell && _localProcess != null) {
-      String localData = data;
-      if (Platform.isWindows) {
-        // Windows shells (powershell.exe, cmd.exe) expect CRLF (\r\n) on Enter
-        localData = localData
-            .replaceAll('\r\n', '\n')
-            .replaceAll('\r', '\n')
-            .replaceAll('\n', '\r\n')
-            .replaceAll('\x7f', '\b');
-      } else {
-        // Unix shells (bash, zsh) reading from a pipe expect LF (\n) on Enter
-        localData = localData
-            .replaceAll('\r\n', '\n')
-            .replaceAll('\r', '\n');
-      }
+    if (isLocalShell && _localPty != null) {
+      // A console reads Enter as CR, like a real keyboard; pasted LF/CRLF
+      // line breaks become CR the way Windows Terminal sends them.
+      final keys = data.replaceAll('\r\n', '\r').replaceAll('\n', '\r');
+      _localPty!.write(utf8.encode(keys));
+    } else if (isLocalShell && _localProcess != null) {
+      // Unix shells (bash, zsh) reading from a pipe expect LF (\n) on Enter
+      final localData = data.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
       _localProcess!.stdin.write(localData);
       _localProcess!.stdin.flush().catchError((_) {});
     } else if (_session != null) {
@@ -644,12 +645,12 @@ class SshConnection {
             _enqueueTerminal('\x1b[2J\x1b[H');
           }
           _inputLineBuffer = '';
-          buffer.write(Platform.isWindows ? '\r\n' : '\n');
+          buffer.write('\n');
         } else if (char == '\x7f' || char == '\b' || char == '\x08') {
           if (_inputLineBuffer.isNotEmpty) {
             _inputLineBuffer =
                 _inputLineBuffer.substring(0, _inputLineBuffer.length - 1);
-            buffer.write(Platform.isWindows ? '\b' : '\x7f');
+            buffer.write('\x7f');
           }
         } else if (char == '\x03' || char == '\x15') {
           _inputLineBuffer = '';
@@ -812,6 +813,15 @@ class SshConnection {
 
   void resize(int width, int height) {
     if (width <= 0 || height <= 0) return;
+    if (_localPty != null) {
+      // Local console: no remote round-trip to coalesce, resize right away
+      // so full-screen programs redraw at the new size.
+      if (_lastSentPtyWidth == width && _lastSentPtyHeight == height) return;
+      _lastSentPtyWidth = width;
+      _lastSentPtyHeight = height;
+      _localPty!.resize(width, height);
+      return;
+    }
     // Nothing to notify when there is no remote PTY yet; the initial PTY size
     // is taken from the terminal viewport when the shell is opened.
     if (_session == null && onPtyResizeForTesting == null) return;
@@ -839,9 +849,9 @@ class SshConnection {
     recordLogCommand(clean);
 
     if (isLocalShell) {
-      write('$clean\n');
-      // For local shells running on pipes without a pseudo-console,
-      // no interactive prompt is emitted. Small delay allows stdin flush.
+      write('$clean\r');
+      // Prompt detection is tuned for remote shells; a short delay lets the
+      // local shell pick the line up.
       await Future.delayed(const Duration(milliseconds: 60));
       return true;
     }
@@ -914,8 +924,10 @@ class SshConnection {
     if (isLocalShell) {
       try {
         _localProcess?.kill();
+        _localPty?.kill();
       } catch (_) {}
       _localProcess = null;
+      _localPty = null;
     }
     _session?.close();
     _client?.close();
