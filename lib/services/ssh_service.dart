@@ -16,7 +16,7 @@ import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
 import 'ssh_algorithm_helper.dart';
 import 'terminal_output_scheduler.dart';
-import 'windows_conpty.dart';
+import 'local_pty.dart';
 
 export 'ssh_algorithm_helper.dart';
 
@@ -62,10 +62,9 @@ class SshConnection {
   final String sshMacs;
   final String customSshOptions;
   bool isLocalShell;
-  Process? _localProcess;
 
-  /// Windows local shell, hosted in a pseudo console so programs see a TTY.
-  WindowsConPty? _localPty;
+  /// Local shell on a pseudo-terminal, so programs see a TTY.
+  LocalPty? _localPty;
 
   TunnelMode _tunnelMode = TunnelMode.multiplexed;
   TunnelMode get tunnelMode => _tunnelMode;
@@ -446,29 +445,7 @@ class SshConnection {
           ? targetPassword
           : (this.targetPassword ?? '');
 
-      if (isLocalShell) {
-        if (Platform.isWindows) return await _connectLocalConPty();
-        final executable = Platform.environment['SHELL'] ?? '/bin/bash';
-        try {
-          _localProcess = await Process.start(executable, const ['-l']);
-          _isConnected = true;
-          _setConnectionState(true);
-          _addOutput('\r\n--- Local Shell Ready ($executable) ---\r\n\r\n');
-          _decodedOutput(_localProcess!.stdout).listen((s) {
-            _addOutput(s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));
-          });
-          _decodedOutput(_localProcess!.stderr).listen((s) {
-            _addOutput(s.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));
-          });
-          _localProcess!.exitCode.then(_onLocalShellExit);
-          return true;
-        } catch (e) {
-          _isConnected = false;
-          _setConnectionState(false);
-          _addOutput('\r\nFailed to start local shell: $e\r\n');
-          return false;
-        }
-      }
+      if (isLocalShell) return await _connectLocalPty();
 
       if (nmConfig != null && nmConfig.host.trim().isNotEmpty) {
         if (_tunnelMode == TunnelMode.multiplexed) {
@@ -522,22 +499,24 @@ class SshConnection {
     }
   }
 
-  Future<bool> _connectLocalConPty() async {
-    const pwsh7Path = r'C:\Program Files\PowerShell\7\pwsh.exe';
-    final candidates = [
-      if (File(pwsh7Path).existsSync()) pwsh7Path,
-      'powershell.exe',
-    ];
+  Future<bool> _connectLocalPty() async {
     final columns = terminal.viewWidth > 0 ? terminal.viewWidth : 80;
     final rows = terminal.viewHeight > 0 ? terminal.viewHeight : 24;
-    Object? lastError;
-    for (final executable in candidates) {
+    // A GUI launch on macOS/Linux starts in "/" (or wherever the launcher
+    // was); open the shell at home like a terminal app does. Windows keeps
+    // inheriting the app's directory.
+    final home = Platform.isWindows ? null : Platform.environment['HOME'];
+    Object? lastError = 'no shell found';
+    for (final (executable, args) in LocalPty.defaultShells()) {
       try {
-        final pty = await WindowsConPty.start(
+        final pty = await LocalPty.start(
           executable,
-          const ['-NoLogo'],
+          args,
           columns: columns,
           rows: rows,
+          workingDirectory:
+              home != null && Directory(home).existsSync() ? home : null,
+          environment: Platform.isWindows ? null : LocalPty.unixEnvironment(),
         );
         _localPty = pty;
         _lastSentPtyWidth = columns;
@@ -615,15 +594,10 @@ class SshConnection {
 
   void _sendRaw(String data) {
     if (isLocalShell && _localPty != null) {
-      // A console reads Enter as CR, like a real keyboard; pasted LF/CRLF
-      // line breaks become CR the way Windows Terminal sends them.
+      // A terminal reads Enter as CR, like a real keyboard; pasted LF/CRLF
+      // line breaks become CR the way Windows Terminal and iTerm send them.
       final keys = data.replaceAll('\r\n', '\r').replaceAll('\n', '\r');
       _localPty!.write(utf8.encode(keys));
-    } else if (isLocalShell && _localProcess != null) {
-      // Unix shells (bash, zsh) reading from a pipe expect LF (\n) on Enter
-      final localData = data.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-      _localProcess!.stdin.write(localData);
-      _localProcess!.stdin.flush().catchError((_) {});
     } else if (_session != null) {
       _session!.stdin.add(Uint8List.fromList(utf8.encode(data)));
     }
@@ -631,46 +605,6 @@ class SshConnection {
   }
 
   void write(String data) {
-    if (isLocalShell && _localProcess != null) {
-      final buffer = StringBuffer();
-      for (int i = 0; i < data.length; i++) {
-        final char = data[i];
-        if (char == '\r' || char == '\n') {
-          final command = _inputLineBuffer.trim().toLowerCase();
-          if (command == 'exit' || command == 'logout') {
-            if (SettingsService.instance.nexusCascadeExit) {
-              _handleUserExit();
-            }
-          } else if (command == 'cls' || command == 'clear') {
-            _enqueueTerminal('\x1b[2J\x1b[H');
-          }
-          _inputLineBuffer = '';
-          buffer.write('\n');
-        } else if (char == '\x7f' || char == '\b' || char == '\x08') {
-          if (_inputLineBuffer.isNotEmpty) {
-            _inputLineBuffer =
-                _inputLineBuffer.substring(0, _inputLineBuffer.length - 1);
-            buffer.write('\x7f');
-          }
-        } else if (char == '\x03' || char == '\x15') {
-          _inputLineBuffer = '';
-          buffer.write(char);
-        } else if (char.codeUnitAt(0) >= 32) {
-          _inputLineBuffer += char;
-          buffer.write(char);
-        } else {
-          buffer.write(char);
-        }
-      }
-      final toSend = buffer.toString();
-      if (toSend.isNotEmpty) {
-        _localProcess!.stdin.write(toSend);
-        _localProcess!.stdin.flush().catchError((_) {});
-      }
-      onDataWritten?.call(data);
-      return;
-    }
-
     _sendRaw(data);
 
     if (!_isConnected) return;
@@ -923,10 +857,8 @@ class SshConnection {
     _resizeDebounceTimer = null;
     if (isLocalShell) {
       try {
-        _localProcess?.kill();
         _localPty?.kill();
       } catch (_) {}
-      _localProcess = null;
       _localPty = null;
     }
     _session?.close();

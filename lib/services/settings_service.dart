@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:yaml/yaml.dart';
 import '../theme/app_theme.dart';
 import '../models/file_explorer_models.dart';
+import 'app_paths.dart';
 
 enum NodeViewMode {
   cards,
@@ -262,7 +263,7 @@ class SettingsService extends ChangeNotifier {
   }
 
   String _getConfigPath() {
-    return _customConfigPath ?? 'config/settings.yaml';
+    return _customConfigPath ?? AppPaths.settingsFile;
   }
 
   Future<void> loadSettings() async {

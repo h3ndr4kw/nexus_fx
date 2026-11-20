@@ -9,6 +9,7 @@ import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
+import '../services/app_paths.dart';
 
 
 class FileExplorerIconHelper {
@@ -375,7 +376,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   @override
   void initState() {
     super.initState();
-    final initialLocalPath = Directory.current.path;
+    final initialLocalPath = AppPaths.defaultLocalDir;
     final leftTarget = widget.initialLeftTarget ?? ExplorerNodeTarget.local;
     final rightTarget = widget.initialRightTarget ?? ExplorerNodeTarget.local;
 
@@ -837,7 +838,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         pane.filterText = '';
         pane.filterInputController.clear();
         pane.isFiltering = false;
-        pane.currentPath = selected.isLocal ? Directory.current.path : '/home';
+        pane.currentPath = selected.isLocal ? AppPaths.defaultLocalDir : '/home';
         pane.selectedIndex = 0;
         pane.multiSelected.clear();
         pane.isLoading = true;

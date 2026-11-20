@@ -10,6 +10,7 @@ import '../theme/terminal_theme_helper.dart';
 import '../services/settings_service.dart';
 import '../services/ssh_service.dart';
 import '../services/ssh_log_service.dart';
+import '../services/app_paths.dart';
 
 class SshTabView extends StatefulWidget {
   final SshConnection connection;
@@ -118,7 +119,7 @@ class SshTabViewState extends State<SshTabView> {
           : widget.connection.currentHost;
       final safeHost = hostName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
-      final baseDir = logSvc.baseDir ?? Directory.current.path;
+      final baseDir = logSvc.baseDir ?? AppPaths.dataDir;
       final dir = Directory(
           '$baseDir${Platform.pathSeparator}logs${Platform.pathSeparator}nexus${Platform.pathSeparator}$dateStr');
       if (!dir.existsSync()) {

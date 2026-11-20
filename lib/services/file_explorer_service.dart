@@ -10,6 +10,7 @@ import 'ssh_tunnel_manager.dart';
 import 'rust_sftp_bridge.dart';
 import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
+import 'app_paths.dart';
 
 class RemoteSession {
   final SSHClient client;
@@ -222,8 +223,7 @@ class FileExplorerService {
   Future<List<FileExplorerItem>> listLocal(String dirPath, {String filter = ''}) async {
     final dir = Directory(dirPath);
     if (!await dir.exists()) {
-      final cur = Directory.current;
-      return listLocal(cur.path, filter: filter);
+      return listLocal(AppPaths.defaultLocalDir, filter: filter);
     }
 
     final items = <FileExplorerItem>[];

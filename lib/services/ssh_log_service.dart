@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'app_paths.dart';
 
 /// Why a session log stopped recording.
 class SshLogFailure {
@@ -198,7 +199,7 @@ class SshLogService {
   }
 
   String get _resolvedBaseDir {
-    return baseDir ?? Directory.current.path;
+    return baseDir ?? AppPaths.dataDir;
   }
 
   String formatDate(DateTime dt) {
