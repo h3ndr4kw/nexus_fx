@@ -521,6 +521,11 @@ class SshConnection {
         _localPty = pty;
         _lastSentPtyWidth = columns;
         _lastSentPtyHeight = rows;
+        // The tab usually lays the terminal out while the shell is starting;
+        // that resize found no PTY and was dropped, so catch up now.
+        // Otherwise the console stays at the pre-layout default (80x24) and
+        // e.g. `clear` only wipes the top 24 rows.
+        resize(terminal.viewWidth, terminal.viewHeight);
         _isConnected = true;
         _setConnectionState(true);
         _decodedOutput(pty.output).listen(_addOutput);
