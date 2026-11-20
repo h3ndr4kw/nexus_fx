@@ -366,7 +366,15 @@ class AppTheme {
 
   static ThemeData get darkTheme => getThemeData(currentTheme);
 
-  static ThemeData getThemeData(AppThemeType type) {
+  // Cached per type: ThemeData holds WidgetStateProperty closures that never
+  // compare equal, so a fresh instance on every settings-driven MaterialApp
+  // rebuild made AnimatedTheme lerp the whole app for ~200ms.
+  static final Map<AppThemeType, ThemeData> _themeCache = {};
+
+  static ThemeData getThemeData(AppThemeType type) =>
+      _themeCache.putIfAbsent(type, () => _buildThemeData(type));
+
+  static ThemeData _buildThemeData(AppThemeType type) {
     final palette = getPalette(type);
     return ThemeData(
       brightness: Brightness.dark,

@@ -182,7 +182,8 @@ class SettingsService extends ChangeNotifier {
   void setShowSessionDialogAtStartup(bool show) {
     if (_showSessionDialogAtStartup != show) {
       _showSessionDialogAtStartup = show;
-      notifyListeners();
+      // No notifyListeners(): nothing renders this live, and notifying
+      // rebuilds the whole MaterialApp (and every terminal tab) per toggle.
       saveSettings();
     }
   }

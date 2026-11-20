@@ -1675,22 +1675,38 @@ class _SessionsScreenState extends State<SessionsScreen> {
         children: [
           InkWell(
             borderRadius: BorderRadius.circular(4),
+            splashFactory: NoSplash.splashFactory,
             onTap: () => _setShowAtStartup(!_showAtStartup),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Checkbox(
-                  value: _showAtStartup,
-                  onChanged: (val) => _setShowAtStartup(val ?? false),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Show this dialog box at startup',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(width: 6),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Plain box instead of Material Checkbox: its ~200ms check-stroke
+                  // + radial reaction animation made the toggle feel laggy.
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: _showAtStartup ? AppTheme.accentPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(
+                        color: _showAtStartup ? AppTheme.accentPrimary : AppTheme.textMuted,
+                        width: 1.2,
+                      ),
+                    ),
+                    child: _showAtStartup
+                        ? const Icon(Icons.check, size: 12, color: AppTheme.background)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Show this dialog box at startup',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(width: 2),
+                ],
+              ),
             ),
           ),
           const Spacer(),
