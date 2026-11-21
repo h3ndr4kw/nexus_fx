@@ -13,7 +13,7 @@
 
 ## Overview
 
-**NexusFX** is a desktop application engineered for sysadmins, DevOps engineers, and network operators. Built with Flutter Desktop and boosted by a native Rust engine, NexusFX combines the ergonomics of classic tools like Xshell with modern fluid design, keyboard-driven navigation, multi-tab terminal broadcast, transparent Jump Host routing, and interactive executable runbooks (`.nxnb`).
+**NexusFX** is a desktop application engineered for sysadmins, DevOps engineers, and network operators. Built with Flutter Desktop and boosted by a native Rust engine, NexusFX combines the ergonomics of classic tools with modern fluid design, keyboard-driven navigation, multi-tab terminal broadcast, transparent Jump Host routing, and interactive executable runbooks (`.nxnb`).
 
 ---
 
@@ -30,7 +30,7 @@
 - **Clipboard & Batch Operations**: Quick `Cut`, `Copy`, `Paste`, `Duplicate`, and inline search.
 - **Comprehensive Session Properties**:
   - **Connection**: Host, port, protocol, keepalive, and timeout.
-  - **Authentication**: Password (AES-256 encrypted in storage) or Private Key authentication.
+   **Authentication**: Password (AES-256 encrypted in storage) or Private Key authentication.
   - **Jump Host / ProxyJump Routing**: Direct connection, via existing session profile, or via custom jump hosts.
   - **SSH Tunneling**: Local and remote port forwarding configurations.
   - **Appearance & Logging**: Font size, custom color palettes, and automated local session logging.

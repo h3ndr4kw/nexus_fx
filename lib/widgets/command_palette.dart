@@ -14,6 +14,7 @@ enum CommandAction {
   toggleRunbookSidebar,
   toggleSplitView,
   toggleSessionFullscreen,
+  showKeyboardShortcuts,
   setTheme,
   setFontSize,
   openCustomTool,
@@ -111,6 +112,12 @@ class _CommandPaletteState extends State<CommandPalette> {
     }
 
     if (!widget.sessionsOnly) {
+      list.add(const CommandItem(
+        label: 'Show Keyboard Shortcuts',
+        subtitle: 'All shortcuts for navigation, terminals, sessions and explorer (F1)',
+        icon: Icons.keyboard_outlined,
+        action: CommandAction.showKeyboardShortcuts,
+      ));
       list.add(const CommandItem(
         label: 'Open Sessions Manager',
         subtitle: 'Manage sessions, folders, and connection properties',
