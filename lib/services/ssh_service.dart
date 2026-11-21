@@ -203,8 +203,11 @@ class SshConnection {
   final List<StreamSubscription<dynamic>> _outputSubscriptions = [];
   bool _outputPaused = false;
 
+  /// Scrollback kept by [terminal], clamped to sane bounds.
+  final int scrollbackLines;
+
   late final Terminal terminal = Terminal(
-    maxLines: 10000,
+    maxLines: scrollbackLines,
     reflowEnabled: false,
   );
   late final TerminalController terminalController = TerminalController();
@@ -235,7 +238,10 @@ class SshConnection {
     this.logService,
     this.logTimestamp,
     TunnelMode? tunnelMode,
-  })  : _currentHost = host,
+    int scrollbackLines = kDefaultScrollbackLines,
+  })  : scrollbackLines =
+            scrollbackLines.clamp(kMinScrollbackLines, kMaxScrollbackLines),
+        _currentHost = host,
         _currentLabel = label,
         _tunnelMode = tunnelMode ?? TunnelMode.multiplexed,
         isOam = isOam ??
@@ -282,6 +288,7 @@ class SshConnection {
       sshMacs: profile.sshMacs,
       customSshOptions: profile.customSshOptions,
       tunnelMode: profile.tunnelMode,
+      scrollbackLines: profile.scrollbackLines,
     );
     return conn;
   }
@@ -314,6 +321,7 @@ class SshConnection {
       sshMacs: sshMacs,
       customSshOptions: customSshOptions,
       tunnelMode: _tunnelMode,
+      scrollbackLines: scrollbackLines,
     );
   }
 

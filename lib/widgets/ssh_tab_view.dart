@@ -11,6 +11,7 @@ import '../services/settings_service.dart';
 import '../services/ssh_service.dart';
 import '../services/ssh_log_service.dart';
 import '../services/app_paths.dart';
+import 'terminal_find_bar.dart';
 
 class SshTabView extends StatefulWidget {
   final SshConnection connection;
@@ -49,6 +50,10 @@ class SshTabViewState extends State<SshTabView> {
   StreamSubscription<bool>? _connectionSubscription;
   double _fontSize = 14.0;
   bool _isContextMenuOpen = false;
+  final GlobalKey<TerminalViewState> _terminalViewKey = GlobalKey();
+  bool _isFindOpen = false;
+  int _findFocusRequest = 0;
+  String _findSeed = '';
 
   void requestFocus() {
     if (mounted) {
@@ -331,6 +336,43 @@ class SshTabViewState extends State<SshTabView> {
     _controller.clearSelection();
   }
 
+  /// Opens the find bar, seeded with the selection when it is a short
+  /// single-line fragment. When already open it just takes focus again.
+  void openFind() {
+    final selected = _selectedText?.trim() ?? '';
+    final seed = selected.isNotEmpty &&
+            !selected.contains('\n') &&
+            selected.length <= 200
+        ? selected
+        : '';
+    setState(() {
+      if (seed.isNotEmpty || !_isFindOpen) _findSeed = seed;
+      _isFindOpen = true;
+      _findFocusRequest++;
+    });
+  }
+
+  void _closeFind() {
+    if (!_isFindOpen) return;
+    setState(() => _isFindOpen = false);
+    _focusNode.requestFocus();
+  }
+
+  /// Scrolls so buffer row [line] is visible, centring it when it is not.
+  void _revealLine(int line) {
+    final view = _terminalViewKey.currentState;
+    if (view == null || !_scrollController.hasClients) return;
+    final lineHeight = view.renderTerminal.lineHeight;
+    if (lineHeight <= 0) return;
+    final position = _scrollController.position;
+    final top = line * lineHeight;
+    final visibleBottom =
+        position.pixels + position.viewportDimension - widget.bottomInset;
+    if (top >= position.pixels && top + lineHeight <= visibleBottom) return;
+    final target = top - (position.viewportDimension - lineHeight) / 2;
+    _scrollController.jumpTo(target.clamp(0.0, position.maxScrollExtent));
+  }
+
   void _selectAll() {
     if (_terminal.buffer.lines.length == 0) return;
     final lastLineIndex = _terminal.buffer.lines.length - 1;
@@ -395,6 +437,22 @@ class SshTabViewState extends State<SshTabView> {
         _copySelection();
         return KeyEventResult.handled;
       }
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+F / Ctrl+Shift+F: find in buffer; the keystroke is not sent to the shell
+    if (isCtrl && !isAlt && event.logicalKey == LogicalKeyboardKey.keyF) {
+      openFind();
+      return KeyEventResult.handled;
+    }
+
+    // Escape closes the find bar when it is open (otherwise it goes to the shell)
+    if (_isFindOpen &&
+        !isCtrl &&
+        !isAlt &&
+        !isShift &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      _closeFind();
       return KeyEventResult.handled;
     }
 
@@ -625,6 +683,27 @@ class SshTabViewState extends State<SshTabView> {
           ),
           const PopupMenuDivider(height: 1),
           PopupMenuItem<String>(
+            value: 'find',
+            height: 36,
+            child: Row(
+              children: [
+                Icon(Icons.search, size: 14, color: AppTheme.textColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Find...',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textColor),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Ctrl+F',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
             value: 'select_all',
             height: 36,
             child: Row(
@@ -829,6 +908,9 @@ class SshTabViewState extends State<SshTabView> {
         case 'paste_selection':
           _pasteSelection();
           break;
+        case 'find':
+          openFind();
+          break;
         case 'select_all':
           _selectAll();
           break;
@@ -938,6 +1020,7 @@ class SshTabViewState extends State<SshTabView> {
                 interactive: true,
                 child: TerminalView(
                   _terminal,
+                  key: _terminalViewKey,
                   controller: _controller,
                   scrollController: _scrollController,
                   focusNode: _focusNode,
@@ -961,6 +1044,20 @@ class SshTabViewState extends State<SshTabView> {
             ),
           ),
         ),
+        if (_isFindOpen)
+          Positioned(
+            top: 8,
+            right: 16,
+            child: TerminalFindBar(
+              terminal: _terminal,
+              controller: _controller,
+              theme: terminalTheme,
+              initialQuery: _findSeed,
+              focusRequest: _findFocusRequest,
+              onClose: _closeFind,
+              onReveal: _revealLine,
+            ),
+          ),
         if (_error != null &&
             !widget.connection.isConnected &&
             !_isConnecting &&

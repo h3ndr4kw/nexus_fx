@@ -153,7 +153,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
     _customJumpPasswordController = TextEditingController(text: s?.customJumpPassword ?? '');
 
     _fontSizeController = TextEditingController(text: s?.customFontSize?.toString() ?? '');
-    _scrollbackController = TextEditingController(text: (s?.scrollbackLines ?? 5000).toString());
+    _scrollbackController = TextEditingController(text: (s?.scrollbackLines ?? kDefaultScrollbackLines).toString());
   }
 
   @override
@@ -252,7 +252,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       customJumpPassword: _customJumpPasswordController.text.isEmpty ? null : _customJumpPasswordController.text,
       tunnelMode: _tunnelMode,
       customFontSize: double.tryParse(_fontSizeController.text.trim()),
-      scrollbackLines: int.tryParse(_scrollbackController.text.trim()) ?? 5000,
+      scrollbackLines: int.tryParse(_scrollbackController.text.trim()) ?? kDefaultScrollbackLines,
       enableSessionLogging: _enableLogging,
       modifiedAt: DateTime.now(),
     );
@@ -808,7 +808,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           _buildSectionHeader('Terminal Font & Buffer'),
           _buildTextField('Custom Font Size:', _fontSizeController, hintText: 'Leave empty for default (14)'),
           const SizedBox(height: 10),
-          _buildTextField('Scrollback Lines:', _scrollbackController, hintText: '5000'),
+          _buildTextField('Scrollback Lines:', _scrollbackController, hintText: '$kDefaultScrollbackLines'),
         ],
       ),
     );

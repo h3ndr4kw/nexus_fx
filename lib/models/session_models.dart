@@ -79,6 +79,17 @@ class SessionFolder {
   }
 }
 
+/// Terminal scrollback for a session when the profile does not override it.
+const int kDefaultScrollbackLines = 10000;
+
+/// Bounds applied when a terminal is created, so a typo cannot exhaust memory.
+const int kMinScrollbackLines = 500;
+const int kMaxScrollbackLines = 200000;
+
+/// The default before 10000. The value was saved with every profile while it
+/// had no effect, so a stored 5000 means "default", not a user choice.
+const int _legacyDefaultScrollbackLines = 5000;
+
 class SessionProfile {
   final String id;
   final String? parentId;
@@ -193,7 +204,7 @@ class SessionProfile {
     this.tunnelMode = TunnelMode.multiplexed,
     this.customThemeName,
     this.customFontSize,
-    this.scrollbackLines = 5000,
+    this.scrollbackLines = kDefaultScrollbackLines,
     this.enableSessionLogging = true,
     required this.modifiedAt,
   });
@@ -363,7 +374,10 @@ class SessionProfile {
       ),
       customThemeName: json['customThemeName'] as String?,
       customFontSize: (json['customFontSize'] as num?)?.toDouble(),
-      scrollbackLines: (json['scrollbackLines'] as num?)?.toInt() ?? 5000,
+      scrollbackLines: switch ((json['scrollbackLines'] as num?)?.toInt()) {
+        null || _legacyDefaultScrollbackLines => kDefaultScrollbackLines,
+        final int n => n,
+      },
       enableSessionLogging: json['enableSessionLogging'] as bool? ?? true,
       modifiedAt: json['modifiedAt'] != null
           ? DateTime.tryParse(json['modifiedAt'] as String) ?? DateTime.now()
