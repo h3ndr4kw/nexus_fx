@@ -64,3 +64,6 @@ rea.tar.bz2
 # AI workflow notes kept locally, not published
 anti-slop/
 docs/superpowers/
+
+# Packaged builds (scripts/package.ps1)
+/dist/

@@ -116,6 +116,26 @@ flutter run -d windows
 
 ---
 
+## Packaging for Distribution
+
+One command builds the app and packages it:
+```powershell
+.\scripts\package.ps1
+```
+
+It writes to `dist\` (not tracked in git), using the version from `pubspec.yaml`:
+
+| Output | Use |
+|---|---|
+| `NexusFX-<version>-setup.exe` | Installer: Program Files, Start Menu shortcut, uninstaller. Offers a per-user install for people without admin rights |
+| `NexusFX-<version>-win-x64.zip` | Portable: unzip anywhere and run `nexus_fx.exe` |
+
+The script fails if `sftp_engine.dll` is missing from the bundle, and copies in the Visual C++ runtime DLLs the app imports, so neither package needs the VC++ Redistributable installed. Settings, sessions and logs are kept in `%USERPROFILE%\.nexus_fx`, outside the install folder, so they survive upgrades and uninstalls.
+
+Requirements on top of the build prerequisites: [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer (`winget install JRSoftware.InnoSetup`). Without it the script still produces the zip. Flags: `-SkipBuild` packages the existing release build, `-NoInstaller` skips the installer.
+
+---
+
 ## Testing
 
 Run the test suite:
