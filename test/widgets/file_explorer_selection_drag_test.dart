@@ -206,6 +206,7 @@ void main() {
         FileExplorerItem(name: '..', path: '/root', isDir: true, size: 0, modified: '- -'),
         FileExplorerItem(name: 'docs', path: '/root/docs', isDir: true, size: 0, modified: 'Jan 01 10:00'),
         FileExplorerItem(name: 'file1.txt', path: '/root/file1.txt', isDir: false, size: 1024, modified: 'Jan 01 10:05'),
+        FileExplorerItem(name: 'logs.tar.gz', path: '/root/logs.tar.gz', isDir: false, size: 4096, modified: 'Jan 01 10:06'),
       ]);
     });
 
@@ -236,6 +237,18 @@ void main() {
       expect(find.text('Rename'), findsOneWidget);
       expect(find.text('Delete'), findsOneWidget);
       expect(find.text('Copy to Other Pane'), findsOneWidget);
+      expect(find.text('Compress...'), findsOneWidget);
+      expect(find.text('Extract Here'), findsNothing);
+    });
+
+    testWidgets('right-click on an archive offers Extract Here', (tester) async {
+      await pumpExplorer(tester);
+
+      await tester.tap(find.text('logs.tar.gz').first, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Extract Here'), findsOneWidget);
+      expect(find.text('Compress...'), findsOneWidget);
     });
 
     testWidgets('right-click on blank space shows the area menu', (tester) async {

@@ -2153,6 +2153,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final count = targets.length;
     final suffix = count > 1 ? ' ($count items)' : '';
     final otherPane = _isDualPane ? 'Other Pane' : inactivePaneState.target.label;
+    final isArchive = count == 1 && !targets.first.isDir && archiveKindOf(targets.first.name) != null;
 
     final action = await _showContextMenu(globalPosition, [
       _menuItem('open', item.isDir ? Icons.folder_open : Icons.open_in_new,
@@ -2165,6 +2166,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         _menuItem('toggle_select', Icons.check_box_outlined,
             pane.multiSelected.contains(item.path) ? 'Unmark' : 'Mark',
             shortcut: 'Space', iconColor: const Color(0xFF98C379)),
+        const PopupMenuDivider(),
+        _menuItem('compress', Icons.archive_outlined, 'Compress...$suffix',
+            shortcut: 'Z', iconColor: const Color(0xFFD19A66)),
+        if (isArchive)
+          _menuItem('extract', Icons.unarchive_outlined, 'Extract Here',
+              shortcut: 'X', iconColor: const Color(0xFFD19A66)),
         const PopupMenuDivider(),
         _menuItem('delete', Icons.delete_outline, 'Delete$suffix',
             shortcut: 'Del', iconColor: const Color(0xFFE06C75), labelColor: const Color(0xFFE06C75)),
@@ -2188,6 +2195,10 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         await _initiateRename();
       case 'toggle_select':
         _toggleSelectItem(pane, idx);
+      case 'compress':
+        await _initiateCompress();
+      case 'extract':
+        await _initiateExtract();
       case 'delete':
         await _initiateDelete();
       case 'new_file':
