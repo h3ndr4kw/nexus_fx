@@ -24,6 +24,7 @@ import '../widgets/sidebar_icon.dart';
 import '../widgets/transfer_status_bar.dart';
 import '../widgets/window_caption_buttons.dart';
 import '../widgets/window_drag_area.dart';
+import '../controllers/file_explorer_tabs_controller.dart';
 import '../controllers/session_fullscreen_controller.dart';
 import 'nexus_screen.dart';
 import 'sessions_screen.dart';
@@ -126,31 +127,17 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     }
   }
 
-  int _nextFileExplorerTabId = 1;
-  late final List<_FileExplorerTab> _fileExplorerTabs = [
-    _createDefaultFileExplorerTab(),
-  ];
-  int _activeFileExplorerTab = 0;
+  final FileExplorerTabsController _explorerTabs = FileExplorerTabsController();
   final ScrollController _fileExplorerTabScrollController = ScrollController();
 
-  _FileExplorerTab _createDefaultFileExplorerTab() {
-    return _FileExplorerTab(
-      id: 'fe_tab_${_nextFileExplorerTabId++}',
-      label: 'Local Explorer',
-      leftTarget: ExplorerNodeTarget.local,
-      rightTarget: ExplorerNodeTarget.local,
-      initialActivePane: PaneSide.left,
-    );
-  }
-
-  String _formatExplorerTabLabel(ExplorerNodeTarget target) {
-    if (target.isLocal) return 'Local Explorer';
-    return 'SFTP: ${target.label}';
+  void _onExplorerTabsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void initState() {
     super.initState();
+    _explorerTabs.addListener(_onExplorerTabsChanged);
     _sessionManager = widget.sessionManager ?? SessionManagerService.instance;
     _toolRegistry = widget.toolRegistry ?? NexusToolRegistry.instance;
     if (widget.customTools != null && widget.customTools!.isNotEmpty) {
@@ -229,9 +216,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _transferNotifier?.dispose();
     _sidebarFocusNode.dispose();
     _fileExplorerTabScrollController.dispose();
-    for (final tab in _fileExplorerTabs) {
-      tab.dispose();
-    }
+    _explorerTabs.removeListener(_onExplorerTabsChanged);
+    _explorerTabs.dispose();
     super.dispose();
   }
 
@@ -380,7 +366,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         return true;
       }
       if (isCtrl && !isShift && !isAlt && event.logicalKey == LogicalKeyboardKey.keyW) {
-        _closeFileExplorerTab(_activeFileExplorerTab);
+        _closeFileExplorerTab(_explorerTabs.activeIndex);
         return true;
       }
       if (isCtrl && !isAlt && event.logicalKey == LogicalKeyboardKey.tab) {
@@ -785,16 +771,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     setState(() {
       _selectedCustomToolId = null;
       _selectedTab = AppTab.fileExplorer;
-      final newTab = _FileExplorerTab(
-        id: 'fe_tab_${_nextFileExplorerTabId++}',
-        label: _formatExplorerTabLabel(target),
-        leftTarget: ExplorerNodeTarget.local,
-        rightTarget: target,
-        initialActivePane: target.isLocal ? PaneSide.left : PaneSide.right,
-      );
-      _fileExplorerTabs.add(newTab);
-      _activeFileExplorerTab = _fileExplorerTabs.length - 1;
     });
+    _explorerTabs.open(target);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_fileExplorerTabScrollController.hasClients) {
@@ -809,14 +787,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _switchFileExplorerTab(int delta) {
-    if (_fileExplorerTabs.length <= 1) return;
-    setState(() {
-      _activeFileExplorerTab =
-          (_activeFileExplorerTab + delta) % _fileExplorerTabs.length;
-      if (_activeFileExplorerTab < 0) {
-        _activeFileExplorerTab += _fileExplorerTabs.length;
-      }
-    });
+    if (_explorerTabs.length <= 1) return;
+    _explorerTabs.switchBy(delta);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusActiveFileExplorer();
     });
@@ -824,67 +796,29 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   void _focusActiveFileExplorer() {
     if (!mounted || _selectedTab != AppTab.fileExplorer) return;
-    final safeIdx = _activeFileExplorerTab.clamp(
-      0,
-      _fileExplorerTabs.isNotEmpty ? _fileExplorerTabs.length - 1 : 0,
-    );
-    if (_fileExplorerTabs.isNotEmpty && safeIdx < _fileExplorerTabs.length) {
-      final node = _fileExplorerTabs[safeIdx].focusNode;
-      if (node.canRequestFocus) {
-        node.requestFocus();
-      }
+    final node = _explorerTabs.activeTab.focusNode;
+    if (node.canRequestFocus) {
+      node.requestFocus();
     }
   }
 
   void _closeFileExplorerTab(int index) {
-    if (index < 0 || index >= _fileExplorerTabs.length) return;
-    final toRemove = _fileExplorerTabs[index];
-    setState(() {
-      if (_fileExplorerTabs.length <= 1) {
-        _fileExplorerTabs
-          ..clear()
-          ..add(_createDefaultFileExplorerTab());
-        _activeFileExplorerTab = 0;
-      } else {
-        _fileExplorerTabs.removeAt(index);
-        if (_activeFileExplorerTab >= _fileExplorerTabs.length) {
-          _activeFileExplorerTab = _fileExplorerTabs.length - 1;
-        } else if (_activeFileExplorerTab > index) {
-          _activeFileExplorerTab--;
-        }
-      }
-    });
-    toRemove.dispose();
+    if (index < 0 || index >= _explorerTabs.length) return;
+    _explorerTabs.close(index);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusActiveFileExplorer();
     });
   }
 
-  void _closeOtherFileExplorerTabs(_FileExplorerTab keepTab) {
-    final toRemove = _fileExplorerTabs.where((t) => t.id != keepTab.id).toList();
-    setState(() {
-      _fileExplorerTabs.removeWhere((t) => t.id != keepTab.id);
-      _activeFileExplorerTab = 0;
-    });
-    for (final t in toRemove) {
-      t.dispose();
-    }
+  void _closeOtherFileExplorerTabs(FileExplorerTab keepTab) {
+    _explorerTabs.closeOthers(keepTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusActiveFileExplorer();
     });
   }
 
   void _closeAllFileExplorerTabs() {
-    final toRemove = List<_FileExplorerTab>.from(_fileExplorerTabs);
-    setState(() {
-      _fileExplorerTabs
-        ..clear()
-        ..add(_createDefaultFileExplorerTab());
-      _activeFileExplorerTab = 0;
-    });
-    for (final t in toRemove) {
-      t.dispose();
-    }
+    _explorerTabs.closeAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusActiveFileExplorer();
     });
@@ -892,7 +826,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   Future<void> _showFileExplorerTabContextMenu(
     Offset globalPosition,
-    _FileExplorerTab tab,
+    FileExplorerTab tab,
   ) async {
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
@@ -905,7 +839,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       overlayRect,
     );
 
-    final canCloseOthers = _fileExplorerTabs.length > 1;
+    final canCloseOthers = _explorerTabs.length > 1;
 
     final selected = await showMenu<String>(
       context: context,
@@ -990,7 +924,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         _promptNewFileExplorerTab();
         break;
       case 'close':
-        final idx = _fileExplorerTabs.indexWhere((t) => t.id == tab.id);
+        final idx = _explorerTabs.tabs.indexWhere((t) => t.id == tab.id);
         if (idx != -1) _closeFileExplorerTab(idx);
         break;
       case 'close_others':
@@ -1499,9 +1433,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   Widget _buildFileExplorerPage() {
-    final safeActiveIdx = _activeFileExplorerTab.clamp(
+    final safeActiveIdx = _explorerTabs.activeIndex.clamp(
       0,
-      _fileExplorerTabs.isNotEmpty ? _fileExplorerTabs.length - 1 : 0,
+      _explorerTabs.tabs.isNotEmpty ? _explorerTabs.length - 1 : 0,
     );
 
     return Column(
@@ -1520,18 +1454,18 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                 child: ListView.builder(
                   controller: _fileExplorerTabScrollController,
                   scrollDirection: Axis.horizontal,
-                  itemCount: _fileExplorerTabs.length + 1,
+                  itemCount: _explorerTabs.length + 1,
                   itemBuilder: (context, index) {
-                    if (index == _fileExplorerTabs.length) {
+                    if (index == _explorerTabs.length) {
                       return _buildFileExplorerAddTabButton();
                     }
-                    final tab = _fileExplorerTabs[index];
+                    final tab = _explorerTabs.tabs[index];
                     final isActive = index == safeActiveIdx;
                     return _buildFileExplorerTabItem(tab, index, isActive);
                   },
                 ),
               ),
-              if (_fileExplorerTabs.length > 1)
+              if (_explorerTabs.length > 1)
                 _buildFileExplorerCloseAllButton(),
             ],
           ),
@@ -1539,7 +1473,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         Expanded(
           child: IndexedStack(
             index: safeActiveIdx,
-            children: _fileExplorerTabs.asMap().entries.map((entry) {
+            children: _explorerTabs.tabs.asMap().entries.map((entry) {
               final index = entry.key;
               final tab = entry.value;
               final isTabActive = (_selectedTab == AppTab.fileExplorer) && (index == safeActiveIdx);
@@ -1553,17 +1487,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                 initialActivePane: tab.initialActivePane,
                 onTargetChanged: (newTarget) {
                   if (!mounted) return;
-                  setState(() {
-                    tab.rightTarget = newTarget;
-                    tab.label = _formatExplorerTabLabel(newTarget);
-                  });
+                  _explorerTabs.retarget(tab, right: newTarget);
                 },
                 onNewTab: _promptNewFileExplorerTab,
-                onCloseTab: () => _closeFileExplorerTab(_activeFileExplorerTab),
+                onCloseTab: () => _closeFileExplorerTab(_explorerTabs.activeIndex),
                 onSwitchTab: _switchFileExplorerTab,
                 onExit: () {
-                  final idx = _fileExplorerTabs.indexOf(tab);
-                  if (_fileExplorerTabs.length > 1 && idx != -1) {
+                  final idx = _explorerTabs.tabs.indexOf(tab);
+                  if (_explorerTabs.length > 1 && idx != -1) {
                     _closeFileExplorerTab(idx);
                   } else {
                     setState(() {
@@ -1580,7 +1511,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   Widget _buildFileExplorerTabItem(
-    _FileExplorerTab tab,
+    FileExplorerTab tab,
     int index,
     bool isActive,
   ) {
@@ -1592,9 +1523,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       child: InkWell(
         key: ValueKey('file_explorer_tab_${tab.id}'),
         onTap: () {
-          setState(() {
-            _activeFileExplorerTab = index;
-          });
+          _explorerTabs.activate(index);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _focusActiveFileExplorer();
           });
@@ -1929,26 +1858,5 @@ class _FileExplorerTabTransferBadge extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-class _FileExplorerTab {
-  final String id;
-  String label;
-  ExplorerNodeTarget leftTarget;
-  ExplorerNodeTarget rightTarget;
-  final PaneSide initialActivePane;
-  final FocusNode focusNode = FocusNode();
-
-  _FileExplorerTab({
-    required this.id,
-    required this.label,
-    required this.leftTarget,
-    required this.rightTarget,
-    required this.initialActivePane,
-  });
-
-  void dispose() {
-    focusNode.dispose();
   }
 }
