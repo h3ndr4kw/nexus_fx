@@ -60,7 +60,7 @@
 ```
 nexus_fx/
 ├── assets/                  # Icons, bundled scripts, and presets
-├── config/                  # App configuration (settings.yaml)
+├── config/                  # Sample settings.yaml (runtime copy: ~/.nexus_fx/config/)
 ├── docs/                    # Design specifications and implementation plans
 ├── lib/
 │   ├── models/              # Data models (Session, Playbook, File Explorer, SSH Tunnel)

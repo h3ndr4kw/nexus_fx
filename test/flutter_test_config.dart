@@ -5,8 +5,8 @@ import 'package:nexus_fx/services/settings_service.dart';
 
 /// Runs before every test file under test/ (picked up by `flutter test`).
 ///
-/// SettingsService saves to `config/settings.yaml` in the working folder,
-/// which is the developer's real config: a test that changes a setting
+/// SettingsService saves to `~/.nexus_fx/config/settings.yaml`, which is
+/// the developer's real config: a test that changes a setting
 /// would overwrite it. Point it at a throwaway file instead.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   final dir = Directory.systemTemp.createTempSync('nexus_fx_test_config_');

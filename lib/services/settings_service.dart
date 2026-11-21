@@ -290,6 +290,12 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> loadSettings() async {
     try {
+      if (_customConfigPath == null && Platform.isWindows) {
+        AppPaths.migrateLegacySettings(
+          legacyPath: AppPaths.legacySettingsFile,
+          targetPath: AppPaths.settingsFile,
+        );
+      }
       final file = File(_getConfigPath());
       if (file.existsSync()) {
         final content = file.readAsStringSync();
