@@ -44,7 +44,8 @@ void main() {
 
   setUp(opened.clear);
 
-  Future<List<CommandItem>> pumpPalette(WidgetTester tester, {ThemeData? theme}) async {
+  Future<List<CommandItem>> pumpPalette(WidgetTester tester,
+      {ThemeData? theme, bool sessionsOnly = true}) async {
     final manager = await buildSessions();
     final selected = <CommandItem>[];
     await tester.pumpWidget(MaterialApp(
@@ -55,7 +56,7 @@ void main() {
             onPressed: () => showDialog(
               context: context,
               builder: (_) => CommandPalette(
-                sessionsOnly: true,
+                sessionsOnly: sessionsOnly,
                 sessionManager: manager,
                 onSelect: selected.add,
                 openWeb: (urls) async {
@@ -170,5 +171,22 @@ void main() {
     expect(decoration.enabledBorder, InputBorder.none);
     expect(decoration.focusedBorder, InputBorder.none);
     expect(decoration.filled, isFalse);
+  });
+
+  testWidgets('full palette (Ctrl+Shift+P) offers the keyboard shortcuts', (tester) async {
+    final selected = await pumpPalette(tester, sessionsOnly: false);
+
+    await tester.enterText(find.byType(TextField), 'shortcut');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show Keyboard Shortcuts'));
+    await tester.pumpAndSettle();
+
+    expect(selected.single.action, CommandAction.showKeyboardShortcuts);
+    expect(find.byType(CommandPalette), findsNothing);
+  });
+
+  testWidgets('sessions-only palette leaves the shortcuts command out', (tester) async {
+    await pumpPalette(tester);
+    expect(find.text('Show Keyboard Shortcuts'), findsNothing);
   });
 }

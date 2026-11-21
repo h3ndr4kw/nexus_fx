@@ -715,6 +715,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           _nexusKey.currentState?.toggleRightSidebar();
         });
         break;
+      case CommandAction.showKeyboardShortcuts:
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showKeyboardShortcutsDialog();
+        });
+        break;
       case CommandAction.setTheme:
         if (item.appTheme != null) {
           SettingsService.instance.setAppTheme(item.appTheme!);
@@ -1141,10 +1146,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               onTap: _toggleRightSidebar,
             ),
           ],
-          const SizedBox(width: 4),
-          _KeyboardShortcutsTopBarButton(
-            onTap: _showKeyboardShortcutsDialog,
-          ),
           const SizedBox(width: 8),
           if (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
             const WindowCaptionButtons(showFullScreen: true),
@@ -2319,60 +2320,6 @@ class _SessionManagerTopBarButtonState extends State<_SessionManagerTopBarButton
             child: Center(
               child: Icon(
                 Icons.dns_outlined,
-                size: 16.0,
-                color: iconColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeyboardShortcutsTopBarButton extends StatefulWidget {
-  final VoidCallback onTap;
-
-  const _KeyboardShortcutsTopBarButton({
-    required this.onTap,
-  });
-
-  @override
-  State<_KeyboardShortcutsTopBarButton> createState() =>
-      _KeyboardShortcutsTopBarButtonState();
-}
-
-class _KeyboardShortcutsTopBarButtonState
-    extends State<_KeyboardShortcutsTopBarButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final iconColor = _isHovered ? AppTheme.ink : AppTheme.textSecondary;
-
-    return Tooltip(
-      message: 'Keyboard Shortcuts (F1 / Ctrl+/)',
-      waitDuration: const Duration(milliseconds: 500),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            width: 30.0,
-            height: 28.0,
-            decoration: BoxDecoration(
-              color: _isHovered
-                  ? AppTheme.ink.withValues(alpha: 0.1)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.keyboard_outlined,
                 size: 16.0,
                 color: iconColor,
               ),
