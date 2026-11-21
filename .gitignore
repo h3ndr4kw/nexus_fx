@@ -57,3 +57,6 @@ sessions.json
 
 # Local archives
 rea.tar.bz2
+
+# Claude Code worktrees (local, per-session)
+.claude/worktrees/
