@@ -30,7 +30,7 @@
 - **Clipboard & Batch Operations**: Quick `Cut`, `Copy`, `Paste`, `Duplicate`, and inline search.
 - **Comprehensive Session Properties**:
   - **Connection**: Host, port, protocol, keepalive, and timeout.
-   **Authentication**: Password (AES-256 encrypted in storage) or Private Key authentication.
+  - **Authentication**: Password (AES-256 encrypted in storage) or Private Key authentication.
   - **Jump Host / ProxyJump Routing**: Direct connection, via existing session profile, or via custom jump hosts.
   - **SSH Tunneling**: Local and remote port forwarding configurations.
   - **Appearance & Logging**: Font size, custom color palettes, and automated local session logging.

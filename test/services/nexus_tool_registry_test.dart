@@ -208,12 +208,14 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
 
-      // Verify both "Open Tool: Cluster Monitor" and "Run Cluster Diagnostics" appear
+      // The palette list builds rows lazily, so scroll until each tool
+      // command is on screen instead of assuming where it falls.
+      final list = find.descendant(of: find.byType(CommandPalette), matching: find.byType(Scrollable));
+      await tester.scrollUntilVisible(find.text('Open Tool: Cluster Monitor'), 100, scrollable: list.first);
       expect(find.text('Open Tool: Cluster Monitor'), findsOneWidget);
-      expect(find.text('Run Cluster Diagnostics'), findsOneWidget);
 
-      // Tap "Run Cluster Diagnostics" command (the palette list scrolls)
-      await tester.ensureVisible(find.text('Run Cluster Diagnostics'));
+      await tester.scrollUntilVisible(find.text('Run Cluster Diagnostics'), 100, scrollable: list.first);
+      expect(find.text('Run Cluster Diagnostics'), findsOneWidget);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Run Cluster Diagnostics'));
       await tester.pumpAndSettle();
