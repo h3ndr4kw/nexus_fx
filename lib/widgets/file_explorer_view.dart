@@ -516,7 +516,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
     try {
       if (pane.target.isLocal) {
-        final results = await _service.listLocal(
+        final results = await _service.local.listLocal(
           pane.currentPath,
         );
         pane.items = results;
@@ -1252,7 +1252,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       try {
         for (final item in targets) {
           if (pane.target.isLocal) {
-            await _service.deleteLocal(item.path);
+            await _service.local.deleteLocal(item.path);
           } else {
             pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
             await _service.deleteRemote(pane.remoteSession!, item.path, item.isDir);
@@ -1281,7 +1281,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       final pane = activePaneState;
       try {
         if (pane.target.isLocal) {
-          await _service.createLocalFile(pane.currentPath, name.trim());
+          await _service.local.createLocalFile(pane.currentPath, name.trim());
         } else {
           pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
           await _service.createRemoteFile(pane.remoteSession!, pane.currentPath, name.trim());
@@ -1308,7 +1308,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       final pane = activePaneState;
       try {
         if (pane.target.isLocal) {
-          await _service.createLocalDir(pane.currentPath, name.trim());
+          await _service.local.createLocalDir(pane.currentPath, name.trim());
         } else {
           pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
           await _service.createRemoteDir(pane.remoteSession!, pane.currentPath, name.trim());
@@ -1343,7 +1343,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       final pane = activePaneState;
       try {
         if (pane.target.isLocal) {
-          await _service.renameLocal(active.path, newName.trim());
+          await _service.local.renameLocal(active.path, newName.trim());
         } else {
           pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
           await _service.renameRemote(pane.remoteSession!, active.path, newName.trim());
@@ -1410,7 +1410,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           }
         }
 
-        final launched = await _service.launchExternalEditor(chosenEditor, targetPath);
+        final launched = await _service.externalTools.launchExternalEditor(chosenEditor, targetPath);
         if (mounted) {
           if (launched) {
             _setStatus("Opening '${item.name}' in ${chosenEditor.label}...", isSuccess: true);
@@ -1453,9 +1453,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       }
 
       // Local filesystem pcap file: Open in Wireshark GUI
-      final wiresharkPath = _service.getWiresharkPath();
+      final wiresharkPath = _service.externalTools.getWiresharkPath();
       if (wiresharkPath != null) {
-        final launched = await _service.launchWireshark(item.path);
+        final launched = await _service.externalTools.launchWireshark(item.path);
         if (mounted) {
           if (launched) {
             _setStatus("Opening '${item.name}' in Wireshark GUI...", isSuccess: true);
@@ -1496,7 +1496,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     String content = '';
     try {
       if (pane.target.isLocal) {
-        content = await _service.readLocalText(item.path);
+        content = await _service.local.readLocalText(item.path);
       } else {
         pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
         content = await _service.readRemoteText(pane.remoteSession!, item.path);
@@ -1514,7 +1514,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           readOnly: false,
           onSave: (newContent) async {
             if (pane.target.isLocal) {
-              await _service.writeLocalText(item.path, newContent);
+              await _service.local.writeLocalText(item.path, newContent);
             } else {
               pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
               await _service.writeRemoteText(pane.remoteSession!, item.path, newContent);
@@ -1555,7 +1555,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       try {
         final paths = targets.map((t) => t.path).toList();
         if (pane.target.isLocal) {
-          await _service.mergeLocal(paths, pane.currentPath, newName.trim());
+          await _service.local.mergeLocal(paths, pane.currentPath, newName.trim());
         } else {
           pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
           await _service.mergeRemote(pane.remoteSession!, paths, pane.currentPath, newName.trim());

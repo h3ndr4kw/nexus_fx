@@ -7,14 +7,20 @@ import 'package:nexus_fx/services/file_explorer_service.dart';
 import 'package:nexus_fx/widgets/file_explorer_dialogs.dart';
 import 'package:nexus_fx/widgets/file_explorer_view.dart';
 
-class FakeFileExplorerService extends FileExplorerService {
+class _FakeLocalFiles extends LocalFileOperations {
   final List<FileExplorerItem> mockFiles;
 
-  FakeFileExplorerService(this.mockFiles);
+  _FakeLocalFiles(this.mockFiles);
 
   @override
   Future<List<FileExplorerItem>> listLocal(String dirPath, {String filter = ''}) async {
     return List.from(mockFiles);
+  }
+}
+
+class FakeFileExplorerService extends FileExplorerService {
+  FakeFileExplorerService(List<FileExplorerItem> mockFiles) {
+    local = _FakeLocalFiles(mockFiles);
   }
 }
 

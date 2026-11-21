@@ -735,7 +735,7 @@ class TransferManager extends ChangeNotifier {
           // existing one would otherwise nest it (`cp -r`) or merge it.
           token.throwIfCancelled();
           if (dest.isLocal) {
-            await svc.deleteLocal(destPath);
+            await svc.local.deleteLocal(destPath);
           } else {
             await svc.deleteRemote(await destRemote(), destPath, existingIsDir);
           }
@@ -744,10 +744,10 @@ class TransferManager extends ChangeNotifier {
 
       if (src.isLocal && dest.isLocal) {
         if (job.isMove) {
-          await svc.moveLocal(item.path, destDir,
+          await svc.local.moveLocal(item.path, destDir,
               onProgress: onBytes, cancelToken: token, destName: destName);
         } else {
-          await svc.copyLocal(item.path, destDir,
+          await svc.local.copyLocal(item.path, destDir,
               onProgress: onBytes, cancelToken: token, destName: destName);
         }
       } else if (isSameTarget && !src.isLocal) {
@@ -764,7 +764,7 @@ class TransferManager extends ChangeNotifier {
             onProgress: onBytes, cancelToken: token, destName: destName);
         if (job.isMove) {
           token.throwIfCancelled();
-          await svc.deleteLocal(item.path);
+          await svc.local.deleteLocal(item.path);
         }
       } else if (!src.isLocal && dest.isLocal) {
         final session = await srcRemote();

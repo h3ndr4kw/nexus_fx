@@ -31,7 +31,7 @@ void main() {
     final dest = await Directory('${tmp.path}${Platform.pathSeparator}dest').create();
 
     final events = <List<int>>[];
-    await service.copyLocal(
+    await service.local.copyLocal(
       src.path,
       dest.path,
       onProgress: (sent, total) => events.add([sent, total]),
@@ -52,7 +52,7 @@ void main() {
     final dest = await Directory('${tmp.path}${Platform.pathSeparator}dest').create();
 
     final events = <List<int>>[];
-    await service.moveLocal(
+    await service.local.moveLocal(
       src.path,
       dest.path,
       onProgress: (sent, total) => events.add([sent, total]),
@@ -74,7 +74,7 @@ void main() {
     final token = TransferCancelToken();
 
     await expectLater(
-      service.copyLocal(
+      service.local.copyLocal(
         big.path,
         dest.path,
         cancelToken: token,
