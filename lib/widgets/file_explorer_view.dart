@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../services/file_explorer_service.dart';
 import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
 import '../services/settings_service.dart';
+import '../services/text_diff.dart';
 import '../theme/app_theme.dart';
 import '../services/app_paths.dart';
 
@@ -341,6 +343,18 @@ class _PaneController {
     filterInputController.dispose();
     filterFocusNode.dispose();
   }
+}
+
+/// A file picked for compare: where it lives and how to label it.
+class _CompareFile {
+  final ExplorerNodeTarget target;
+  final String path;
+  final String name;
+  final int size;
+  const _CompareFile(this.target, this.path, this.name, this.size);
+
+  bool sameAs(_CompareFile other) => target.isSameTarget(other.target) && path == other.path;
+  String get location => '${target.label}: $path';
 }
 
 class _FileExplorerViewState extends State<FileExplorerView> {
@@ -1738,6 +1752,147 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _focusNode.requestFocus();
   }
 
+  // Compare (VS Code's Compare Selected / Select for Compare)
+
+  static const int _maxCompareBytes = 20 * 1024 * 1024;
+
+  /// File picked with "Select for Compare"; it stays picked across folders,
+  /// panes and nodes until another pick replaces it.
+  _CompareFile? _compareMark;
+
+  _CompareFile _compareFileOf(_PaneController pane, FileExplorerItem item) =>
+      _CompareFile(pane.target, item.path, item.name, item.size);
+
+  /// The active selection in the order it was marked, so the file marked
+  /// first lands on the left, as in VS Code.
+  List<FileExplorerItem> _compareTargets() {
+    final pane = activePaneState;
+    final items = _getTargetItems();
+    if (pane.multiSelected.isEmpty) return items;
+    final byPath = {for (final i in items) i.path: i};
+    return [
+      for (final path in pane.multiSelected)
+        if (byPath[path] != null) byPath[path]!,
+    ];
+  }
+
+  /// `=`: two marked files compare with each other; a single file compares
+  /// with the file picked for compare, or becomes the pick when none exists.
+  Future<void> _initiateCompare() async {
+    final pane = activePaneState;
+    final targets = _compareTargets();
+    if (targets.any((t) => t.isDir)) {
+      _setStatus('Compare works on files, not folders.');
+      return;
+    }
+    if (targets.length == 2) {
+      await _openCompare(_compareFileOf(pane, targets[0]), _compareFileOf(pane, targets[1]));
+      return;
+    }
+    if (targets.length == 1) {
+      final current = _compareFileOf(pane, targets.first);
+      final mark = _compareMark;
+      if (mark == null || mark.sameAs(current)) {
+        _selectForCompare();
+        return;
+      }
+      await _openCompare(mark, current);
+      return;
+    }
+    _setStatus(targets.isEmpty ? 'No file selected to compare.' : 'Select exactly two files to compare.');
+  }
+
+  void _selectForCompare() {
+    final targets = _getTargetItems();
+    if (targets.length != 1 || targets.first.isDir) {
+      _setStatus('Select a single file to compare.');
+      return;
+    }
+    final file = _compareFileOf(activePaneState, targets.first);
+    setState(() => _compareMark = file);
+    _setStatus("Selected '${file.name}' for compare. Press = on another file to compare.", isSuccess: true);
+  }
+
+  Future<Uint8List> _readCompareBytes(_CompareFile file) async {
+    if (file.target.isLocal) return _service.readLocalBytes(file.path);
+    final pane = [_leftPane, _rightPane].where((p) => p.target.isSameTarget(file.target)).firstOrNull;
+    final session = pane?.remoteSession ?? await _service.getOrConnectRemote(file.target);
+    pane?.remoteSession ??= session;
+    return _service.readRemoteBytes(session, file.path);
+  }
+
+  Future<void> _openCompare(_CompareFile left, _CompareFile right) async {
+    for (final f in [left, right]) {
+      if (f.size > _maxCompareBytes) {
+        _setStatus(
+          "'${f.name}' is too large to compare (${FileExplorerItem.formatSize(f.size)}, "
+          'limit ${FileExplorerItem.formatSize(_maxCompareBytes)}).',
+          isError: true,
+        );
+        return;
+      }
+    }
+
+    _setStatus("Comparing '${left.name}' with '${right.name}'...");
+    Uint8List leftBytes;
+    Uint8List rightBytes;
+    try {
+      leftBytes = await _readCompareBytes(left);
+      rightBytes = await _readCompareBytes(right);
+    } catch (e) {
+      _setStatus('Compare failed: $e', isError: true);
+      _focusNode.requestFocus();
+      return;
+    }
+    if (!mounted) return;
+
+    if (looksBinary(leftBytes) || looksBinary(rightBytes)) {
+      final same = _bytesEqual(leftBytes, rightBytes);
+      _setStatus(same ? 'Binary files are identical.' : 'Binary files differ.', isSuccess: same);
+      await showDialog(
+        context: context,
+        builder: (ctx) => FileExplorerNotificationDialog(
+          title: 'BINARY FILES',
+          message: same
+              ? "'${left.name}' and '${right.name}' are identical."
+              : "'${left.name}' and '${right.name}' differ.",
+          subMessage: 'Binary files are not shown in the text compare view.\n'
+              '${left.location} (${FileExplorerItem.formatSize(leftBytes.length)})\n'
+              '${right.location} (${FileExplorerItem.formatSize(rightBytes.length)})',
+          icon: Icons.compare_arrows,
+        ),
+      );
+      _focusNode.requestFocus();
+      return;
+    }
+
+    _setStatus(_defaultStatus);
+    await showDialog(
+      context: context,
+      builder: (ctx) => FileExplorerCompareDialog(
+        left: CompareSource(
+          name: left.name,
+          location: left.location,
+          text: utf8.decode(leftBytes, allowMalformed: true),
+        ),
+        right: CompareSource(
+          name: right.name,
+          location: right.location,
+          text: utf8.decode(rightBytes, allowMalformed: true),
+        ),
+      ),
+    );
+    _focusNode.requestFocus();
+  }
+
+  static bool _bytesEqual(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   void _showHelpDialog() {
     showDialog(
       context: context,
@@ -1986,6 +2141,11 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       return KeyEventResult.handled;
     }
 
+    if (isDownOnly && !isCtrl && event.logicalKey == LogicalKeyboardKey.equal) {
+      _initiateCompare();
+      return KeyEventResult.handled;
+    }
+
     if (isDownOnly &&
         !isCtrl &&
         (event.logicalKey == LogicalKeyboardKey.keyO ||
@@ -2154,6 +2314,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final suffix = count > 1 ? ' ($count items)' : '';
     final otherPane = _isDualPane ? 'Other Pane' : inactivePaneState.target.label;
     final isArchive = count == 1 && !targets.first.isDir && archiveKindOf(targets.first.name) != null;
+    final allFiles = targets.isNotEmpty && targets.every((t) => !t.isDir);
+    final mark = _compareMark;
+    final canCompareWithMark = count == 1 &&
+        allFiles &&
+        mark != null &&
+        !mark.sameAs(_compareFileOf(pane, targets.first));
 
     final action = await _showContextMenu(globalPosition, [
       _menuItem('open', item.isDir ? Icons.folder_open : Icons.open_in_new,
@@ -2172,6 +2338,18 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         if (isArchive)
           _menuItem('extract', Icons.unarchive_outlined, 'Extract Here',
               shortcut: 'X', iconColor: const Color(0xFFD19A66)),
+        if (allFiles && count <= 2) ...[
+          const PopupMenuDivider(),
+          if (count == 2)
+            _menuItem('compare_selected', Icons.compare_arrows, 'Compare Selected',
+                shortcut: '=', iconColor: const Color(0xFF56B6C2)),
+          if (canCompareWithMark)
+            _menuItem('compare_with', Icons.compare_arrows, "Compare with '${mark.name}'",
+                shortcut: '=', iconColor: const Color(0xFF56B6C2)),
+          if (count == 1)
+            _menuItem('select_compare', Icons.playlist_add_check, 'Select for Compare',
+                shortcut: canCompareWithMark ? null : '='),
+        ],
         const PopupMenuDivider(),
         _menuItem('delete', Icons.delete_outline, 'Delete$suffix',
             shortcut: 'Del', iconColor: const Color(0xFFE06C75), labelColor: const Color(0xFFE06C75)),
@@ -2199,6 +2377,11 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         await _initiateCompress();
       case 'extract':
         await _initiateExtract();
+      case 'compare_selected':
+      case 'compare_with':
+        await _initiateCompare();
+      case 'select_compare':
+        _selectForCompare();
       case 'delete':
         await _initiateDelete();
       case 'new_file':
