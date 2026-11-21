@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/semantics.dart';
 import '../theme/app_theme.dart';
 
 // Shared look for the quick pickers (Nexus command palette, File Explorer
@@ -319,6 +320,146 @@ class PaletteRow extends StatelessWidget {
             ),
             for (final w in trailing) ...[const SizedBox(width: 8), w],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Right-click menu: a flat card with a thin border, plain-text rows with
+/// right-aligned shortcuts, and full-width [PaletteMenuDivider] separators.
+Future<T?> showPaletteMenu<T>({
+  required BuildContext context,
+  required Offset position,
+  required List<PopupMenuEntry<T>> items,
+}) {
+  return showMenu<T>(
+    context: context,
+    popUpAnimationStyle: AnimationStyle.noAnimation,
+    position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+    color: PaletteMenuColors.background,
+    surfaceTintColor: Colors.transparent,
+    elevation: 12,
+    shadowColor: Colors.black,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: const BorderSide(color: PaletteMenuColors.border),
+    ),
+    clipBehavior: Clip.antiAlias,
+    menuPadding: const EdgeInsets.symmetric(vertical: 4),
+    constraints: const BoxConstraints(minWidth: 260, maxWidth: 400),
+    items: items,
+  );
+}
+
+class PaletteMenuColors {
+  static const Color background = Color(0xFF22252C);
+  static const Color border = Color(0xFF3A3E47);
+  static const Color divider = Color(0xFF33363E);
+  static const Color highlight = Color(0xFF2F3D52);
+}
+
+class PaletteMenuDivider extends PopupMenuDivider {
+  const PaletteMenuDivider({super.key}) : super(height: 9, color: PaletteMenuColors.divider);
+}
+
+/// A [showPaletteMenu] row: label on the left, shortcut on the right. Hover
+/// and keyboard focus share one highlight.
+class PaletteMenuItem<T> extends PopupMenuEntry<T> {
+  final T value;
+  final String label;
+  final String? shortcut;
+
+  /// Overrides the label color, e.g. for destructive actions.
+  final Color? labelColor;
+  final bool enabled;
+
+  const PaletteMenuItem({
+    super.key,
+    required this.value,
+    required this.label,
+    this.shortcut,
+    this.labelColor,
+    this.enabled = true,
+  });
+
+  @override
+  double get height => 30;
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<PaletteMenuItem<T>> createState() => _PaletteMenuItemState<T>();
+}
+
+class _PaletteMenuItemState<T> extends State<PaletteMenuItem<T>> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  void _select() => Navigator.pop<T>(context, widget.value);
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.enabled;
+    final active = enabled && (_hovered || _focused);
+
+    final row = Container(
+      height: widget.height,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+      decoration: BoxDecoration(
+        color: active ? PaletteMenuColors.highlight : Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: enabled ? (widget.labelColor ?? AppTheme.textPrimary) : AppTheme.textMuted,
+              ),
+            ),
+          ),
+          if (widget.shortcut != null) ...[
+            const SizedBox(width: 32),
+            Text(
+              widget.shortcut!,
+              style: TextStyle(
+                fontSize: 12,
+                color: enabled ? AppTheme.textSecondary : AppTheme.textMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return Semantics(
+      role: SemanticsRole.menuItem,
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        enabled: enabled,
+        mouseCursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        onShowFocusHighlight: (v) => setState(() => _focused = v),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
+            _select();
+            return null;
+          }),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled ? _select : null,
+          child: row,
         ),
       ),
     );

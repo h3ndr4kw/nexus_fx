@@ -11,6 +11,7 @@ import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
 import 'file_explorer_icons.dart';
 import 'path_crumbs.dart';
+import 'palette_widgets.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
 import '../services/app_paths.dart';
@@ -1584,61 +1585,24 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   // Context menus
 
-  PopupMenuItem<String> _menuItem(
+  PaletteMenuItem<String> _menuItem(
     String value,
-    IconData icon,
     String label, {
     String? shortcut,
-    Color? iconColor,
     Color? labelColor,
     bool enabled = true,
   }) {
-    return PopupMenuItem<String>(
+    return PaletteMenuItem<String>(
       value: value,
+      label: label,
+      shortcut: shortcut,
+      labelColor: labelColor,
       enabled: enabled,
-      height: 34,
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: enabled ? (iconColor ?? AppTheme.textSecondary) : AppTheme.textSecondary.withValues(alpha: 0.4)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: enabled ? labelColor : AppTheme.textSecondary.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
-          if (shortcut != null) ...[
-            const SizedBox(width: 16),
-            Text(
-              shortcut,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                color: AppTheme.adaptive(const Color(0xFF5C6370)),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
   Future<String?> _showContextMenu(Offset globalPosition, List<PopupMenuEntry<String>> items) {
-    return showMenu<String>(
-      context: context,
-      popUpAnimationStyle: AnimationStyle.noAnimation,
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        globalPosition.dx + 1,
-        globalPosition.dy + 1,
-      ),
-      color: AppTheme.bgSurface,
-      items: items,
-    );
+    return showPaletteMenu<String>(context: context, position: globalPosition, items: items);
   }
 
   /// Right-click on empty space in a pane: actions on the current directory.
@@ -1650,19 +1614,17 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
     final hasItems = pane.filteredItems.any((i) => i.name != '..');
     final action = await _showContextMenu(globalPosition, [
-      _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N', iconColor: _cursorAccent),
-      _menuItem('new_folder', Icons.create_new_folder_outlined, 'New Folder',
-          shortcut: 'Shift+N', iconColor: AppTheme.adaptive(const Color(0xFFFFCA28))),
-      const PopupMenuDivider(),
-      _menuItem('refresh', Icons.refresh, 'Refresh'),
-      _menuItem('select_all', Icons.select_all, 'Select All', shortcut: 'Ctrl+A', enabled: hasItems),
-      _menuItem('filter', Icons.filter_list, 'Filter', shortcut: '/', enabled: hasItems),
-      const PopupMenuDivider(),
-      _menuItem('change_dir', Icons.drive_file_move_outline, 'Go to Path...'),
-      _menuItem('parent', Icons.arrow_upward, 'Parent Folder', shortcut: 'Backspace'),
-      _menuItem('switch_node', Icons.dns_outlined, 'Switch Node...', shortcut: 'F2'),
-      _menuItem('dual_pane', _isDualPane ? Icons.crop_square : Icons.vertical_split_outlined,
-          _isDualPane ? 'Single Pane' : 'Dual Pane', shortcut: 'Ctrl+D'),
+      _menuItem('new_file', 'New File', shortcut: 'N'),
+      _menuItem('new_folder', 'New Folder', shortcut: 'Shift+N'),
+      const PaletteMenuDivider(),
+      _menuItem('refresh', 'Refresh'),
+      _menuItem('select_all', 'Select All', shortcut: 'Ctrl+A', enabled: hasItems),
+      _menuItem('filter', 'Filter', shortcut: '/', enabled: hasItems),
+      const PaletteMenuDivider(),
+      _menuItem('change_dir', 'Go to Path...'),
+      _menuItem('parent', 'Parent Folder', shortcut: 'Backspace'),
+      _menuItem('switch_node', 'Switch Node...', shortcut: 'F2'),
+      _menuItem('dual_pane', _isDualPane ? 'Single Pane' : 'Dual Pane', shortcut: 'Ctrl+D'),
     ]);
     if (!mounted) return;
     _focusNode.requestFocus();
@@ -1721,30 +1683,24 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final isArchive = count == 1 && !targets.first.isDir && archiveKindOf(targets.first.name) != null;
 
     final action = await _showContextMenu(globalPosition, [
-      _menuItem('open', item.isDir ? Icons.folder_open : Icons.open_in_new,
-          item.isDir ? 'Open' : 'Open / View', shortcut: 'Enter', iconColor: _cursorAccent),
+      _menuItem('open', item.isDir ? 'Open' : 'Open / View', shortcut: 'Enter'),
       if (!isParent) ...[
-        const PopupMenuDivider(),
-        _menuItem('copy', Icons.copy, 'Copy to $otherPane$suffix', shortcut: 'C'),
-        _menuItem('move', Icons.drive_file_move_outlined, 'Move to $otherPane$suffix', shortcut: 'M'),
-        _menuItem('rename', Icons.drive_file_rename_outline, 'Rename', shortcut: 'R', enabled: count == 1),
-        _menuItem('toggle_select', Icons.check_box_outlined,
-            pane.multiSelected.contains(item.path) ? 'Unmark' : 'Mark',
-            shortcut: 'Space', iconColor: AppTheme.adaptive(const Color(0xFF98C379))),
-        const PopupMenuDivider(),
-        _menuItem('compress', Icons.archive_outlined, 'Compress...$suffix',
-            shortcut: 'Z', iconColor: AppTheme.adaptive(const Color(0xFFD19A66))),
+        const PaletteMenuDivider(),
+        _menuItem('copy', 'Copy to $otherPane$suffix', shortcut: 'C'),
+        _menuItem('move', 'Move to $otherPane$suffix', shortcut: 'M'),
+        _menuItem('rename', 'Rename', shortcut: 'R', enabled: count == 1),
+        _menuItem('toggle_select', pane.multiSelected.contains(item.path) ? 'Unmark' : 'Mark', shortcut: 'Space'),
+        const PaletteMenuDivider(),
+        _menuItem('compress', 'Compress...$suffix', shortcut: 'Z'),
         if (isArchive)
-          _menuItem('extract', Icons.unarchive_outlined, 'Extract Here',
-              shortcut: 'X', iconColor: AppTheme.adaptive(const Color(0xFFD19A66))),
-        const PopupMenuDivider(),
-        _menuItem('delete', Icons.delete_outline, 'Delete$suffix',
-            shortcut: 'Del', iconColor: AppTheme.adaptive(const Color(0xFFE06C75)), labelColor: AppTheme.adaptive(const Color(0xFFE06C75))),
+          _menuItem('extract', 'Extract Here', shortcut: 'X'),
+        const PaletteMenuDivider(),
+        _menuItem('delete', 'Delete$suffix', shortcut: 'Del', labelColor: const Color(0xFFE06C75)),
       ],
-      const PopupMenuDivider(),
-      _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N'),
-      _menuItem('new_folder', Icons.create_new_folder_outlined, 'New Folder', shortcut: 'Shift+N'),
-      _menuItem('refresh', Icons.refresh, 'Refresh'),
+      const PaletteMenuDivider(),
+      _menuItem('new_file', 'New File', shortcut: 'N'),
+      _menuItem('new_folder', 'New Folder', shortcut: 'Shift+N'),
+      _menuItem('refresh', 'Refresh'),
     ]);
     if (!mounted) return;
     _focusNode.requestFocus();
