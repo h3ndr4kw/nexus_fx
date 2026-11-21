@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../models/snippet_model.dart';
 import '../services/snippet_manager_service.dart';
 import '../theme/app_theme.dart';
