@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -194,6 +195,73 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(result, equals(FileDropAction.copy));
+    });
+  });
+
+  group('FileExplorerView context menu', () {
+    late FakeFileExplorerService fakeService;
+
+    setUp(() {
+      fakeService = FakeFileExplorerService([
+        FileExplorerItem(name: '..', path: '/root', isDir: true, size: 0, modified: '- -'),
+        FileExplorerItem(name: 'docs', path: '/root/docs', isDir: true, size: 0, modified: 'Jan 01 10:00'),
+        FileExplorerItem(name: 'file1.txt', path: '/root/file1.txt', isDir: false, size: 1024, modified: 'Jan 01 10:05'),
+      ]);
+    });
+
+    Future<void> pumpExplorer(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FileExplorerView(
+              service: fakeService,
+              initialLeftPath: '/root',
+              initialRightPath: '/root',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('right-click on a row shows the item menu', (tester) async {
+      await pumpExplorer(tester);
+
+      await tester.tap(find.text('file1.txt').first, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open / View'), findsOneWidget);
+      expect(find.text('Rename'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+      expect(find.text('Copy to Other Pane'), findsOneWidget);
+    });
+
+    testWidgets('right-click on blank space shows the area menu', (tester) async {
+      await pumpExplorer(tester);
+
+      final list = find.byType(ListView).first;
+      final bottom = tester.getBottomLeft(list) + const Offset(40, -20);
+      await tester.tapAt(bottom, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('New Folder'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
+      expect(find.text('Go to Path...'), findsOneWidget);
+      expect(find.text('Rename'), findsNothing);
+    });
+
+    testWidgets('area menu New Folder opens the prompt', (tester) async {
+      await pumpExplorer(tester);
+
+      final list = find.byType(ListView).first;
+      await tester.tapAt(tester.getBottomLeft(list) + const Offset(40, -20), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Folder'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter folder name:'), findsOneWidget);
     });
   });
 }

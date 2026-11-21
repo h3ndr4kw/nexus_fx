@@ -1838,6 +1838,188 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return KeyEventResult.ignored;
   }
 
+  // Context menus
+
+  PopupMenuItem<String> _menuItem(
+    String value,
+    IconData icon,
+    String label, {
+    String? shortcut,
+    Color iconColor = AppTheme.textSecondary,
+    Color? labelColor,
+    bool enabled = true,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      enabled: enabled,
+      height: 34,
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: enabled ? iconColor : AppTheme.textSecondary.withValues(alpha: 0.4)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: enabled ? labelColor : AppTheme.textSecondary.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          if (shortcut != null) ...[
+            const SizedBox(width: 16),
+            Text(
+              shortcut,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: Color(0xFF5C6370),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _showContextMenu(Offset globalPosition, List<PopupMenuEntry<String>> items) {
+    return showMenu<String>(
+      context: context,
+      popUpAnimationStyle: AnimationStyle.noAnimation,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      color: AppTheme.bgSurface,
+      items: items,
+    );
+  }
+
+  /// Right-click on empty space in a pane: actions on the current directory.
+  Future<void> _showAreaContextMenu(_PaneController pane, PaneSide side, Offset globalPosition) async {
+    if (_activePane != side) {
+      setState(() => _activePane = side);
+    }
+    _unselectAllAndUnfocus(pane);
+
+    final hasItems = pane.filteredItems.any((i) => i.name != '..');
+    final action = await _showContextMenu(globalPosition, [
+      _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N', iconColor: _cursorAccent),
+      _menuItem('new_folder', Icons.create_new_folder_outlined, 'New Folder',
+          shortcut: 'Shift+N', iconColor: const Color(0xFFFFCA28)),
+      const PopupMenuDivider(),
+      _menuItem('refresh', Icons.refresh, 'Refresh'),
+      _menuItem('select_all', Icons.select_all, 'Select All', shortcut: 'Ctrl+A', enabled: hasItems),
+      _menuItem('filter', Icons.filter_list, 'Filter', shortcut: '/', enabled: hasItems),
+      const PopupMenuDivider(),
+      _menuItem('change_dir', Icons.drive_file_move_outline, 'Go to Path...'),
+      _menuItem('parent', Icons.arrow_upward, 'Parent Folder', shortcut: 'Backspace'),
+      _menuItem('switch_node', Icons.dns_outlined, 'Switch Node...', shortcut: 'F2'),
+      _menuItem('dual_pane', _isDualPane ? Icons.crop_square : Icons.vertical_split_outlined,
+          _isDualPane ? 'Single Pane' : 'Dual Pane', shortcut: 'Ctrl+D'),
+    ]);
+    if (!mounted) return;
+    _focusNode.requestFocus();
+
+    switch (action) {
+      case 'new_file':
+        await _initiateNewFile();
+      case 'new_folder':
+        await _initiateNewFolder();
+      case 'refresh':
+        await _loadPane(pane);
+      case 'select_all':
+        _selectAll();
+      case 'filter':
+        _openFilter(pane);
+      case 'change_dir':
+        await _promptChangeDirectory(pane, side);
+      case 'parent':
+        await _navigateParent();
+      case 'switch_node':
+        await _selectNodeTarget(pane);
+      case 'dual_pane':
+        _toggleDualPane();
+    }
+  }
+
+  /// Right-click on a row: the row joins (or becomes) the selection, then the
+  /// menu acts on the selection the same way the keyboard shortcuts do.
+  Future<void> _showItemContextMenu(
+    _PaneController pane,
+    PaneSide side,
+    int idx,
+    Offset globalPosition,
+  ) async {
+    if (idx < 0 || idx >= pane.filteredItems.length) return;
+    final item = pane.filteredItems[idx];
+
+    setState(() {
+      _activePane = side;
+      if (!pane.multiSelected.contains(item.path)) {
+        pane.multiSelected.clear();
+        for (final it in pane.filteredItems) {
+          it.isSelected = false;
+        }
+        pane.selectionAnchorIndex = idx;
+      }
+      pane.selectedIndex = idx;
+    });
+    _focusNode.requestFocus();
+
+    final isParent = item.name == '..';
+    final targets = _getTargetItems();
+    final count = targets.length;
+    final suffix = count > 1 ? ' ($count items)' : '';
+    final otherPane = _isDualPane ? 'Other Pane' : inactivePaneState.target.label;
+
+    final action = await _showContextMenu(globalPosition, [
+      _menuItem('open', item.isDir ? Icons.folder_open : Icons.open_in_new,
+          item.isDir ? 'Open' : 'Open / View', shortcut: 'Enter', iconColor: _cursorAccent),
+      if (!isParent) ...[
+        const PopupMenuDivider(),
+        _menuItem('copy', Icons.copy, 'Copy to $otherPane$suffix', shortcut: 'C'),
+        _menuItem('move', Icons.drive_file_move_outlined, 'Move to $otherPane$suffix', shortcut: 'M'),
+        _menuItem('rename', Icons.drive_file_rename_outline, 'Rename', shortcut: 'R', enabled: count == 1),
+        _menuItem('toggle_select', Icons.check_box_outlined,
+            pane.multiSelected.contains(item.path) ? 'Unmark' : 'Mark',
+            shortcut: 'Space', iconColor: const Color(0xFF98C379)),
+        const PopupMenuDivider(),
+        _menuItem('delete', Icons.delete_outline, 'Delete$suffix',
+            shortcut: 'Del', iconColor: const Color(0xFFE06C75), labelColor: const Color(0xFFE06C75)),
+      ],
+      const PopupMenuDivider(),
+      _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N'),
+      _menuItem('new_folder', Icons.create_new_folder_outlined, 'New Folder', shortcut: 'Shift+N'),
+      _menuItem('refresh', Icons.refresh, 'Refresh'),
+    ]);
+    if (!mounted) return;
+    _focusNode.requestFocus();
+
+    switch (action) {
+      case 'open':
+        await _enterItemInPane(pane, idx);
+      case 'copy':
+        await _initiateCopy();
+      case 'move':
+        await _initiateMove();
+      case 'rename':
+        await _initiateRename();
+      case 'toggle_select':
+        _toggleSelectItem(pane, idx);
+      case 'delete':
+        await _initiateDelete();
+      case 'new_file':
+        await _initiateNewFile();
+      case 'new_folder':
+        await _initiateNewFolder();
+      case 'refresh':
+        await _loadPane(pane);
+    }
+  }
+
   // View composition
 
   @override
@@ -2439,6 +2621,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           _focusNode.requestFocus();
           _unselectAllAndUnfocus(pane);
         },
+        onSecondaryTapUp: (details) => _showAreaContextMenu(pane, side, details.globalPosition),
         child: const Center(
           child: Text(
             '(Empty folder)',
@@ -2458,7 +2641,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final sizeWidth = density == FileExplorerDensity.large ? 95.0 : 80.0;
     final modWidth = density == FileExplorerDensity.large ? 130.0 : 110.0;
 
-    return Listener(
+    // Rows claim their own right-clicks (the innermost recognizer wins the
+    // arena), so this only fires for the blank space below the last row.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapUp: (details) => _showAreaContextMenu(pane, side, details.globalPosition),
+      child: Listener(
       behavior: HitTestBehavior.translucent,
       onPointerUp: (event) {
         final totalItemsHeight = pane.filteredItems.length * density.rowHeight;
@@ -2651,6 +2839,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 });
               }
             },
+            onSecondaryTapUp: (details) =>
+                _showItemContextMenu(pane, side, idx, details.globalPosition),
             child: rowContent,
           );
 
@@ -2721,6 +2911,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
           return row;
         },
+      ),
       ),
     );
   }
