@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 enum AppThemeType {
   antigravity,
+  // Listed right after the default so it shows without scrolling in the
+  // theme picker. Persisted by name, so the position is free to change.
+  light,
   catppuccinMocha,
   catppuccinMacchiato,
   vscodeDark,
@@ -15,7 +18,6 @@ enum AppThemeType {
   dracula,
   monokaiPro,
   gruvboxDark,
-  light,
 }
 
 enum AppFontSize {
@@ -445,7 +447,7 @@ class AppTheme {
     // 13. Light (white)
     AppThemeType.light: const AppPalette(
       id: 'light',
-      name: 'Light',
+      name: 'Light (White)',
       brightness: Brightness.light,
       background: Color(0xFFFFFFFF),
       surfaceColor: Color(0xFFF4F5F7),
