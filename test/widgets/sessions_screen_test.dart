@@ -51,7 +51,7 @@ void main() {
     expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
     expect(find.byIcon(Icons.paste_outlined), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-    expect(find.byIcon(Icons.settings_ethernet), findsOneWidget);
+    expect(find.byIcon(Icons.tune), findsOneWidget);
 
     // Verify breadcrumb
     expect(find.text('All Sessions'), findsOneWidget);

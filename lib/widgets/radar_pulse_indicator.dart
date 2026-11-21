@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 import '../theme/app_motion.dart';
-import '../theme/app_theme.dart';
 
 /// Radar pulse expanding ripple beacon for active session tabs (ping-slow)
 class RadarPulseIndicator extends StatefulWidget {
