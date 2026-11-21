@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'app_log.dart';
 
 /// Result of comparing a presented host key with what we have on record.
 enum HostKeyStatus {
@@ -202,7 +203,9 @@ class KnownHostsService {
       // Keep the unreadable file aside instead of overwriting it on next save.
       try {
         await File(filePath).rename('$filePath.corrupt');
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('KnownHosts: setting the unreadable file aside', e, st);
+      }
     }
     _loaded = true;
   }

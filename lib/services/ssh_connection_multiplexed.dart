@@ -86,7 +86,9 @@ extension _SshMultiplexedRoutes on SshConnection {
         }
         try {
           forwardChannel.close();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('SSH: closing forward channel', e, st);
+        }
         rethrow;
       }
     }
@@ -125,7 +127,9 @@ extension _SshMultiplexedRoutes on SshConnection {
       onRelease: () {
         try {
           _session?.close();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('SSH: closing session on lease release', e, st);
+        }
       },
     );
     _leaseId = lease.id;
@@ -323,7 +327,9 @@ extension _SshMultiplexedRoutes on SshConnection {
       }
       try {
         forwardChannel.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('SSH: closing forward channel', e, st);
+      }
       rethrow;
     }
   }

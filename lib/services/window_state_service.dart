@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:window_manager/window_manager.dart';
+import 'app_log.dart';
 
 /// Centralized service to manage and synchronize window states
 /// (fullscreen, maximize, minimize, restore) across desktop platforms.
@@ -32,7 +33,8 @@ class WindowStateService extends ChangeNotifier
         WidgetsBinding.instance.addObserver(this);
         checkWindowState();
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: initialising state', e, st);
       // In test environments or when binding is not yet attached
     }
   }
@@ -47,7 +49,8 @@ class WindowStateService extends ChangeNotifier
         _isFullScreen = fullScreen;
         notifyListeners();
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: reading state', e, st);
       // Gracefully ignore during test or non-desktop environment
     }
   }
@@ -65,7 +68,8 @@ class WindowStateService extends ChangeNotifier
       // Give window manager a moment to settle, then verify state
       await Future.delayed(const Duration(milliseconds: 50));
       await checkWindowState();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: toggling fullscreen', e, st);
       // Gracefully ignore during test or non-desktop environment
     }
   }
@@ -84,7 +88,8 @@ class WindowStateService extends ChangeNotifier
       }
       await Future.delayed(const Duration(milliseconds: 50));
       await checkWindowState();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: toggling maximize', e, st);
       // Gracefully ignore during test or non-desktop environment
     }
   }
@@ -93,7 +98,9 @@ class WindowStateService extends ChangeNotifier
   Future<void> minimize() async {
     try {
       await windowManager.minimize();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: minimize', e, st);
+    }
   }
 
   /// Centers the window if window manager is initialized.
@@ -101,7 +108,9 @@ class WindowStateService extends ChangeNotifier
     if (!_initialized) return;
     try {
       await windowManager.center();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: center', e, st);
+    }
   }
 
   @visibleForTesting
@@ -112,7 +121,9 @@ class WindowStateService extends ChangeNotifier
     onCloseRequestedForTesting?.call();
     try {
       await windowManager.close();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: close', e, st);
+    }
   }
 
   // WindowListener overrides

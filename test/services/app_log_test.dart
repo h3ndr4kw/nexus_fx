@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/services/app_log.dart';
 
@@ -83,5 +84,25 @@ void main() {
 
     expect(AppLog.recent, hasLength(1));
     expect(File(logPath).existsSync(), isFalse);
+  });
+
+  test('a missing desktop plugin is not worth an entry', () {
+    AppLog.warningUnlessPluginMissing(
+      'Window.minimize',
+      MissingPluginException('No implementation found'),
+      StackTrace.current,
+    );
+
+    expect(AppLog.recent, isEmpty);
+  });
+
+  test('any other plugin failure is logged', () {
+    AppLog.warningUnlessPluginMissing(
+      'Window.minimize',
+      PlatformException(code: 'denied'),
+      StackTrace.current,
+    );
+
+    expect(AppLog.recent.single.where, 'Window.minimize');
   });
 }

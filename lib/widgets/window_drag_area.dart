@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
+import '../services/app_log.dart';
 
 /// Where to place a window that is restored from maximized mid-drag so the
 /// pointer keeps the same horizontal proportion across the title bar and the
@@ -44,7 +45,8 @@ class WindowDragArea extends StatelessWidget {
         ));
       }
       await windowManager.startDragging();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: start dragging', e, st);
       // Not available in tests / before window_manager is initialised.
     }
   }
@@ -56,7 +58,9 @@ class WindowDragArea extends StatelessWidget {
       } else {
         await windowManager.maximize();
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: toggle maximize', e, st);
+    }
   }
 
   @override

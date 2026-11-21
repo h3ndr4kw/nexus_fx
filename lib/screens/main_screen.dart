@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../models/file_explorer_models.dart';
 import '../models/nexus_tool.dart';
 import '../models/session_models.dart';
+import '../services/app_log.dart';
 import '../services/crypto_vault_service.dart';
 import '../services/nexus_tool_registry.dart';
 import '../services/session_manager_service.dart';
@@ -569,7 +570,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
     try {
       await windowManager.setPreventClose(value);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Window: set prevent-close', e, st);
       // Not available in tests / before window_manager is initialised.
     }
   }
@@ -582,7 +584,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       await _setWindowPreventClose(false);
       try {
         await windowManager.destroy();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warningUnlessPluginMissing('Window: destroy', e, st);
+      }
     }
   }
 

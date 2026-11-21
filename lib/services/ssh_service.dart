@@ -17,6 +17,7 @@ import 'ssh_key_loader.dart';
 import 'ssh_algorithm_helper.dart';
 import 'terminal_output_scheduler.dart';
 import 'local_pty.dart';
+import 'app_log.dart';
 
 export 'ssh_algorithm_helper.dart';
 
@@ -468,7 +469,8 @@ class SshConnection {
           } on MasterConnectionException catch (e) {
             masterFailed = true;
             _log('✖ Network Manager connection failed: ${e.cause}', color: 'red');
-          } catch (_) {
+          } catch (e, st) {
+            AppLog.warning('SSH: multiplexed connect failed, trying the next mode', e, st);
             multiplexedSuccess = false;
           }
 
@@ -871,7 +873,9 @@ class SshConnection {
     if (isLocalShell) {
       try {
         _localPty?.kill();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('SSH: killing local shell', e, st);
+      }
       _localPty = null;
     }
     _session?.close();

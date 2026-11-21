@@ -933,7 +933,9 @@ extension _RunbookDocumentOps on InteractiveRunbookSidebarState {
         if (file.existsSync()) {
           try {
             existingBytes = file.readAsBytesSync();
-          } catch (_) {}
+          } catch (e, st) {
+            AppLog.warning('Runbook: reading existing .docx before save', e, st);
+          }
         }
         final docxBytes = PlaybookParser.serializeToDocx(
           doc,

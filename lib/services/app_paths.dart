@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'app_log.dart';
+
 /// Where the app keeps files that are not tied to a user-chosen location.
 ///
 /// Everything lives under `~/.nexus_fx` (`%USERPROFILE%\.nexus_fx` on
@@ -60,7 +62,8 @@ class AppPaths {
       target.parent.createSync(recursive: true);
       legacy.copySync(targetPath);
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warning('AppPaths: migrating legacy settings', e, st);
       return false;
     }
   }

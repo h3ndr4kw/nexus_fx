@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/session_models.dart';
 import '../theme/app_theme.dart';
 import '../theme/terminal_theme_helper.dart';
+import '../services/app_log.dart';
 import '../services/session_manager_service.dart';
 import '../services/ssh_service.dart';
 import '../services/settings_service.dart';

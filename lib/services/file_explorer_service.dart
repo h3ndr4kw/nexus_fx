@@ -12,6 +12,7 @@ import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
 import 'app_paths.dart';
 import 'archive_commands.dart';
+import 'app_log.dart';
 
 class RemoteSession {
   final SSHClient client;
@@ -99,7 +100,9 @@ class RemoteSession {
         allowMalformed: true,
       );
       tmsh = !out.contains(_shellProbeMarker) && _tmshErrorPattern.hasMatch(out);
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.warning('FileExplorer: tmsh shell probe', e, st);
+    }
     isTmshShell = tmsh;
     if (tmsh) {
       // The SFTP subsystem is unusable under tmsh (the channel carries tmsh
@@ -157,12 +160,16 @@ class RemoteSession {
     if (!isSharedClient) {
       try {
         client.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: closing SSH client', e, st);
+      }
     }
     if (!isSharedJumpClient) {
       try {
         jumpClient?.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: closing jump client', e, st);
+      }
     }
     if (leaseId != null) {
       SshTunnelManager.instance.releaseLease(leaseId!);
@@ -370,7 +377,9 @@ class FileExplorerService {
       if (!ok) {
         try {
           await dest.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: deleting partial local copy', e, st);
+        }
       }
     }
   }
@@ -818,7 +827,9 @@ class FileExplorerService {
       try {
         await session.sftp!.remove(targetPath);
         return;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP remove failed, falling back to rm', e, st);
+      }
     }
     // Command rm -rf works reliably for both dirs and files
     await session.run('rm -rf "$targetPath"');
@@ -833,7 +844,9 @@ class FileExplorerService {
       try {
         await session.sftp!.rename(oldPath, newPath);
         return;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP rename failed, falling back to mv', e, st);
+      }
     }
     await session.run('mv "$oldPath" "$newPath"');
   }
@@ -858,7 +871,9 @@ class FileExplorerService {
         await session.sftp!.rename(srcPath, targetPath);
         onProgress?.call(1, 1);
         return;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP move failed, falling back to mv', e, st);
+      }
     }
     // `mv` across filesystems copies the data, so track the target growing.
     await _runWithRemoteProgress(
@@ -995,7 +1010,9 @@ class FileExplorerService {
         final bytes = await file.readBytes();
         await file.close();
         return utf8.decode(bytes, allowMalformed: true);
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP read failed, falling back to cat', e, st);
+      }
     }
     final bytes = await session.run('cat "$path"');
     return utf8.decode(bytes, allowMalformed: true);
@@ -1012,7 +1029,9 @@ class FileExplorerService {
         await file.writeBytes(Uint8List.fromList(bytes));
         await file.close();
         return;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP write failed, falling back to base64 over shell', e, st);
+      }
     }
     final encoded = base64Encode(bytes);
     await session.run('echo "$encoded" | base64 -d > "$path"');
@@ -1107,7 +1126,11 @@ class FileExplorerService {
       if (session.sftp != null) {
         try {
           await session.sftp!.mkdir(targetRemotePath);
-        } catch (_) {}
+        } catch (_) {
+          // Fails when the folder already exists, which is the usual case on
+          // a re-upload. A folder that really cannot be created fails the
+          // uploads into it below, and those errors are reported.
+        }
       } else {
         await session.run('mkdir -p "$targetRemotePath"');
       }
@@ -1233,7 +1256,9 @@ class FileExplorerService {
       if (!isDir && session.sftp != null) {
         try {
           total = (await session.sftp!.stat(remotePath)).size ?? -1;
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: SFTP stat failed, sizing with shell', e, st);
+        }
       }
       if (total <= 0) total = await session.sizeOf(remotePath);
       agg = _ProgressAggregator(total, onProgress);
@@ -1281,7 +1306,9 @@ class FileExplorerService {
         try {
           final attrs = await session.sftp!.stat(remotePath);
           totalBytes = attrs.size ?? -1;
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: SFTP stat failed, download size unknown', e, st);
+        }
       }
 
       if (session.sftp != null) {
@@ -1420,18 +1447,26 @@ class FileExplorerService {
       if (!ok) {
         try {
           onAbort?.call();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: download abort callback', e, st);
+        }
       }
       try {
         await sink.flush();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: flushing download file', e, st);
+      }
       try {
         await sink.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: closing download file', e, st);
+      }
       if (!ok) {
         try {
           if (await localFile.exists()) await localFile.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: deleting partial download', e, st);
+        }
       }
     }
   }
@@ -1622,7 +1657,9 @@ class FileExplorerService {
             }
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: locating Wireshark', e, st);
+      }
     } else if (Platform.isMacOS) {
       const candidates = [
         '/Applications/Wireshark.app/Contents/MacOS/Wireshark',
@@ -1638,7 +1675,9 @@ class FileExplorerService {
           final trimmed = (result.stdout as String).trim();
           if (trimmed.isNotEmpty && File(trimmed).existsSync()) return trimmed;
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: locating Wireshark', e, st);
+      }
     } else {
       // Linux
       const candidates = [
@@ -1655,7 +1694,9 @@ class FileExplorerService {
           final trimmed = (result.stdout as String).trim();
           if (trimmed.isNotEmpty && File(trimmed).existsSync()) return trimmed;
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: locating Wireshark', e, st);
+      }
     }
     return null;
   }
@@ -1764,7 +1805,9 @@ class FileExplorerService {
               }
             }
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: locating external editor', e, st);
+        }
       }
     } else if (Platform.isMacOS) {
       final candidates = <String>[];
@@ -1809,7 +1852,9 @@ class FileExplorerService {
             final trimmed = (result.stdout as String).trim();
             if (trimmed.isNotEmpty && File(trimmed).existsSync()) return trimmed;
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: locating external editor', e, st);
+        }
       }
     } else {
       // Linux
@@ -1856,7 +1901,9 @@ class FileExplorerService {
             final trimmed = (result.stdout as String).trim();
             if (trimmed.isNotEmpty && File(trimmed).existsSync()) return trimmed;
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('FileExplorer: locating external editor', e, st);
+        }
       }
     }
 
@@ -1930,7 +1977,9 @@ class FileExplorerService {
         await file.close();
         await File(localPath).writeAsBytes(bytes);
         return localPath;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('FileExplorer: SFTP download failed, falling back to cat', e, st);
+      }
     }
     final bytes = await session.run('cat "$remotePath"');
     await File(localPath).writeAsBytes(bytes);
@@ -2065,7 +2114,9 @@ class TransferCancelToken {
     for (final listener in List.of(_pauseListeners)) {
       try {
         listener();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.error('FileExplorer: transfer pause listener threw', e, st);
+      }
     }
   }
 
@@ -2120,7 +2171,9 @@ class TransferCancelToken {
     for (final hook in List.of(_hooks)) {
       try {
         hook();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.error('FileExplorer: cancel hook threw', e, st);
+      }
     }
     _hooks.clear();
   }

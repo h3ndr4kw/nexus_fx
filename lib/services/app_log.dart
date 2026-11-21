@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show MissingPluginException;
 
 import 'app_paths.dart';
 
@@ -58,6 +59,13 @@ class AppLog {
   /// A failure that cost the user something: an operation did not happen.
   static void error(String where, Object error, [StackTrace? stack]) =>
       _add('ERROR', where, error, stack);
+
+  /// For calls into desktop plugins (window_manager, notifications). A
+  /// plugin that is not registered, as in widget tests, is not a failure.
+  static void warningUnlessPluginMissing(String where, Object error, StackTrace stack) {
+    if (error is MissingPluginException) return;
+    warning(where, error, stack);
+  }
 
   static void _add(String level, String where, Object error, StackTrace? stack) {
     final entry = AppLogEntry(

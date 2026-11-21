@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:window_manager/window_manager.dart';
 
 import 'transfer_manager.dart';
+import 'app_log.dart';
 
 /// Mirrors the overall transfer progress on the app's taskbar icon (Windows)
 /// or dock icon (macOS), so it stays visible while the window is minimised
@@ -36,7 +37,8 @@ class TransferTaskbarProgress {
     try {
       // window_manager: 0..1 shows the bar, a negative value removes it.
       await windowManager.setProgressBar(progress);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Taskbar: setting progress', e, st);
       // Not available in tests / before window_manager is initialised.
     }
   }

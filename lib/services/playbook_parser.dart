@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 import '../models/playbook_models.dart';
+import 'app_log.dart';
 
 /// Exception thrown when parsing a docx playbook archive or XML fails.
 class PlaybookParseException implements Exception {
@@ -474,7 +475,8 @@ class PlaybookParser {
           );
         }
         return ZipEncoder().encode(newArchive);
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.warning('PlaybookParser: existing .docx unreadable, writing a fresh archive', e, st);
         // Fall through to fresh archive creation
       }
     }

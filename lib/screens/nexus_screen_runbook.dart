@@ -45,7 +45,9 @@ extension _NexusRunbookExecution on NexusScreenState {
           await conn.connectionState
               .firstWhere((connected) => connected)
               .timeout(const Duration(seconds: 15));
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('Runbook: target not connected after waiting, running anyway', e, st);
+        }
       }
     }
 

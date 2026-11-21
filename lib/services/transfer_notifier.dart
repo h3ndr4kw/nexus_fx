@@ -6,6 +6,7 @@ import 'package:local_notifier/local_notifier.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'transfer_manager.dart';
+import 'app_log.dart';
 
 /// Shows one desktop notification. [onClick] runs when the user clicks it.
 typedef TransferNotificationSender = Future<void> Function(
@@ -134,7 +135,8 @@ class TransferNotifier {
     try {
       if (await windowManager.isMinimized()) return false;
       return await windowManager.isFocused();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.warningUnlessPluginMissing('Notifier: reading window focus', e, st);
       // Unknown (tests, window_manager not ready): stay quiet.
       return true;
     }
@@ -146,7 +148,9 @@ class TransferNotifier {
         if (await windowManager.isMinimized()) await windowManager.restore();
         await windowManager.show();
         await windowManager.focus();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warningUnlessPluginMissing('Notifier: bringing window to front', e, st);
+      }
     }();
   }
 

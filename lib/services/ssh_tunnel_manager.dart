@@ -5,6 +5,7 @@ import '../models/network_manager_config.dart';
 import '../models/ssh_tunnel_models.dart';
 import 'ssh_service.dart';
 import 'known_hosts_service.dart';
+import 'app_log.dart';
 
 /// Manages SSH master jump host connections and multiplexed port forwarding channels.
 ///
@@ -174,7 +175,9 @@ class SshTunnelManager {
         _activeLeases.remove(leaseId);
         try {
           forwardChannel.close();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('Tunnel: closing forward channel', e, st);
+        }
       },
     );
 
@@ -389,7 +392,9 @@ class SshTunnelManager {
     } catch (e) {
       try {
         channel.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('Tunnel: closing channel after failed cluster connect', e, st);
+      }
       _clusterClients.remove(key);
       rethrow;
     }
@@ -452,7 +457,9 @@ class SshTunnelManager {
         _activeLeases.remove(leaseId);
         try {
           forwardChannel.close();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('Tunnel: closing forward channel', e, st);
+        }
       },
     );
 
@@ -478,7 +485,9 @@ class SshTunnelManager {
     for (final lease in leases) {
       try {
         lease.release();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('Tunnel: releasing lease', e, st);
+      }
     }
 
     final clusterClients = _clusterClients.values.toList();
@@ -487,7 +496,9 @@ class SshTunnelManager {
     for (final client in clusterClients) {
       try {
         client.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('Tunnel: closing cluster client', e, st);
+      }
     }
 
     final clients = _masterClients.values.toList();
@@ -497,7 +508,9 @@ class SshTunnelManager {
     for (final client in clients) {
       try {
         client.close();
-      } catch (_) {}
+      } catch (e, st) {
+        AppLog.warning('Tunnel: closing master client', e, st);
+      }
     }
   }
 }

@@ -32,7 +32,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
             dir.createSync(recursive: true);
           }
           return 'nxnb';
-        } catch (_) {}
+        } catch (e, st) {
+          AppLog.warning('Runbook: creating default nxnb folder', e, st);
+        }
       }
     }
     return configuredPath;
@@ -71,7 +73,8 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
       List<FileSystemEntity> entries;
       try {
         entries = dir.listSync();
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.warning('Runbook: listing folder', e, st);
         return;
       }
 
@@ -283,7 +286,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
         });
       }
       _loadFiles();
-    } catch (_) {}
+    } catch (e, st) {
+      if (mounted) reportFileOperationError(context, 'delete "${_extractFileName(filePath)}"', e, st);
+    }
   }
 
   Future<void> _confirmAndDeleteFolder(String folderPath) async {
@@ -376,7 +381,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
         _selectedFilePath = null;
       });
       _loadFiles();
-    } catch (_) {}
+    } catch (e, st) {
+      if (mounted) reportFileOperationError(context, 'delete folder "$folderName"', e, st);
+    }
   }
 
   Future<void> _promptCreateNewFile() async {
@@ -503,8 +510,8 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
       _expandedFolders.add(_normalizePath(targetDir));
       _loadFiles();
       _openFileInTab(newFile);
-    } catch (_) {
-      // Ignore creation errors
+    } catch (e, st) {
+      if (mounted) reportFileOperationError(context, 'create "$finalName"', e, st);
     }
   }
 
@@ -610,8 +617,8 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
       _expandedFolders.add(_normalizePath(targetDir));
       _selectedFolderPath = newDir.path;
       _loadFiles();
-    } catch (_) {
-      // Ignore folder creation errors
+    } catch (e, st) {
+      if (mounted) reportFileOperationError(context, 'create folder "$folderName"', e, st);
     }
   }
 
@@ -689,7 +696,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
             _selectedFilePath = null;
           });
           _loadFiles();
-        } catch (_) {}
+        } catch (e, st) {
+          if (mounted) reportFileOperationError(context, 'move folder "$sourceName"', e, st);
+        }
       } else {
         if (Directory(destPath).existsSync()) {
           destDirName = '${sourceName}_copy';
@@ -708,7 +717,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
             _selectedFilePath = null;
           });
           _loadFiles();
-        } catch (_) {}
+        } catch (e, st) {
+          if (mounted) reportFileOperationError(context, 'copy folder "$sourceName"', e, st);
+        }
       }
     } else {
       final ext = _extractExtension(sourceName);
@@ -738,7 +749,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
             _selectedFolderPath = null;
           });
           _loadFiles();
-        } catch (_) {}
+        } catch (e, st) {
+          if (mounted) reportFileOperationError(context, 'move "$sourceName"', e, st);
+        }
       } else {
         if (File(destPath).existsSync()) {
           destFileName = '${baseName}_copy$ext';
@@ -757,7 +770,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
             _selectedFolderPath = null;
           });
           _loadFiles();
-        } catch (_) {}
+        } catch (e, st) {
+          if (mounted) reportFileOperationError(context, 'copy "$sourceName"', e, st);
+        }
       }
     }
   }
@@ -968,7 +983,9 @@ extension _RunbookFileTreeOps on InteractiveRunbookSidebarState {
         });
       }
       _loadFiles();
-    } catch (_) {}
+    } catch (e, st) {
+      if (mounted) reportFileOperationError(context, 'rename "${_extractFileName(currentPath)}"', e, st);
+    }
   }
 
   Future<void> _showContextMenuForNode(
