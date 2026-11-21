@@ -582,18 +582,22 @@ class FileExplorerService {
   }
 
   Future<String> readRemoteText(RemoteSession session, String path) async {
+    final bytes = await readRemoteBytes(session, path);
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  Future<Uint8List> readRemoteBytes(RemoteSession session, String path) async {
     if (session.sftp != null) {
       try {
         final file = await session.sftp!.open(path, mode: SftpFileOpenMode.read);
         final bytes = await file.readBytes();
         await file.close();
-        return utf8.decode(bytes, allowMalformed: true);
+        return bytes;
       } catch (e, st) {
         AppLog.warning('FileExplorer: SFTP read failed, falling back to cat', e, st);
       }
     }
-    final bytes = await session.run('cat "$path"');
-    return utf8.decode(bytes, allowMalformed: true);
+    return session.run('cat "$path"');
   }
 
   Future<void> writeRemoteText(RemoteSession session, String path, String content) async {

@@ -239,6 +239,8 @@ class LocalFileOperations {
     return await file.readAsString();
   }
 
+  Future<Uint8List> readLocalBytes(String filePath) => File(filePath).readAsBytes();
+
   Future<void> writeLocalText(String filePath, String content) async {
     final file = File(filePath);
     await file.writeAsString(content);

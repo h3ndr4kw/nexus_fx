@@ -52,6 +52,7 @@ class FileExplorerHelpDialog extends StatelessWidget {
                     _ShortcutRow('d/Del', 'Delete Selected'),
                     _ShortcutRow('r', 'Rename Active'),
                     _ShortcutRow('Ctrl+j', 'Merge Selected'),
+                    _ShortcutRow('=', 'Compare Selected'),
                   ],
                 ),
               ),
