@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import '../theme/app_theme.dart';
 
 // Shared look for the quick pickers (Nexus command palette, File Explorer
@@ -319,6 +320,186 @@ class PaletteRow extends StatelessWidget {
             ),
             for (final w in trailing) ...[const SizedBox(width: 8), w],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Right-click menu in the palette look: a bordered card with a soft shadow,
+/// [PaletteMenuItem] rows and [PaletteMenuDivider] separators.
+Future<T?> showPaletteMenu<T>({
+  required BuildContext context,
+  required Offset position,
+  required List<PopupMenuEntry<T>> items,
+}) {
+  return showMenu<T>(
+    context: context,
+    popUpAnimationStyle: AnimationStyle.noAnimation,
+    position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+    color: AppTheme.bgSurface,
+    surfaceTintColor: Colors.transparent,
+    elevation: 16,
+    shadowColor: Colors.black,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+      side: const BorderSide(color: AppTheme.borderSubtle),
+    ),
+    clipBehavior: Clip.antiAlias,
+    menuPadding: const EdgeInsets.symmetric(vertical: 6),
+    constraints: const BoxConstraints(minWidth: 240, maxWidth: 380),
+    items: items,
+  );
+}
+
+class PaletteMenuDivider extends PopupMenuDivider {
+  const PaletteMenuDivider({super.key}) : super(height: 9, color: AppTheme.borderSubtle);
+}
+
+/// A [showPaletteMenu] row: icon box, label, optional shortcut keycap. Hover
+/// and keyboard focus both show the palette's accent bar and tint.
+class PaletteMenuItem<T> extends PopupMenuEntry<T> {
+  final T value;
+  final IconData icon;
+  final String label;
+  final String? shortcut;
+  final Color iconColor;
+
+  /// Overrides the label color, e.g. for destructive actions.
+  final Color? labelColor;
+  final bool enabled;
+
+  const PaletteMenuItem({
+    super.key,
+    required this.value,
+    required this.icon,
+    required this.label,
+    this.shortcut,
+    this.iconColor = AppTheme.textSecondary,
+    this.labelColor,
+    this.enabled = true,
+  });
+
+  @override
+  double get height => 34;
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<PaletteMenuItem<T>> createState() => _PaletteMenuItemState<T>();
+}
+
+class _PaletteMenuItemState<T> extends State<PaletteMenuItem<T>> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  void _select() => Navigator.pop<T>(context, widget.value);
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = AppTheme.accentPrimary;
+    final enabled = widget.enabled;
+    final active = enabled && (_hovered || _focused);
+    final iconColor = enabled ? widget.iconColor : AppTheme.textMuted;
+
+    final row = Container(
+      height: widget.height,
+      padding: const EdgeInsets.fromLTRB(9, 0, 12, 0),
+      decoration: BoxDecoration(
+        color: active ? accent.withValues(alpha: 0.08) : Colors.transparent,
+        border: Border(
+          left: BorderSide(color: active ? accent : Colors.transparent, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? iconColor.withValues(alpha: 0.15) : AppTheme.bgSurfaceSecondary,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: active ? iconColor.withValues(alpha: 0.35) : AppTheme.borderSubtle,
+              ),
+            ),
+            child: Icon(widget.icon, size: 14, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: enabled ? (widget.labelColor ?? AppTheme.textPrimary) : AppTheme.textMuted,
+              ),
+            ),
+          ),
+          if (widget.shortcut != null) ...[
+            const SizedBox(width: 16),
+            Opacity(
+              opacity: enabled ? 1 : 0.5,
+              child: _PaletteKeycap(widget.shortcut!),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return Semantics(
+      role: SemanticsRole.menuItem,
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        enabled: enabled,
+        mouseCursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        onShowFocusHighlight: (v) => setState(() => _focused = v),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
+            _select();
+            return null;
+          }),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled ? _select : null,
+          child: row,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shortcut hint drawn like the palette's ESC keycap.
+class _PaletteKeycap extends StatelessWidget {
+  final String text;
+
+  const _PaletteKeycap(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurfaceSecondary,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppTheme.inputOutline),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
+          color: AppTheme.textSecondary,
         ),
       ),
     );
