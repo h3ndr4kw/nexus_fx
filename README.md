@@ -20,7 +20,7 @@
 ## Key Features
 
 ### 1. Nexus Terminal & Multi-Tab Workspace
-- **Hybrid Terminal Support**: Launch remote **SSH Sessions** (powered by `dartssh2` & `xterm`) or **Local Shells** (`powershell.exe`, `cmd.exe` on Windows; `bash`, `zsh` on Unix).
+- **Hybrid Terminal Support**: Launch remote **SSH Sessions** (powered by `dartssh2` & `xterm`) or **Local Shells** (`powershell.exe`, `cmd.exe` on Windows).
 - **Split View**: Work on multiple systems simultaneously with side-by-side or stacked split panes.
 - **Broadcast Bar**: Send keystrokes and shell commands to multiple terminal tabs at once for synchronized fleet operations.
 - **Command History & Search**: Quick-access floating search island, scrollback search, and execution logs.
@@ -61,7 +61,7 @@
 nexus_fx/
 ├── assets/                  # Icons, bundled scripts, and presets
 ├── config/                  # Sample settings.yaml (runtime copy: ~/.nexus_fx/config/)
-├── docs/                    # Design specifications and implementation plans
+├── docs/                    # Design notes
 ├── lib/
 │   ├── models/              # Data models (Session, Playbook, File Explorer, SSH Tunnel)
 │   ├── screens/             # Top-level views (MainScreen, NexusScreen, SessionsScreen)
@@ -74,6 +74,13 @@ nexus_fx/
 ├── test/                    # Comprehensive unit and widget test suite
 └── windows/                 # Windows desktop runner & CMake configurations
 ```
+
+### Platform support
+
+NexusFX is built, tested, and released for **Windows 10/11 (x64)** only. The
+Linux and macOS runner folders exist and parts of the code handle those systems
+(for example finding Wireshark and external editors), but they are not built or
+tested in CI, so treat them as unsupported.
 
 ---
 

@@ -60,3 +60,7 @@ rea.tar.bz2
 
 # Claude Code worktrees (local, per-session)
 .claude/worktrees/
+
+# AI workflow notes kept locally, not published
+anti-slop/
+docs/superpowers/
