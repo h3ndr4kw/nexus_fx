@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_fx/models/session_models.dart';
 import 'package:nexus_fx/models/ssh_tunnel_models.dart';
+import 'package:nexus_fx/services/app_log.dart';
 
 void main() {
   group('Session models', () {
@@ -201,6 +202,54 @@ void main() {
       final old = SessionProfile.fromJson(json);
       expect(old.webUrl, '');
       expect(old.webEnabled, isFalse);
+    });
+  });
+
+  group('Undecryptable credentials', () {
+    setUp(AppLog.clearForTesting);
+
+    Map<String, dynamic> withCorrupted(String field) {
+      final json = SessionProfile(
+        id: 's1',
+        name: 'Prod',
+        host: '10.0.0.1',
+        password: 'secret-password',
+        privateKeyPassphrase: 'key-passphrase',
+        customJumpPassword: 'jump-password',
+        modifiedAt: DateTime(2026),
+      ).toJson();
+      final value = json[field] as String;
+      json[field] = '${value.substring(0, value.length - 6)}AAAA==';
+      return json;
+    }
+
+    test('a corrupted password loads as empty, never as the ciphertext', () {
+      final restored = SessionProfile.fromJson(withCorrupted('password'));
+
+      expect(restored.password, isEmpty);
+      expect(restored.name, 'Prod');
+      expect(restored.privateKeyPassphrase, 'key-passphrase');
+    });
+
+    test('a corrupted key passphrase and jump password load as empty', () {
+      expect(
+        SessionProfile.fromJson(withCorrupted('privateKeyPassphrase')).privateKeyPassphrase,
+        isEmpty,
+      );
+      expect(
+        SessionProfile.fromJson(withCorrupted('customJumpPassword')).customJumpPassword,
+        isEmpty,
+      );
+    });
+
+    test('the failure is logged without the stored value', () {
+      final json = withCorrupted('password');
+      SessionProfile.fromJson(json);
+
+      expect(AppLog.recent, hasLength(1));
+      final entry = AppLog.recent.single;
+      expect(entry.where, contains('password'));
+      expect(entry.toString(), isNot(contains(json['password'] as String)));
     });
   });
 }

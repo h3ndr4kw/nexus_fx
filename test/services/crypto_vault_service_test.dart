@@ -62,5 +62,21 @@ void main() {
       final malformed = 'not-valid-base64-or-encryption-%%%';
       expect(vault.decrypt(malformed), equals(malformed));
     });
+    test('A corrupted enc:v1 payload throws instead of returning the ciphertext', () {
+      final encrypted = vault.encrypt('real-password');
+      final corrupted = '${encrypted.substring(0, encrypted.length - 6)}AAAA==';
+
+      expect(() => vault.decrypt(corrupted), throwsA(isA<VaultDecryptException>()));
+    });
+
+    test('An enc:v1 payload with the wrong number of fields throws', () {
+      expect(() => vault.decrypt('enc:v1:only-one-field'),
+          throwsA(isA<VaultDecryptException>()));
+    });
+
+    test('An enc:v1 payload that is not base64 throws', () {
+      expect(() => vault.decrypt('enc:v1:%%%:%%%'),
+          throwsA(isA<VaultDecryptException>()));
+    });
   });
 }

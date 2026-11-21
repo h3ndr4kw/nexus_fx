@@ -4,6 +4,16 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
 
+/// A stored `enc:v1:` credential that cannot be decrypted (the file was
+/// edited, truncated or corrupted). Never carries the stored value.
+class VaultDecryptException implements Exception {
+  final String reason;
+  const VaultDecryptException(this.reason);
+
+  @override
+  String toString() => 'VaultDecryptException: $reason';
+}
+
 /// Cryptographic vault service for encrypting and decrypting sensitive credentials
 /// using AES-256-CBC with PKCS7 padding and random IVs, supporting legacy XOR migration.
 class CryptoVaultService {
@@ -52,17 +62,21 @@ class CryptoVaultService {
   }
 
   /// Decrypts ciphertext.
-  /// Automatically detects `enc:v1:` AES format vs legacy XOR 0x5A format,
-  /// falling back gracefully to the raw input if decryption fails.
+  /// Automatically detects `enc:v1:` AES format vs legacy XOR 0x5A format.
+  ///
+  /// Throws [VaultDecryptException] when an `enc:v1:` payload cannot be
+  /// decrypted: returning it unchanged would hand the ciphertext to callers
+  /// as if it were the password. Input without the prefix that is not legacy
+  /// XOR is returned as is, since old files may hold plain text.
   String decrypt(String encoded) {
     if (encoded.isEmpty) return '';
 
     if (encoded.startsWith(prefix)) {
+      final parts = encoded.substring(prefix.length).split(':');
+      if (parts.length != 2) {
+        throw const VaultDecryptException('expected <iv>:<ciphertext>');
+      }
       try {
-        final raw = encoded.substring(prefix.length);
-        final parts = raw.split(':');
-        if (parts.length != 2) return encoded;
-
         final iv = base64.decode(parts[0]);
         final ciphertext = base64.decode(parts[1]);
 
@@ -75,8 +89,12 @@ class CryptoVaultService {
 
         final decryptedBytes = cipher.process(Uint8List.fromList(ciphertext));
         return utf8.decode(decryptedBytes);
-      } catch (_) {
-        return encoded;
+      } on VaultDecryptException {
+        rethrow;
+      } catch (e) {
+        // pointycastle reports bad padding, block sizes and IVs as a mix of
+        // ArgumentError, StateError and RangeError.
+        throw VaultDecryptException(e.runtimeType.toString());
       }
     }
 

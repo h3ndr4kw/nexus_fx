@@ -1,4 +1,5 @@
 import 'ssh_tunnel_models.dart';
+import '../services/app_log.dart';
 import '../services/crypto_vault_service.dart';
 
 enum SessionProtocol {
@@ -21,7 +22,18 @@ enum JumpHostMode {
 /// with backward-compatible decoding of legacy XOR payloads.
 class _Obfuscator {
   static String encode(String raw) => CryptoVaultService.instance.encrypt(raw);
-  static String decode(String encoded) => CryptoVaultService.instance.decrypt(encoded);
+
+  /// Decodes the stored [field] of a session. A value that cannot be
+  /// decrypted becomes empty, so the rest of the session still loads and the
+  /// ciphertext is never offered to a server as the password.
+  static String decode(String encoded, {required String field}) {
+    try {
+      return CryptoVaultService.instance.decrypt(encoded);
+    } on VaultDecryptException catch (e) {
+      AppLog.error('SessionProfile.$field', e);
+      return '';
+    }
+  }
 }
 
 class SessionFolder {
@@ -350,10 +362,10 @@ class SessionProfile {
         (e) => e.name == json['authMethod'],
         orElse: () => AuthMethod.password,
       ),
-      password: _Obfuscator.decode(json['password'] as String? ?? ''),
+      password: _Obfuscator.decode(json['password'] as String? ?? '', field: 'password'),
       privateKeyPath: json['privateKeyPath'] as String?,
       privateKeyPassphrase: json['privateKeyPassphrase'] != null
-          ? _Obfuscator.decode(json['privateKeyPassphrase'] as String)
+          ? _Obfuscator.decode(json['privateKeyPassphrase'] as String, field: 'privateKeyPassphrase')
           : null,
       loginScript: json['loginScript'] as String? ?? '',
       jumpHostMode: JumpHostMode.values.firstWhere(
@@ -366,7 +378,7 @@ class SessionProfile {
       customJumpFallbackHost: json['customJumpFallbackHost'] as String?,
       customJumpUsername: json['customJumpUsername'] as String?,
       customJumpPassword: json['customJumpPassword'] != null
-          ? _Obfuscator.decode(json['customJumpPassword'] as String)
+          ? _Obfuscator.decode(json['customJumpPassword'] as String, field: 'customJumpPassword')
           : null,
       tunnelMode: TunnelMode.values.firstWhere(
         (e) => e.name == json['tunnelMode'],
