@@ -11,6 +11,7 @@ import 'rust_sftp_bridge.dart';
 import 'known_hosts_service.dart';
 import 'ssh_key_loader.dart';
 import 'app_paths.dart';
+import 'archive_commands.dart';
 
 class RemoteSession {
   final SSHClient client;
@@ -936,6 +937,55 @@ class FileExplorerService {
     }
     await op;
     onProgress(total, total);
+  }
+
+  /// Archives [names] in [dir] on the node into [archiveName] (also in [dir]).
+  Future<void> compressRemote(
+    RemoteSession session,
+    String dir,
+    List<String> names,
+    String archiveName,
+    FileExplorerArchiveFormat format,
+  ) async {
+    await _runArchiveCommand(
+      session,
+      remoteCompressCommand(
+        dir: dir,
+        names: names,
+        archiveName: archiveName,
+        format: format,
+      ),
+      remoteToolFor(format: format),
+    );
+  }
+
+  /// Unpacks [archivePath] on the node into the new folder [destDir].
+  Future<void> extractRemote(
+    RemoteSession session,
+    String archivePath,
+    String destDir,
+    ArchiveKind kind,
+  ) async {
+    await _runArchiveCommand(
+      session,
+      remoteExtractCommand(archivePath: archivePath, destDir: destDir, kind: kind),
+      remoteToolFor(kind: kind),
+    );
+  }
+
+  Future<void> _runArchiveCommand(
+    RemoteSession session,
+    String cmd,
+    String tool,
+  ) async {
+    final output = utf8.decode(
+      await session.run(wrapWithExitCode(cmd)),
+      allowMalformed: true,
+    );
+    final result = parseExitCode(output);
+    if (!result.ok) {
+      throw ArchiveOperationException(describeRemoteFailure(result, tool));
+    }
   }
 
   Future<String> readRemoteText(RemoteSession session, String path) async {

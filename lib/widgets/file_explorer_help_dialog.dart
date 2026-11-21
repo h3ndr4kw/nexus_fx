@@ -68,6 +68,8 @@ class FileExplorerHelpDialog extends StatelessWidget {
                     _ShortcutRow('m', 'Move Selected'),
                     _ShortcutRow('n/N', 'New File/Dir'),
                     _ShortcutRow('o/v', 'Edit File'),
+                    _ShortcutRow('z', 'Compress Selected'),
+                    _ShortcutRow('x', 'Extract Archive'),
                     _ShortcutRow('Esc/q', 'Exit Explorer'),
                   ],
                 ),
