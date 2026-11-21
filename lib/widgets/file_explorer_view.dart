@@ -3,273 +3,20 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import '../controllers/explorer_pane_controller.dart';
 import '../models/file_explorer_models.dart';
 import '../services/archive_commands.dart';
 import '../services/file_explorer_service.dart';
 import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
+import 'file_explorer_icons.dart';
+import 'path_crumbs.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
 import '../services/app_paths.dart';
 
-
-class FileExplorerIconHelper {
-  static IconData getIconData(FileExplorerItem item, FileExplorerIconTheme iconTheme) {
-    if (item.isDir) {
-      if (item.name == '..') {
-        return Icons.drive_folder_upload_rounded;
-      }
-      return Icons.folder_rounded;
-    }
-
-    if (iconTheme == FileExplorerIconTheme.classic) {
-      return Icons.insert_drive_file_outlined;
-    }
-
-    final name = item.name.toLowerCase();
-    final dotIndex = name.lastIndexOf('.');
-    final ext = dotIndex != -1 && dotIndex < name.length - 1 ? name.substring(dotIndex + 1) : '';
-
-    switch (ext) {
-      // Code & Scripts
-      case 'dart':
-      case 'py':
-      case 'js':
-      case 'ts':
-      case 'html':
-      case 'css':
-      case 'c':
-      case 'cpp':
-      case 'h':
-      case 'go':
-      case 'rs':
-      case 'java':
-      case 'kt':
-      case 'php':
-      case 'rb':
-      case 'sql':
-        return Icons.code_rounded;
-      case 'sh':
-      case 'bash':
-      case 'zsh':
-      case 'ps1':
-      case 'bat':
-      case 'cmd':
-        return Icons.terminal_rounded;
-
-      // Config & Data
-      case 'yaml':
-      case 'yml':
-      case 'json':
-      case 'xml':
-      case 'toml':
-      case 'ini':
-      case 'conf':
-      case 'cfg':
-      case 'env':
-      case 'properties':
-        return Icons.tune_rounded;
-
-      // Git & Lockfiles
-      case 'gitignore':
-      case 'gitattributes':
-      case 'lock':
-        return Icons.lock_outline;
-
-      // Archives
-      case 'zip':
-      case 'tar':
-      case 'gz':
-      case 'tgz':
-      case '7z':
-      case 'rar':
-      case 'bz2':
-      case 'xz':
-        return Icons.archive_outlined;
-
-      // Images
-      case 'png':
-      case 'jpg':
-      case 'jpeg':
-      case 'gif':
-      case 'svg':
-      case 'ico':
-      case 'webp':
-      case 'bmp':
-        return Icons.image_outlined;
-
-      // Documents
-      case 'txt':
-      case 'md':
-      case 'markdown':
-      case 'doc':
-      case 'docx':
-      case 'pdf':
-      case 'rtf':
-        return Icons.description_outlined;
-
-      // Logs
-      case 'log':
-      case 'out':
-      case 'err':
-        return Icons.article_outlined;
-
-      // Network / Packet Captures
-      case 'pcap':
-      case 'pcapng':
-      case 'cap':
-        return Icons.network_check_rounded;
-
-      // Binaries & Executables
-      case 'exe':
-      case 'dll':
-      case 'so':
-      case 'dylib':
-      case 'bin':
-      case 'msi':
-      case 'apk':
-        return Icons.settings_applications_outlined;
-
-      // Certificates & Keys
-      case 'pem':
-      case 'crt':
-      case 'cer':
-      case 'key':
-      case 'pub':
-      case 'pfx':
-      case 'p12':
-        return Icons.key_rounded;
-
-      default:
-        return Icons.insert_drive_file_outlined;
-    }
-  }
-
-  static Color getIconColor(FileExplorerItem item, FileExplorerIconTheme iconTheme, bool isSelected) {
-    if (isSelected) {
-      return AppTheme.adaptive(const Color(0xFF98C379));
-    }
-
-    if (item.isDir) {
-      if (item.name == '..') {
-        return AppTheme.adaptive(const Color(0xFF61AFEF));
-      }
-      return AppTheme.adaptive(const Color(0xFFE5C07B));
-    }
-
-    if (iconTheme == FileExplorerIconTheme.classic) {
-      return AppTheme.adaptive(const Color(0xFFABB2BF));
-    }
-
-    final name = item.name.toLowerCase();
-    final dotIndex = name.lastIndexOf('.');
-    final ext = dotIndex != -1 && dotIndex < name.length - 1 ? name.substring(dotIndex + 1) : '';
-
-    switch (ext) {
-      case 'dart':
-      case 'py':
-      case 'js':
-      case 'ts':
-      case 'html':
-      case 'css':
-      case 'c':
-      case 'cpp':
-      case 'h':
-      case 'go':
-      case 'rs':
-      case 'java':
-      case 'kt':
-      case 'php':
-      case 'rb':
-      case 'sql':
-        return AppTheme.adaptive(const Color(0xFF56B6C2));
-      case 'sh':
-      case 'bash':
-      case 'zsh':
-      case 'ps1':
-      case 'bat':
-      case 'cmd':
-        return AppTheme.adaptive(const Color(0xFF98C379));
-
-      case 'yaml':
-      case 'yml':
-      case 'json':
-      case 'xml':
-      case 'toml':
-      case 'ini':
-      case 'conf':
-      case 'cfg':
-      case 'env':
-      case 'properties':
-        return AppTheme.adaptive(const Color(0xFFE5C07B));
-
-      case 'gitignore':
-      case 'gitattributes':
-      case 'lock':
-        return AppTheme.adaptive(const Color(0xFF828997));
-
-      case 'zip':
-      case 'tar':
-      case 'gz':
-      case 'tgz':
-      case '7z':
-      case 'rar':
-      case 'bz2':
-      case 'xz':
-        return AppTheme.adaptive(const Color(0xFFD19A66));
-
-      case 'png':
-      case 'jpg':
-      case 'jpeg':
-      case 'gif':
-      case 'svg':
-      case 'ico':
-      case 'webp':
-      case 'bmp':
-        return AppTheme.adaptive(const Color(0xFFC678DD));
-
-      case 'txt':
-      case 'md':
-      case 'markdown':
-      case 'doc':
-      case 'docx':
-      case 'pdf':
-      case 'rtf':
-        return AppTheme.adaptive(const Color(0xFF61AFEF));
-
-      case 'log':
-      case 'out':
-      case 'err':
-        return AppTheme.adaptive(const Color(0xFFE06C75));
-
-      case 'pcap':
-      case 'pcapng':
-      case 'cap':
-        return AppTheme.adaptive(const Color(0xFF98C379));
-
-      case 'exe':
-      case 'dll':
-      case 'so':
-      case 'dylib':
-      case 'bin':
-      case 'msi':
-      case 'apk':
-        return AppTheme.adaptive(const Color(0xFF98C379));
-
-      case 'pem':
-      case 'crt':
-      case 'cer':
-      case 'key':
-      case 'pub':
-      case 'pfx':
-      case 'p12':
-        return AppTheme.adaptive(const Color(0xFFE5C07B));
-
-      default:
-        return AppTheme.adaptive(const Color(0xFFD8DEE9));
-    }
-  }
-}
+export 'file_explorer_icons.dart';
+export 'path_crumbs.dart';
 
 class FileExplorerView extends StatefulWidget {
   final VoidCallback? onExit;
@@ -314,35 +61,6 @@ class FileExplorerView extends StatefulWidget {
   State<FileExplorerView> createState() => _FileExplorerViewState();
 }
 
-class _PaneController {
-  ExplorerNodeTarget target;
-  String currentPath;
-  List<FileExplorerItem> items = [];
-  List<FileExplorerItem> filteredItems = [];
-  int selectedIndex = 0;
-  int? selectionAnchorIndex;
-  final ScrollController scrollController = ScrollController();
-  final Set<String> multiSelected = {};
-  bool isLoading = false;
-  String? errorMessage;
-  String filterText = '';
-  final TextEditingController filterInputController = TextEditingController();
-  final FocusNode filterFocusNode = FocusNode();
-  bool isFiltering = false;
-  RemoteSession? remoteSession;
-
-  _PaneController({
-    required this.target,
-    required this.currentPath,
-  });
-
-  void dispose() {
-    scrollController.dispose();
-    filterInputController.dispose();
-    filterFocusNode.dispose();
-  }
-}
-
 class _FileExplorerViewState extends State<FileExplorerView> {
   FocusNode? _internalFocusNode;
   FocusNode get _focusNode => widget.focusNode ?? (_internalFocusNode ??= FocusNode());
@@ -365,13 +83,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   int? _lastClickIndex;
   PaneSide? _lastClickPane;
 
-  late _PaneController _leftPane;
-  late _PaneController _rightPane;
+  late ExplorerPaneController _leftPane;
+  late ExplorerPaneController _rightPane;
 
-  _PaneController get activePaneState =>
+  ExplorerPaneController get activePaneState =>
       _activePane == PaneSide.left ? _leftPane : _rightPane;
 
-  _PaneController get inactivePaneState =>
+  ExplorerPaneController get inactivePaneState =>
       _activePane == PaneSide.left ? _rightPane : _leftPane;
 
   @override
@@ -384,21 +102,23 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _activePane = widget.initialActivePane ??
         (!rightTarget.isLocal ? PaneSide.right : PaneSide.left);
 
-    _leftPane = _PaneController(
+    _leftPane = ExplorerPaneController(
       target: leftTarget,
       currentPath: widget.initialLeftPath ??
           (leftTarget.isLocal ? initialLocalPath : '/home'),
     );
 
-    _rightPane = _PaneController(
+    _rightPane = ExplorerPaneController(
       target: rightTarget,
       currentPath: widget.initialRightPath ??
           (rightTarget.isLocal ? initialLocalPath : '/home'),
     );
 
+    _leftPane.addListener(_rebuild);
+    _rightPane.addListener(_rebuild);
     _loadPane(_leftPane);
     _loadPane(_rightPane);
-    SettingsService.instance.addListener(_handleSettingsChanged);
+    SettingsService.instance.addListener(_rebuild);
     _transferSub = _transfers.finished.listen(_onTransferFinished);
 
     if (widget.isActive) {
@@ -431,7 +151,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     }
   }
 
-  void _handleSettingsChanged() {
+  /// Rebuilds when the settings or either pane's state changes.
+  void _rebuild() {
     if (mounted) {
       setState(() {});
     }
@@ -439,50 +160,21 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   @override
   void dispose() {
-    SettingsService.instance.removeListener(_handleSettingsChanged);
+    SettingsService.instance.removeListener(_rebuild);
     _statusTimer?.cancel();
     _transferSub?.cancel();
     _internalFocusNode?.dispose();
+    _leftPane.removeListener(_rebuild);
+    _rightPane.removeListener(_rebuild);
     _leftPane.dispose();
     _rightPane.dispose();
     super.dispose();
   }
 
-  void _applyFilter(_PaneController pane) {
-    final query = pane.filterText.trim().toLowerCase();
-    if (query.isEmpty) {
-      pane.filteredItems = List.from(pane.items);
-    } else {
-      pane.filteredItems = pane.items
-          .where((item) =>
-              item.name.toLowerCase().contains(query) && !item.isParentDir)
-          .toList();
-    }
-    for (final item in pane.filteredItems) {
-      item.isSelected = pane.multiSelected.contains(item.path);
-    }
-    if (pane.filteredItems.isEmpty) {
-      pane.selectedIndex = -1;
-    } else if (pane.selectedIndex >= pane.filteredItems.length) {
-      pane.selectedIndex = pane.filteredItems.length - 1;
-    }
-  }
+  void _unselectAllAndUnfocus(ExplorerPaneController pane) => pane.clearSelection();
 
-  void _unselectAllAndUnfocus(_PaneController pane) {
-    setState(() {
-      pane.multiSelected.clear();
-      for (final item in pane.filteredItems) {
-        item.isSelected = false;
-      }
-      pane.selectedIndex = -1;
-      pane.selectionAnchorIndex = null;
-    });
-  }
-
-  void _openFilter(_PaneController pane) {
-    setState(() {
-      pane.isFiltering = true;
-    });
+  void _openFilter(ExplorerPaneController pane) {
+    pane.openFilter();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && pane.filterFocusNode.canRequestFocus) {
         pane.filterFocusNode.requestFocus();
@@ -490,13 +182,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     });
   }
 
-  void _closeFilter(_PaneController pane) {
-    setState(() {
-      pane.isFiltering = false;
-      pane.filterText = '';
-      pane.filterInputController.clear();
-      _applyFilter(pane);
-    });
+  void _closeFilter(ExplorerPaneController pane) {
+    pane.closeFilter();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _focusNode.canRequestFocus) {
         _focusNode.requestFocus();
@@ -504,7 +191,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     });
   }
 
-  Future<void> _loadPane(_PaneController pane, {bool silent = false}) async {
+  Future<void> _loadPane(ExplorerPaneController pane, {bool silent = false}) async {
     if (!silent && pane.items.isEmpty) {
       setState(() {
         pane.isLoading = true;
@@ -523,7 +210,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         for (final item in pane.items) {
           item.isSelected = pane.multiSelected.contains(item.path);
         }
-        _applyFilter(pane);
+        pane.applyFilter();
       } else {
         // Remote node
         pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
@@ -535,7 +222,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         for (final item in pane.items) {
           item.isSelected = pane.multiSelected.contains(item.path);
         }
-        _applyFilter(pane);
+        pane.applyFilter();
       }
     } catch (e) {
       pane.errorMessage = e.toString();
@@ -613,46 +300,17 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _focusNode.requestFocus();
   }
 
-  void _moveCursorInPane(_PaneController pane, int delta) {
-    if (pane.filteredItems.isEmpty) return;
-
-    final baseIndex = pane.selectedIndex < 0
-        ? (delta > 0 ? -1 : pane.filteredItems.length)
-        : pane.selectedIndex;
-    final newIndex = (baseIndex + delta).clamp(0, pane.filteredItems.length - 1);
-
-    setState(() {
-      pane.selectedIndex = newIndex;
-      pane.selectionAnchorIndex = newIndex;
-      if (pane.multiSelected.isNotEmpty) {
-        pane.multiSelected.clear();
-        for (final item in pane.filteredItems) {
-          item.isSelected = false;
-        }
-      }
-    });
-
+  void _moveCursorInPane(ExplorerPaneController pane, int delta) {
+    pane.moveCursor(delta);
     _scrollPaneToSelection(pane);
   }
 
-  void _moveCursorWithSelectionInPane(_PaneController pane, int delta) {
-    if (pane.filteredItems.isEmpty) return;
-
-    final anchor = pane.selectionAnchorIndex ?? (pane.selectedIndex < 0 ? 0 : pane.selectedIndex);
-    pane.selectionAnchorIndex = anchor;
-
-    final cur = pane.selectedIndex < 0 ? anchor : pane.selectedIndex;
-    final newIndex = (cur + delta).clamp(0, pane.filteredItems.length - 1);
-
-    setState(() {
-      pane.selectedIndex = newIndex;
-      _selectRange(pane, anchor, newIndex);
-    });
-
+  void _moveCursorWithSelectionInPane(ExplorerPaneController pane, int delta) {
+    pane.moveCursorExtendingSelection(delta);
     _scrollPaneToSelection(pane);
   }
 
-  void _scrollPaneToSelection(_PaneController pane) {
+  void _scrollPaneToSelection(ExplorerPaneController pane) {
     if (pane.selectedIndex < 0) return;
     if (!pane.scrollController.hasClients) return;
 
@@ -682,7 +340,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     await _enterItemInPane(pane, pane.selectedIndex);
   }
 
-  Future<void> _enterItemInPane(_PaneController pane, int index) async {
+  Future<void> _enterItemInPane(ExplorerPaneController pane, int index) async {
     if (index < 0 || index >= pane.filteredItems.length) return;
     final item = pane.filteredItems[index];
 
@@ -726,105 +384,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   void _toggleSelectCurrent() {
     final pane = activePaneState;
-    if (pane.selectedIndex >= 0 && pane.selectedIndex < pane.filteredItems.length) {
-      _toggleSelectItem(pane, pane.selectedIndex);
-    }
+    pane.toggleSelect(pane.selectedIndex);
   }
 
-  void _toggleSelectItem(_PaneController pane, int idx) {
-    if (idx < 0 || idx >= pane.filteredItems.length) return;
-    final item = pane.filteredItems[idx];
-    if (item.name == '..') return;
+  void _selectAll() => activePaneState.toggleSelectAll();
 
-    setState(() {
-      if (pane.multiSelected.contains(item.path)) {
-        pane.multiSelected.remove(item.path);
-        item.isSelected = false;
-      } else {
-        pane.multiSelected.add(item.path);
-        item.isSelected = true;
-      }
-      pane.selectedIndex = idx;
-      pane.selectionAnchorIndex = idx;
-    });
-  }
-
-  void _toggleSelectItemWithCtrl(_PaneController pane, int clickedIdx) {
-    if (clickedIdx < 0 || clickedIdx >= pane.filteredItems.length) return;
-    final clickedItem = pane.filteredItems[clickedIdx];
-    if (clickedItem.name == '..') return;
-
-    setState(() {
-      // If multiSelected was empty, also add the previously focused item
-      if (pane.multiSelected.isEmpty &&
-          pane.selectedIndex >= 0 &&
-          pane.selectedIndex < pane.filteredItems.length &&
-          pane.selectedIndex != clickedIdx) {
-        final prev = pane.filteredItems[pane.selectedIndex];
-        if (prev.name != '..') {
-          pane.multiSelected.add(prev.path);
-          prev.isSelected = true;
-        }
-      }
-
-      if (pane.multiSelected.contains(clickedItem.path)) {
-        pane.multiSelected.remove(clickedItem.path);
-        clickedItem.isSelected = false;
-      } else {
-        pane.multiSelected.add(clickedItem.path);
-        clickedItem.isSelected = true;
-      }
-      pane.selectedIndex = clickedIdx;
-      pane.selectionAnchorIndex = clickedIdx;
-    });
-  }
-
-  void _selectRange(_PaneController pane, int fromIdx, int toIdx) {
-    if (pane.filteredItems.isEmpty) return;
-    final start = fromIdx.clamp(0, pane.filteredItems.length - 1);
-    final end = toIdx.clamp(0, pane.filteredItems.length - 1);
-    final minIdx = start < end ? start : end;
-    final maxIdx = start > end ? start : end;
-
-    setState(() {
-      pane.multiSelected.clear();
-      for (int i = 0; i < pane.filteredItems.length; i++) {
-        final item = pane.filteredItems[i];
-        if (item.name == '..') {
-          item.isSelected = false;
-          continue;
-        }
-        if (i >= minIdx && i <= maxIdx) {
-          pane.multiSelected.add(item.path);
-          item.isSelected = true;
-        } else {
-          item.isSelected = false;
-        }
-      }
-    });
-  }
-
-  void _selectAll() {
-    final pane = activePaneState;
-    final allSelected = pane.filteredItems
-        .where((i) => i.name != '..')
-        .every((i) => pane.multiSelected.contains(i.path));
-
-    setState(() {
-      for (final item in pane.filteredItems) {
-        if (item.name == '..') continue;
-        if (allSelected) {
-          item.isSelected = false;
-          pane.multiSelected.remove(item.path);
-        } else {
-          item.isSelected = true;
-          pane.multiSelected.add(item.path);
-        }
-      }
-    });
-  }
-
-  Future<void> _selectNodeTarget(_PaneController pane) async {
+  Future<void> _selectNodeTarget(ExplorerPaneController pane) async {
     final selected = await showDialog<ExplorerNodeTarget>(
       context: context,
       builder: (ctx) => FileExplorerNodePickerDialog(currentTarget: pane.target),
@@ -855,7 +420,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _focusNode.requestFocus();
   }
 
-  Future<void> _showEditCredentialsDialog(_PaneController pane) async {
+  Future<void> _showEditCredentialsDialog(ExplorerPaneController pane) async {
     final userCtrl = TextEditingController(text: pane.target.username);
     final passCtrl = TextEditingController(text: pane.target.password);
     bool obscure = true;
@@ -1104,8 +669,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   /// once. Progress and cancel live in the global transfer bar, so this tab,
   /// other tabs and other pages stay usable while the job runs.
   Future<void> _executeTransfer({
-    required _PaneController src,
-    required _PaneController dest,
+    required ExplorerPaneController src,
+    required ExplorerPaneController dest,
     required List<FileExplorerItem> targets,
     required String destDirPath,
     required bool isMove,
@@ -1146,7 +711,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     }
   }
 
-  bool _paneShows(_PaneController pane, ExplorerNodeTarget target, String dirPath) {
+  bool _paneShows(ExplorerPaneController pane, ExplorerNodeTarget target, String dirPath) {
     if (!pane.target.isSameTarget(target)) return false;
     String norm(String p) {
       var s = p;
@@ -1369,7 +934,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         lower.endsWith('.cap');
   }
 
-  Future<void> _openViewFile(_PaneController pane, FileExplorerItem item) async {
+  Future<void> _openViewFile(ExplorerPaneController pane, FileExplorerItem item) async {
     if (_isLogOrTextFile(item.name)) {
       final chosenEditor = await showDialog<ExternalEditor>(
         context: context,
@@ -1580,7 +1145,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return last.endsWith(':') ? '' : last;
   }
 
-  String _childPath(_PaneController pane, String name) {
+  String _childPath(ExplorerPaneController pane, String name) {
     final dir = pane.currentPath;
     if (pane.target.isLocal) return '$dir${Platform.pathSeparator}$name';
     final clean = dir.length > 1 && dir.endsWith('/')
@@ -1589,11 +1154,11 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return clean == '/' ? '/$name' : '$clean/$name';
   }
 
-  Set<String> _existingNames(_PaneController pane) =>
+  Set<String> _existingNames(ExplorerPaneController pane) =>
       pane.items.where((i) => i.name != '..').map((i) => i.name).toSet();
 
   /// Error text for a new item name in [pane], or null when it is usable.
-  String? _newNameProblem(_PaneController pane, String name) {
+  String? _newNameProblem(ExplorerPaneController pane, String name) {
     if (name.isEmpty) return 'Name is empty.';
     if (name.contains('/') || (pane.target.isLocal && name.contains(r'\'))) {
       return 'Name cannot contain a path separator.';
@@ -2077,7 +1642,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   }
 
   /// Right-click on empty space in a pane: actions on the current directory.
-  Future<void> _showAreaContextMenu(_PaneController pane, PaneSide side, Offset globalPosition) async {
+  Future<void> _showAreaContextMenu(ExplorerPaneController pane, PaneSide side, Offset globalPosition) async {
     if (_activePane != side) {
       setState(() => _activePane = side);
     }
@@ -2127,7 +1692,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   /// Right-click on a row: the row joins (or becomes) the selection, then the
   /// menu acts on the selection the same way the keyboard shortcuts do.
   Future<void> _showItemContextMenu(
-    _PaneController pane,
+    ExplorerPaneController pane,
     PaneSide side,
     int idx,
     Offset globalPosition,
@@ -2194,7 +1759,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       case 'rename':
         await _initiateRename();
       case 'toggle_select':
-        _toggleSelectItem(pane, idx);
+        pane.toggleSelect(idx);
       case 'compress':
         await _initiateCompress();
       case 'extract':
@@ -2273,7 +1838,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   }
 
   Widget _buildPaneWidget(
-    _PaneController pane,
+    ExplorerPaneController pane,
     PaneSide side, {
     required bool isActive,
   }) {
@@ -2459,7 +2024,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
   }
 
-  Future<void> _promptChangeDirectory(_PaneController pane, PaneSide side) async {
+  Future<void> _promptChangeDirectory(ExplorerPaneController pane, PaneSide side) async {
     if (_activePane != side) {
       setState(() => _activePane = side);
     }
@@ -2488,7 +2053,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     }
   }
 
-  Widget _buildBreadcrumbs(_PaneController pane, PaneSide side, {required bool isActive}) {
+  Widget _buildBreadcrumbs(ExplorerPaneController pane, PaneSide side, {required bool isActive}) {
     final crumbs = splitPathCrumbs(
       pane.currentPath,
       windowsStyle: pane.target.isLocal && Platform.isWindows,
@@ -2567,7 +2132,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   /// the file list.
   static const double _accentOutlineAlpha = 0.4;
 
-  String _nodeSelectorLabel(_PaneController pane) {
+  String _nodeSelectorLabel(ExplorerPaneController pane) {
     if (!pane.target.isLocal) return 'SFTP: ${pane.target.label}';
     final drive = RegExp(r'^[A-Za-z]:').firstMatch(pane.currentPath)?.group(0);
     if (Platform.isWindows && drive != null) {
@@ -2576,7 +2141,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     return 'Local';
   }
 
-  Widget _buildPaneHeader(_PaneController pane, PaneSide side, {required bool isActive}) {
+  Widget _buildPaneHeader(ExplorerPaneController pane, PaneSide side, {required bool isActive}) {
     final accent = pane.target.isLocal ? _localAccent : _remoteAccent;
     return Row(
       children: [
@@ -2697,7 +2262,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
   }
 
-  Widget _buildFilterBar(_PaneController pane) {
+  Widget _buildFilterBar(ExplorerPaneController pane) {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -2741,7 +2306,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               onChanged: (val) {
                 setState(() {
                   pane.filterText = val;
-                  _applyFilter(pane);
+                  pane.applyFilter();
                 });
               },
               onSubmitted: (_) {
@@ -2800,7 +2365,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     );
   }
 
-  Widget _buildItemsList(_PaneController pane, PaneSide side, {required bool isActive}) {
+  Widget _buildItemsList(ExplorerPaneController pane, PaneSide side, {required bool isActive}) {
     if (pane.filteredItems.isEmpty) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -2924,7 +2489,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                       setState(() => _activePane = side);
                     }
                     _focusNode.requestFocus();
-                    _toggleSelectItem(pane, idx);
+                    pane.toggleSelect(idx);
                   },
                   child: SizedBox(
                     width: 22,
@@ -3010,13 +2575,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               }
 
               if (isCtrl) {
-                _toggleSelectItemWithCtrl(pane, idx);
+                pane.toggleSelectKeepingCursorItem(idx);
               } else if (isShift) {
                 final anchor = pane.selectionAnchorIndex ?? (pane.selectedIndex >= 0 ? pane.selectedIndex : 0);
                 pane.selectionAnchorIndex = anchor;
                 setState(() {
                   pane.selectedIndex = idx;
-                  _selectRange(pane, anchor, idx);
+                  pane.selectRange(anchor, idx);
                 });
               } else {
                 setState(() {
@@ -3108,7 +2673,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   /// Selection and item count for one pane. Without a multi-selection the cursor
   /// row counts as the selection, matching what keyboard actions operate on.
-  Widget _buildPaneFooter(_PaneController pane) {
+  Widget _buildPaneFooter(ExplorerPaneController pane) {
     final entries = pane.filteredItems.where((i) => !i.isParentDir).toList();
     final List<FileExplorerItem> selected;
     if (pane.multiSelected.isNotEmpty) {
@@ -3284,48 +2849,3 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   }
 }
 
-
-/// One clickable segment of a pane's path bar.
-class PathCrumb {
-  const PathCrumb(this.label, this.path);
-  final String label;
-  final String path;
-
-  @override
-  bool operator ==(Object other) =>
-      other is PathCrumb && other.label == label && other.path == path;
-
-  @override
-  int get hashCode => Object.hash(label, path);
-
-  @override
-  String toString() => 'PathCrumb($label, $path)';
-}
-
-/// Splits [path] into cumulative segments, root first. [windowsStyle] accepts both
-/// `\` and `/` and treats a leading `C:` as the root; otherwise paths are POSIX.
-List<PathCrumb> splitPathCrumbs(String path, {required bool windowsStyle}) {
-  const bs = '\\';
-  final parts = path
-      .split(windowsStyle ? RegExp('[\\\\/]') : '/')
-      .where((s) => s.isNotEmpty)
-      .toList();
-  if (windowsStyle) {
-    if (parts.isEmpty) return const [];
-    final root = parts.first.endsWith(':') ? '${parts.first}$bs' : parts.first;
-    final crumbs = <PathCrumb>[PathCrumb(parts.first, root)];
-    var acc = root.endsWith(bs) ? root : '$root$bs';
-    for (var i = 1; i < parts.length; i++) {
-      acc = i == 1 ? '$acc${parts[i]}' : '$acc$bs${parts[i]}';
-      crumbs.add(PathCrumb(parts[i], acc));
-    }
-    return crumbs;
-  }
-  final crumbs = <PathCrumb>[const PathCrumb('/', '/')];
-  var acc = '';
-  for (final part in parts) {
-    acc = '$acc/$part';
-    crumbs.add(PathCrumb(part, acc));
-  }
-  return crumbs;
-}
