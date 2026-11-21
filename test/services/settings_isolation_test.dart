@@ -1,11 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexus_fx/services/app_paths.dart';
 import 'package:nexus_fx/services/settings_service.dart';
 
 void main() {
-  test('tests never write the real config/settings.yaml', () async {
-    final real = File('config/settings.yaml');
+  test('tests never write the real settings file', () async {
+    final real = File(AppPaths.settingsFile);
     final before = real.existsSync() ? real.readAsStringSync() : null;
     final settings = SettingsService.instance;
     final old = settings.nexusTerminalFontSize;
