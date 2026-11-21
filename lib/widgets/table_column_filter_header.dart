@@ -94,7 +94,7 @@ class TableColumnFilterHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: filtered || isSorted ? Colors.white : AppTheme.textColor,
+                color: filtered || isSorted ? AppTheme.textPrimary : AppTheme.textColor,
                 letterSpacing: 0.5,
               ),
             ),
@@ -124,7 +124,7 @@ class TableColumnFilterHeader extends StatelessWidget {
                     child: Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppTheme.primaryColor,
                         shape: BoxShape.circle,
                       ),
@@ -279,15 +279,15 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.filter_alt, size: 16, color: AppTheme.primaryColor),
+                        Icon(Icons.filter_alt, size: 16, color: AppTheme.primaryColor),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Filter: ${widget.title}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: AppTheme.textPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -295,7 +295,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                         InkWell(
                           onTap: () => Navigator.of(context).pop(),
                           borderRadius: BorderRadius.circular(4),
-                          child: const Padding(
+                          child: Padding(
                             padding: EdgeInsets.all(2),
                             child: Icon(Icons.close, size: 16, color: AppTheme.textColor),
                           ),
@@ -340,7 +340,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                                     border: Border.all(color: AppTheme.inputBorderColor),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Icon(Icons.sort_by_alpha, size: 14, color: AppTheme.textColor),
+                                  child: Icon(Icons.sort_by_alpha, size: 14, color: AppTheme.textColor),
                                 ),
                               ),
                             ),
@@ -359,14 +359,14 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                       child: TextField(
                         controller: _searchController,
                         onChanged: (v) => setState(() => _searchQuery = v),
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                         decoration: InputDecoration(
                           hintText: 'Search values...',
                           hintStyle: TextStyle(
                             fontSize: 12,
                             color: AppTheme.dimText(0.6),
                           ),
-                          prefixIcon: const Icon(Icons.search, size: 15, color: AppTheme.textColor),
+                          prefixIcon: Icon(Icons.search, size: 15, color: AppTheme.textColor),
                           prefixIconConstraints: const BoxConstraints(minWidth: 28),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? InkWell(
@@ -374,7 +374,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                                     _searchController.clear();
                                     setState(() => _searchQuery = '');
                                   },
-                                  child: const Icon(Icons.clear, size: 14, color: AppTheme.textColor),
+                                  child: Icon(Icons.clear, size: 14, color: AppTheme.textColor),
                                 )
                               : null,
                           suffixIconConstraints: const BoxConstraints(minWidth: 24),
@@ -391,7 +391,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
-                            borderSide: const BorderSide(color: AppTheme.primaryColor),
+                            borderSide: BorderSide(color: AppTheme.primaryColor),
                           ),
                         ),
                       ),
@@ -414,12 +414,12 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
                         ),
                         const SizedBox(width: 4),
-                        const Text(
+                        Text(
                           '(Select All)',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white70,
+                            color: AppTheme.dimText(0.7),
                           ),
                         ),
                         const Spacer(),
@@ -508,7 +508,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
                                           key.isEmpty ? '(Empty)' : key,
                                           style: TextStyle(
                                             fontSize: 11.5,
-                                            color: isChecked ? Colors.white : AppTheme.textColor,
+                                            color: isChecked ? AppTheme.textPrimary : AppTheme.textColor,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -631,7 +631,7 @@ class _AnchoredFilterDialogState extends State<_AnchoredFilterDialog> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color: isActive ? Colors.white : AppTheme.textColor,
+                color: isActive ? AppTheme.textPrimary : AppTheme.textColor,
               ),
             ),
           ],

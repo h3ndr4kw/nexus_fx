@@ -35,7 +35,7 @@ class _FileExplorerSettingsDialogState
         icon: Icons.tune,
         width: 600,
         onClose: () => Navigator.of(context).pop(),
-        footerLeading: const Text(
+        footerLeading: Text(
           'Ctrl +/- to zoom  ·  Changes are saved automatically',
           style: TextStyle(fontSize: 11, color: _Dlg.textMuted),
         ),
@@ -189,7 +189,7 @@ class _FileExplorerSettingsDialogState
         const SizedBox(width: 6),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
             color: _Dlg.textMuted,
@@ -222,7 +222,7 @@ class _FileExplorerSettingsDialogState
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: focused
-                ? Colors.white
+                ? AppTheme.ink
                 : isSelected
                 ? _Dlg.accent
                 : _Dlg.outline,
@@ -288,7 +288,7 @@ class _FileExplorerSettingsDialogState
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   child: Text(
                     '[ ]',
@@ -302,7 +302,7 @@ class _FileExplorerSettingsDialogState
                 Icon(
                   Icons.folder_rounded,
                   size: density.iconSize,
-                  color: const Color(0xFFE5C07B),
+                  color: AppTheme.adaptive(const Color(0xFFE5C07B)),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -311,7 +311,7 @@ class _FileExplorerSettingsDialogState
                     style: TextStyle(
                       fontFamily: fontFamily,
                       fontSize: density.fontSize,
-                      color: const Color(0xFFE5C07B),
+                      color: AppTheme.adaptive(const Color(0xFFE5C07B)),
                     ),
                   ),
                 ),
@@ -342,14 +342,14 @@ class _FileExplorerSettingsDialogState
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   child: Text(
                     '[*]',
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
-                      color: Color(0xFF98C379),
+                      color: AppTheme.adaptive(const Color(0xFF98C379)),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -360,7 +360,7 @@ class _FileExplorerSettingsDialogState
                       : Icons.insert_drive_file_outlined,
                   size: density.iconSize,
                   color: iconTheme == FileExplorerIconTheme.smart
-                      ? const Color(0xFFE5C07B)
+                      ? AppTheme.adaptive(const Color(0xFFE5C07B))
                       : _Dlg.textPrimary,
                 ),
                 const SizedBox(width: 6),

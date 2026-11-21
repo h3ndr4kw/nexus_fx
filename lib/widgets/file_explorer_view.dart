@@ -147,18 +147,18 @@ class FileExplorerIconHelper {
 
   static Color getIconColor(FileExplorerItem item, FileExplorerIconTheme iconTheme, bool isSelected) {
     if (isSelected) {
-      return const Color(0xFF98C379);
+      return AppTheme.adaptive(const Color(0xFF98C379));
     }
 
     if (item.isDir) {
       if (item.name == '..') {
-        return const Color(0xFF61AFEF);
+        return AppTheme.adaptive(const Color(0xFF61AFEF));
       }
-      return const Color(0xFFE5C07B);
+      return AppTheme.adaptive(const Color(0xFFE5C07B));
     }
 
     if (iconTheme == FileExplorerIconTheme.classic) {
-      return const Color(0xFFABB2BF);
+      return AppTheme.adaptive(const Color(0xFFABB2BF));
     }
 
     final name = item.name.toLowerCase();
@@ -182,14 +182,14 @@ class FileExplorerIconHelper {
       case 'php':
       case 'rb':
       case 'sql':
-        return const Color(0xFF56B6C2);
+        return AppTheme.adaptive(const Color(0xFF56B6C2));
       case 'sh':
       case 'bash':
       case 'zsh':
       case 'ps1':
       case 'bat':
       case 'cmd':
-        return const Color(0xFF98C379);
+        return AppTheme.adaptive(const Color(0xFF98C379));
 
       case 'yaml':
       case 'yml':
@@ -201,12 +201,12 @@ class FileExplorerIconHelper {
       case 'cfg':
       case 'env':
       case 'properties':
-        return const Color(0xFFE5C07B);
+        return AppTheme.adaptive(const Color(0xFFE5C07B));
 
       case 'gitignore':
       case 'gitattributes':
       case 'lock':
-        return const Color(0xFF828997);
+        return AppTheme.adaptive(const Color(0xFF828997));
 
       case 'zip':
       case 'tar':
@@ -216,7 +216,7 @@ class FileExplorerIconHelper {
       case 'rar':
       case 'bz2':
       case 'xz':
-        return const Color(0xFFD19A66);
+        return AppTheme.adaptive(const Color(0xFFD19A66));
 
       case 'png':
       case 'jpg':
@@ -226,7 +226,7 @@ class FileExplorerIconHelper {
       case 'ico':
       case 'webp':
       case 'bmp':
-        return const Color(0xFFC678DD);
+        return AppTheme.adaptive(const Color(0xFFC678DD));
 
       case 'txt':
       case 'md':
@@ -235,17 +235,17 @@ class FileExplorerIconHelper {
       case 'docx':
       case 'pdf':
       case 'rtf':
-        return const Color(0xFF61AFEF);
+        return AppTheme.adaptive(const Color(0xFF61AFEF));
 
       case 'log':
       case 'out':
       case 'err':
-        return const Color(0xFFE06C75);
+        return AppTheme.adaptive(const Color(0xFFE06C75));
 
       case 'pcap':
       case 'pcapng':
       case 'cap':
-        return const Color(0xFF98C379);
+        return AppTheme.adaptive(const Color(0xFF98C379));
 
       case 'exe':
       case 'dll':
@@ -254,7 +254,7 @@ class FileExplorerIconHelper {
       case 'bin':
       case 'msi':
       case 'apk':
-        return const Color(0xFF98C379);
+        return AppTheme.adaptive(const Color(0xFF98C379));
 
       case 'pem':
       case 'crt':
@@ -263,10 +263,10 @@ class FileExplorerIconHelper {
       case 'pub':
       case 'pfx':
       case 'p12':
-        return const Color(0xFFE5C07B);
+        return AppTheme.adaptive(const Color(0xFFE5C07B));
 
       default:
-        return const Color(0xFFD8DEE9);
+        return AppTheme.adaptive(const Color(0xFFD8DEE9));
     }
   }
 }
@@ -355,8 +355,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
   PaneSide _activePane = PaneSide.left;
   static const double _paneControlHeight = 30;
   static const String _defaultStatus = 'Ready';
-  static const Color _defaultStatusColor = Color(0xFFD8DEE9);
-  static const Color _errorStatusColor = Color(0xFFE06C75);
+  static Color get _defaultStatusColor => AppTheme.adaptive(const Color(0xFFD8DEE9));
+  static Color get _errorStatusColor => AppTheme.adaptive(const Color(0xFFE06C75));
   String _statusMessage = _defaultStatus;
   Color _statusColor = _defaultStatusColor;
   Timer? _statusTimer;
@@ -563,7 +563,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       if (isError) {
         _statusColor = _errorStatusColor;
       } else if (isSuccess) {
-        _statusColor = const Color(0xFF98C379);
+        _statusColor = AppTheme.adaptive(const Color(0xFF98C379));
       } else {
         _statusColor = _defaultStatusColor;
       }
@@ -872,14 +872,14 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 );
             return InputDecoration(
               labelText: label,
-              labelStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              labelStyle: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               filled: true,
               fillColor: AppTheme.bgSurfaceSecondary,
               isDense: true,
               suffixIcon: suffixIcon,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: outline(const Color(0xFF6B7280)),
-              enabledBorder: outline(const Color(0xFF6B7280)),
+              border: outline(AppTheme.adaptive(const Color(0xFF6B7280))),
+              enabledBorder: outline(AppTheme.adaptive(const Color(0xFF6B7280))),
               focusedBorder: outline(AppTheme.accentPrimary, 1.5),
             );
           }
@@ -916,14 +916,14 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                   TextField(
                     controller: userCtrl,
                     autofocus: true,
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                     decoration: field('Username'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: passCtrl,
                     obscureText: obscure,
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                     onSubmitted: (_) => connect(),
                     decoration: field(
                       'Password',
@@ -982,9 +982,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E222B),
+          color: AppTheme.adaptive(const Color(0xFF1E222B)),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: const Color(0xFF56B6C2), width: 1.5),
+          border: Border.all(color: AppTheme.adaptive(const Color(0xFF56B6C2)), width: 1.5),
           boxShadow: const [
             BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
           ],
@@ -1000,11 +1000,11 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             const SizedBox(width: 8),
             Text(
               count > 1 ? '${item.name} (+$count items)' : item.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: AppTheme.adaptive(Colors.white),
               ),
             ),
           ],
@@ -1239,7 +1239,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ? 'Are you sure you want to delete ${targets.length} items?'
             : "Are you sure you want to delete '${targets.first.name}'?",
         message2: 'This operation is permanent and cannot be undone.',
-        borderColor: const Color(0xFFE06C75),
+        borderColor: AppTheme.adaptive(const Color(0xFFE06C75)),
         confirmText: 'Delete',
         cancelText: 'Cancel',
         defaultYes: false,
@@ -1400,7 +1400,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                   title: 'DOWNLOAD FAILED',
                   message: "Failed to download remote file '${item.name}'.",
                   subMessage: e.toString(),
-                  borderColor: const Color(0xFFE06C75),
+                  borderColor: AppTheme.adaptive(const Color(0xFFE06C75)),
                   icon: Icons.error_outline,
                 ),
               );
@@ -1422,7 +1422,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 title: 'EDITOR NOT FOUND',
                 message: "${chosenEditor.label} is not installed or executable not found on this system.",
                 subMessage: "Unable to open '${item.name}'. Please make sure ${chosenEditor.label} is installed and available in your PATH.",
-                borderColor: const Color(0xFFE06C75),
+                borderColor: AppTheme.adaptive(const Color(0xFFE06C75)),
                 icon: Icons.warning_amber_rounded,
               ),
             );
@@ -1443,7 +1443,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               title: 'REMOTE PCAP FILE',
               message: "Cannot open remote pcap '${item.name}' directly in Wireshark GUI.",
               subMessage: 'Please copy/transfer this file to the Local Filesystem first, then open it in Wireshark.',
-              borderColor: const Color(0xFFE5C07B),
+              borderColor: AppTheme.adaptive(const Color(0xFFE5C07B)),
               icon: Icons.info_outline,
             ),
           );
@@ -1467,7 +1467,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 title: 'LAUNCH FAILED',
                 message: "Failed to launch Wireshark GUI for '${item.name}'.",
                 subMessage: 'Please check system permissions or try opening Wireshark manually.',
-                borderColor: const Color(0xFFE06C75),
+                borderColor: AppTheme.adaptive(const Color(0xFFE06C75)),
                 icon: Icons.error_outline,
               ),
             );
@@ -1483,7 +1483,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               title: 'WIRESHARK NOT FOUND',
               message: 'Wireshark GUI is not installed on this system.',
               subMessage: "Cannot open '${item.name}'.\nPlease install Wireshark from https://www.wireshark.org or make sure Wireshark.exe is in your PATH.",
-              borderColor: const Color(0xFFE06C75),
+              borderColor: AppTheme.adaptive(const Color(0xFFE06C75)),
               icon: Icons.warning_amber_rounded,
             ),
           );
@@ -2024,7 +2024,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     IconData icon,
     String label, {
     String? shortcut,
-    Color iconColor = AppTheme.textSecondary,
+    Color? iconColor,
     Color? labelColor,
     bool enabled = true,
   }) {
@@ -2034,7 +2034,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       height: 34,
       child: Row(
         children: [
-          Icon(icon, size: 16, color: enabled ? iconColor : AppTheme.textSecondary.withValues(alpha: 0.4)),
+          Icon(icon, size: 16, color: enabled ? (iconColor ?? AppTheme.textSecondary) : AppTheme.textSecondary.withValues(alpha: 0.4)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -2049,10 +2049,10 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             const SizedBox(width: 16),
             Text(
               shortcut,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: Color(0xFF5C6370),
+                color: AppTheme.adaptive(const Color(0xFF5C6370)),
               ),
             ),
           ],
@@ -2087,7 +2087,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final action = await _showContextMenu(globalPosition, [
       _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N', iconColor: _cursorAccent),
       _menuItem('new_folder', Icons.create_new_folder_outlined, 'New Folder',
-          shortcut: 'Shift+N', iconColor: const Color(0xFFFFCA28)),
+          shortcut: 'Shift+N', iconColor: AppTheme.adaptive(const Color(0xFFFFCA28))),
       const PopupMenuDivider(),
       _menuItem('refresh', Icons.refresh, 'Refresh'),
       _menuItem('select_all', Icons.select_all, 'Select All', shortcut: 'Ctrl+A', enabled: hasItems),
@@ -2165,16 +2165,16 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         _menuItem('rename', Icons.drive_file_rename_outline, 'Rename', shortcut: 'R', enabled: count == 1),
         _menuItem('toggle_select', Icons.check_box_outlined,
             pane.multiSelected.contains(item.path) ? 'Unmark' : 'Mark',
-            shortcut: 'Space', iconColor: const Color(0xFF98C379)),
+            shortcut: 'Space', iconColor: AppTheme.adaptive(const Color(0xFF98C379))),
         const PopupMenuDivider(),
         _menuItem('compress', Icons.archive_outlined, 'Compress...$suffix',
-            shortcut: 'Z', iconColor: const Color(0xFFD19A66)),
+            shortcut: 'Z', iconColor: AppTheme.adaptive(const Color(0xFFD19A66))),
         if (isArchive)
           _menuItem('extract', Icons.unarchive_outlined, 'Extract Here',
-              shortcut: 'X', iconColor: const Color(0xFFD19A66)),
+              shortcut: 'X', iconColor: AppTheme.adaptive(const Color(0xFFD19A66))),
         const PopupMenuDivider(),
         _menuItem('delete', Icons.delete_outline, 'Delete$suffix',
-            shortcut: 'Del', iconColor: const Color(0xFFE06C75), labelColor: const Color(0xFFE06C75)),
+            shortcut: 'Del', iconColor: AppTheme.adaptive(const Color(0xFFE06C75)), labelColor: AppTheme.adaptive(const Color(0xFFE06C75))),
       ],
       const PopupMenuDivider(),
       _menuItem('new_file', Icons.note_add_outlined, 'New File', shortcut: 'N'),
@@ -2228,7 +2228,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           }
         },
         child: Container(
-          color: const Color(0xFF171B24), // Slate dark terminal background
+          color: AppTheme.adaptive(const Color(0xFF171B24)), // Slate dark terminal background
         child: Column(
           children: [
             // Panes Area
@@ -2248,7 +2248,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                   if (_isDualPane) ...[
                     Container(
                       width: 1.5,
-                      color: const Color(0xFF2C313C),
+                      color: AppTheme.adaptive(const Color(0xFF2C313C)),
                     ),
                     // Right Pane
                     Expanded(
@@ -2330,10 +2330,10 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             child: Container(
               decoration: BoxDecoration(
                 color: isDropHovered
-                    ? const Color(0xFF56B6C2).withValues(alpha: 0.08)
+                    ? AppTheme.adaptive(const Color(0xFF56B6C2)).withValues(alpha: 0.08)
                     : Colors.transparent,
                 border: isDropHovered
-                    ? Border.all(color: const Color(0xFF56B6C2).withValues(alpha: 0.6), width: 1.5)
+                    ? Border.all(color: AppTheme.adaptive(const Color(0xFF56B6C2)).withValues(alpha: 0.6), width: 1.5)
                     : null,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -2349,7 +2349,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
                   // Table Column Headers
                   _buildTableHeader(),
-                  const Divider(color: Color(0xFF2C313C), height: 1, thickness: 1),
+                  Divider(color: AppTheme.adaptive(const Color(0xFF2C313C)), height: 1, thickness: 1),
 
                   // Item List
                   Expanded(
@@ -2358,28 +2358,28 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.sync,
                                   size: 20,
-                                  color: Color(0xFF56B6C2),
+                                  color: AppTheme.adaptive(const Color(0xFF56B6C2)),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   'Connecting to ${pane.target.label}...',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF56B6C2),
+                                    color: AppTheme.adaptive(const Color(0xFF56B6C2)),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   pane.currentPath,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 10,
-                                    color: Color(0xFF5C6370),
+                                    color: AppTheme.adaptive(const Color(0xFF5C6370)),
                                   ),
                                 ),
                               ],
@@ -2392,19 +2392,19 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.error_outline_rounded,
-                                        color: Color(0xFFE06C75),
+                                        color: AppTheme.adaptive(const Color(0xFFE06C75)),
                                         size: 36,
                                       ),
                                       const SizedBox(height: 12),
                                       Text(
                                         pane.errorMessage!,
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontFamily: 'monospace',
                                           fontSize: 12,
-                                          color: Color(0xFFE06C75),
+                                          color: AppTheme.adaptive(const Color(0xFFE06C75)),
                                         ),
                                       ),
                                       const SizedBox(height: 16),
@@ -2420,8 +2420,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                                               style: TextStyle(fontFamily: 'monospace', fontSize: 11),
                                             ),
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF2C313C),
-                                              foregroundColor: Colors.white,
+                                              backgroundColor: AppTheme.adaptive(const Color(0xFF2C313C)),
+                                              foregroundColor: AppTheme.adaptive(Colors.white),
                                             ),
                                             onPressed: () {
                                               pane.remoteSession = null;
@@ -2436,8 +2436,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                                                 style: TextStyle(fontFamily: 'monospace', fontSize: 11),
                                               ),
                                               style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF56B6C2),
-                                                foregroundColor: const Color(0xFF1E222B),
+                                                backgroundColor: AppTheme.adaptive(const Color(0xFF56B6C2)),
+                                                foregroundColor: AppTheme.adaptive(const Color(0xFF1E222B)),
                                               ),
                                               onPressed: () => _showEditCredentialsDialog(pane),
                                             ),
@@ -2506,7 +2506,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             style: TextStyle(
               fontFamily: fontFamily,
               fontSize: 12,
-              color: const Color(0xFF5C6370),
+              color: AppTheme.adaptive(const Color(0xFF5C6370)),
             ),
           ),
         );
@@ -2532,7 +2532,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 fontFamily: fontFamily,
                 fontSize: 12,
                 fontWeight: isLast && isActive ? FontWeight.bold : FontWeight.normal,
-                color: isLast && isActive ? const Color(0xFFE5E9F0) : const Color(0xFFABB2BF),
+                color: isLast && isActive ? AppTheme.adaptive(const Color(0xFFE5E9F0)) : AppTheme.adaptive(const Color(0xFFABB2BF)),
               ),
             ),
           ),
@@ -2555,12 +2555,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   /// Local panes read blue, SSH panes green; the same color tints the path bar
   /// of the active pane and the node selector.
-  static const Color _localAccent = Color(0xFF61AFEF);
-  static const Color _remoteAccent = Color(0xFF98C379);
-  static const Color _controlSurface = Color(0xFF21252B);
-  static const Color _controlBorder = Color(0xFF3E4451);
-  static const Color _columnTextColor = Color(0xFF8B93A1);
-  static const Color _cursorAccent = Color(0xFF61AFEF);
+  static Color get _localAccent => AppTheme.adaptive(const Color(0xFF61AFEF));
+  static Color get _remoteAccent => AppTheme.adaptive(const Color(0xFF98C379));
+  static Color get _controlSurface => AppTheme.adaptive(const Color(0xFF21252B));
+  static Color get _controlBorder => AppTheme.adaptive(const Color(0xFF3E4451));
+  static Color get _columnTextColor => AppTheme.adaptive(const Color(0xFF8B93A1));
+  static Color get _cursorAccent => AppTheme.adaptive(const Color(0xFF61AFEF));
 
   /// Outline alpha for accent-bordered controls, matching the selected
   /// left-sidebar item, so the outline marks state without competing with
@@ -2603,13 +2603,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                       ? Icons.storage_rounded
                       : Icons.cloud_outlined,
                   size: 16,
-                  color: isActive ? accent : const Color(0xFF8B93A1),
+                  color: isActive ? accent : AppTheme.adaptive(const Color(0xFF8B93A1)),
                 ),
                 const SizedBox(width: 6),
                 Expanded(child: _buildBreadcrumbs(pane, side, isActive: isActive)),
                 IconButton(
                   tooltip: 'Type a path',
-                  icon: const Icon(Icons.edit_outlined, size: 14, color: Color(0xFF8B93A1)),
+                  icon: Icon(Icons.edit_outlined, size: 14, color: AppTheme.adaptive(const Color(0xFF8B93A1))),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () => _promptChangeDirectory(pane, side),
@@ -2654,14 +2654,14 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                   const SizedBox(width: 6),
                   Text(
                     _nodeSelectorLabel(pane),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFE5E9F0),
+                      color: AppTheme.adaptive(const Color(0xFFE5E9F0)),
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF8B93A1)),
+                  Icon(Icons.arrow_drop_down, size: 16, color: AppTheme.adaptive(const Color(0xFF8B93A1))),
                 ],
               ),
             ),
@@ -2672,7 +2672,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
         // Refresh icon
         IconButton(
           tooltip: 'Refresh',
-          icon: const Icon(Icons.refresh, size: 16, color: Color(0xFFABB2BF)),
+          icon: Icon(Icons.refresh, size: 16, color: AppTheme.adaptive(const Color(0xFFABB2BF))),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(
             minWidth: _paneControlHeight,
@@ -2682,7 +2682,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             backgroundColor: _controlSurface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
-              side: const BorderSide(color: _controlBorder),
+              side: BorderSide(color: _controlBorder),
             ),
           ),
           onPressed: () {
@@ -2702,19 +2702,19 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF181A20),
+        color: AppTheme.adaptive(const Color(0xFF181A20)),
         borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: const Color(0xFF98C379)),
+        border: Border.all(color: AppTheme.adaptive(const Color(0xFF98C379))),
       ),
       child: Row(
         children: [
-          const Text(
+          Text(
             'Filter: ',
             style: TextStyle(
               fontFamily: 'monospace',
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF98C379),
+              color: AppTheme.adaptive(const Color(0xFF98C379)),
             ),
           ),
           Expanded(
@@ -2722,12 +2722,12 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               controller: pane.filterInputController,
               focusNode: pane.filterFocusNode,
               autofocus: true,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
-                color: Color(0xFFD8DEE9),
+                color: AppTheme.adaptive(const Color(0xFFD8DEE9)),
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(vertical: 4),
@@ -2735,7 +2735,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 hintStyle: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 11,
-                  color: Color(0xFF5C6370),
+                  color: AppTheme.adaptive(const Color(0xFF5C6370)),
                 ),
               ),
               onChanged: (val) {
@@ -2750,7 +2750,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 14, color: Color(0xFF5C6370)),
+            icon: Icon(Icons.close, size: 14, color: AppTheme.adaptive(const Color(0xFF5C6370))),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             tooltip: 'Clear filter [Esc]',
@@ -2783,7 +2783,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 Text('Name', style: style),
                 const SizedBox(width: 4),
                 // Listings are always sorted by name, folders first.
-                const Icon(Icons.arrow_downward, size: 12, color: _columnTextColor),
+                Icon(Icons.arrow_downward, size: 12, color: _columnTextColor),
               ],
             ),
           ),
@@ -2812,13 +2812,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           _unselectAllAndUnfocus(pane);
         },
         onSecondaryTapUp: (details) => _showAreaContextMenu(pane, side, details.globalPosition),
-        child: const Center(
+        child: Center(
           child: Text(
             '(Empty folder)',
             style: TextStyle(
               fontFamily: 'monospace',
               fontSize: 12,
-              color: Color(0xFF5C6370),
+              color: AppTheme.adaptive(const Color(0xFF5C6370)),
             ),
           ),
         ),
@@ -2867,22 +2867,22 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
           Color rowBg;
           if (isSelected) {
-            rowBg = const Color(0xFF22352A);
+            rowBg = AppTheme.adaptive(const Color(0xFF22352A));
           } else if (isFocused) {
-            rowBg = isActive ? const Color(0xFF1B2B40) : const Color(0xFF242932);
+            rowBg = isActive ? AppTheme.adaptive(const Color(0xFF1B2B40)) : AppTheme.adaptive(const Color(0xFF242932));
           } else {
             rowBg = Colors.transparent;
           }
 
           final textColor = isSelected
-              ? const Color(0xFF98C379)
+              ? AppTheme.adaptive(const Color(0xFF98C379))
               : isCursor || isParent
                   ? _cursorAccent
                   : item.isDir
-                      ? const Color(0xFFE5E9F0)
-                      : const Color(0xFFD8DEE9);
+                      ? AppTheme.adaptive(const Color(0xFFE5E9F0))
+                      : AppTheme.adaptive(const Color(0xFFD8DEE9));
           final columnColor = isSelected
-              ? const Color(0xFF98C379)
+              ? AppTheme.adaptive(const Color(0xFF98C379))
               : isCursor
                   ? _cursorAccent
                   : _columnTextColor;
@@ -2910,8 +2910,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
           final rowContent = Container(
             decoration: BoxDecoration(
               color: rowBg,
-              border: const Border(
-                bottom: BorderSide(color: Color(0xFF1F232B)),
+              border: Border(
+                bottom: BorderSide(color: AppTheme.adaptive(const Color(0xFF1F232B))),
               ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2934,7 +2934,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                         fontFamily: fontFamily,
                         fontSize: density.fontSize - 1,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF98C379),
+                        color: AppTheme.adaptive(const Color(0xFF98C379)),
                       ),
                     ),
                   ),
@@ -3089,8 +3089,8 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 if (!isHovered) return targetChild;
                 return Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF56B6C2).withValues(alpha: 0.25),
-                    border: Border.all(color: const Color(0xFF56B6C2), width: 1.5),
+                    color: AppTheme.adaptive(const Color(0xFF56B6C2)).withValues(alpha: 0.25),
+                    border: Border.all(color: AppTheme.adaptive(const Color(0xFF56B6C2)), width: 1.5),
                     borderRadius: BorderRadius.circular(2),
                   ),
                   child: targetChild,
@@ -3126,15 +3126,15 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final totalText = '${entries.length} item${entries.length == 1 ? '' : 's'} total';
     final hasSelection = n > 0;
 
-    const textStyle = TextStyle(
+    final textStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 11,
       color: _columnTextColor,
     );
     return Container(
       padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFF2C313C))),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.adaptive(const Color(0xFF2C313C)))),
       ),
       child: Row(
         children: [
@@ -3150,7 +3150,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               color: hasSelection ? _cursorAccent : _columnTextColor,
             ),
           ),
-          const Text('  |  ', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF3E4451))),
+          Text('  |  ', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: AppTheme.adaptive(const Color(0xFF3E4451)))),
           Expanded(
             child: Text(totalText, overflow: TextOverflow.ellipsis, style: textStyle),
           ),
@@ -3169,7 +3169,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
   /// Muted text for the status bar while no message is showing (4.7:1 on the
   /// bar background).
-  static const Color _idleStatusColor = Color(0xFF8A919D);
+  static Color get _idleStatusColor => AppTheme.adaptive(const Color(0xFF8A919D));
 
   /// Idle line for [FileExplorerStatusBarStyle.detailed]: the active pane's
   /// node, item count, and selection with its size.
@@ -3197,9 +3197,9 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     final style = SettingsService.instance.fileExplorerStatusBarStyle;
     final idle = _statusMessage == _defaultStatus;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF13161C),
-        border: Border(top: BorderSide(color: Color(0xFF2C313C), width: 1)),
+      decoration: BoxDecoration(
+        color: AppTheme.adaptive(const Color(0xFF13161C)),
+        border: Border(top: BorderSide(color: AppTheme.adaptive(const Color(0xFF2C313C)), width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
@@ -3212,7 +3212,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
               shape: BoxShape.circle,
               color: _statusColor == _errorStatusColor
                   ? _errorStatusColor
-                  : const Color(0xFF98C379),
+                  : AppTheme.adaptive(const Color(0xFF98C379)),
             ),
           ),
           const SizedBox(width: 8),
@@ -3227,7 +3227,7 @@ class _FileExplorerViewState extends State<FileExplorerView> {
                 color: idle
                     ? _idleStatusColor
                     : _statusColor == _errorStatusColor ||
-                          _statusColor == const Color(0xFF98C379)
+                          _statusColor == AppTheme.adaptive(const Color(0xFF98C379))
                     ? _statusColor
                     : _defaultStatusColor,
               ),
@@ -3271,13 +3271,13 @@ class _FileExplorerViewState extends State<FileExplorerView> {
       constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
       style: IconButton.styleFrom(
         backgroundColor:
-            selected == true ? const Color(0xFF2C313C) : Colors.transparent,
+            selected == true ? AppTheme.adaptive(const Color(0xFF2C313C)) : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
       ),
       icon: Icon(
         icon,
         size: 16,
-        color: selected == true ? const Color(0xFF56B6C2) : const Color(0xFFABB2BF),
+        color: selected == true ? AppTheme.adaptive(const Color(0xFF56B6C2)) : AppTheme.adaptive(const Color(0xFFABB2BF)),
       ),
       onPressed: onPressed,
     );

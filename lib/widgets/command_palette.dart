@@ -30,6 +30,7 @@ class CommandItem {
   final SessionProfile? session;
   final String? customToolId;
   final VoidCallback? onCustomExecute;
+  final AppThemeType? appTheme;
 
   const CommandItem({
     required this.label,
@@ -41,6 +42,7 @@ class CommandItem {
     this.session,
     this.customToolId,
     this.onCustomExecute,
+    this.appTheme,
   });
 }
 
@@ -170,11 +172,15 @@ class _CommandPaletteState extends State<CommandPalette> {
 
       // Theme commands
       for (final theme in AppThemeType.values) {
+        final palette = AppTheme.getPalette(theme);
         list.add(CommandItem(
-          label: 'Set Theme: ${theme.name}',
-          subtitle: 'Switch application color theme',
-          icon: Icons.palette_outlined,
+          label: 'Set Theme: ${palette.name}',
+          subtitle: palette.isLight
+              ? 'Switch to a light application color theme'
+              : 'Switch application color theme',
+          icon: palette.isLight ? Icons.light_mode_outlined : Icons.palette_outlined,
           action: CommandAction.setTheme,
+          appTheme: theme,
         ));
       }
     }
@@ -302,7 +308,7 @@ class _CommandPaletteState extends State<CommandPalette> {
         onClose: () => Navigator.of(context).pop(),
       ),
       body: _filteredItems.isEmpty
-          ? const Padding(
+          ? Padding(
               padding: EdgeInsets.all(24),
               child: Text('No matching commands or sessions', style: TextStyle(color: AppTheme.textMuted)),
             )

@@ -72,7 +72,7 @@ Future<void> runNexusFxApp({
   runApp(NexusFxApp(title: title));
 }
 
-class NexusFxApp extends StatelessWidget {
+class NexusFxApp extends StatefulWidget {
   final String title;
   final List<NexusTool>? customTools;
 
@@ -83,18 +83,54 @@ class NexusFxApp extends StatelessWidget {
   });
 
   @override
+  State<NexusFxApp> createState() => _NexusFxAppState();
+}
+
+class _NexusFxAppState extends State<NexusFxApp> {
+  AppThemeType _theme = AppTheme.currentTheme;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService.instance.addListener(_onSettingsChanged);
+  }
+
+  @override
+  void dispose() {
+    SettingsService.instance.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
+  /// Most widgets read colors straight from [AppTheme] instead of
+  /// `Theme.of(context)`, so they don't depend on the theme and would keep
+  /// the old palette. Mark the whole tree dirty when the palette changes.
+  void _onSettingsChanged() {
+    final theme = SettingsService.instance.appTheme;
+    if (theme == _theme) return;
+    _theme = theme;
+    void markAll(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(markAll);
+    }
+    (context as Element).visitChildren(markAll);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: SettingsService.instance,
       builder: (context, _) {
         return MaterialApp(
           navigatorKey: nexusNavigatorKey,
-          title: title,
+          title: widget.title,
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.darkTheme,
+          theme: AppTheme.theme,
+          // Widgets reading AppTheme directly switch at once; animating
+          // only the Material ones would show a mixed palette for a moment.
+          themeAnimationDuration: Duration.zero,
           home: MainScreen(
-            appTitle: title,
-            customTools: customTools,
+            appTitle: widget.title,
+            customTools: widget.customTools,
           ),
         );
       },

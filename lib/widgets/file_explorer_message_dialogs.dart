@@ -19,7 +19,7 @@ class _DialogMessage extends StatelessWidget {
         children: [
           Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               height: 1.4,
               fontWeight: FontWeight.w500,
@@ -30,7 +30,7 @@ class _DialogMessage extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               detail!,
-              style: const TextStyle(fontSize: 12, color: _Dlg.textSecondary),
+              style: TextStyle(fontSize: 12, color: _Dlg.textSecondary),
             ),
           ],
         ],
@@ -45,7 +45,8 @@ class FileExplorerConfirmDialog extends StatefulWidget {
   final String title;
   final String message1;
   final String? message2;
-  final Color borderColor;
+  final Color? _borderColor;
+  Color get borderColor => _borderColor ?? _Dlg.accent;
   final String confirmText;
   final String cancelText;
   final bool defaultYes;
@@ -55,11 +56,11 @@ class FileExplorerConfirmDialog extends StatefulWidget {
     required this.title,
     required this.message1,
     this.message2,
-    this.borderColor = _Dlg.accent,
+    Color? borderColor,
     this.confirmText = 'Yes',
     this.cancelText = 'No',
     this.defaultYes = true,
-  });
+  }) : _borderColor = borderColor;
 
   @override
   State<FileExplorerConfirmDialog> createState() =>
@@ -193,7 +194,7 @@ class _TerminalButtonState extends State<_TerminalButton> {
         : _Dlg.field;
     final foreground = selected ? color : _Dlg.textPrimary;
     final border = _focused
-        ? Colors.white
+        ? AppTheme.ink
         : selected
         ? color.withValues(alpha: 0.7)
         : _Dlg.outline;
@@ -272,7 +273,7 @@ class _Keycap extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
@@ -392,7 +393,8 @@ class FileExplorerNotificationDialog extends StatelessWidget {
   final String title;
   final String message;
   final String? subMessage;
-  final Color borderColor;
+  final Color? _borderColor;
+  Color get borderColor => _borderColor ?? _Dlg.accent;
   final IconData? icon;
   final String buttonText;
 
@@ -401,10 +403,10 @@ class FileExplorerNotificationDialog extends StatelessWidget {
     required this.title,
     required this.message,
     this.subMessage,
-    this.borderColor = _Dlg.accent,
+    Color? borderColor,
     this.icon,
     this.buttonText = 'OK',
-  });
+  }) : _borderColor = borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -521,7 +523,7 @@ class _FileExplorerPromptDialogState extends State<FileExplorerPromptDialog> {
           children: [
             Text(
               widget.promptLabel,
-              style: const TextStyle(fontSize: 12, color: _Dlg.textSecondary),
+              style: TextStyle(fontSize: 12, color: _Dlg.textSecondary),
             ),
             const SizedBox(height: 8),
             MergeSemantics(
@@ -530,7 +532,7 @@ class _FileExplorerPromptDialogState extends State<FileExplorerPromptDialog> {
                 child: TextField(
                   controller: _controller,
                   autofocus: true,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: _Dlg.textPrimary,
                   ),
@@ -544,15 +546,15 @@ class _FileExplorerPromptDialogState extends State<FileExplorerPromptDialog> {
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: _Dlg.outline),
+                      borderSide: BorderSide(color: _Dlg.outline),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: _Dlg.outline),
+                      borderSide: BorderSide(color: _Dlg.outline),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: _Dlg.accent, width: 1.5),
+                      borderSide: BorderSide(color: _Dlg.accent, width: 1.5),
                     ),
                   ),
                   onChanged: (_) {
@@ -570,7 +572,7 @@ class _FileExplorerPromptDialogState extends State<FileExplorerPromptDialog> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.error_outline,
                         size: 14,
                         color: _Dlg.danger,
@@ -579,7 +581,7 @@ class _FileExplorerPromptDialogState extends State<FileExplorerPromptDialog> {
                       Expanded(
                         child: Text(
                           _error!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: _Dlg.danger,
                           ),

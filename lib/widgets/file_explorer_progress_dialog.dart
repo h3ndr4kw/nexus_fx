@@ -51,7 +51,7 @@ class FileExplorerProgressDialog extends StatelessWidget {
     this.onCancel,
   });
 
-  static const _detail = TextStyle(fontSize: 11.5, color: _Dlg.textSecondary);
+  static final _detail = TextStyle(fontSize: 11.5, color: _Dlg.textSecondary);
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +111,7 @@ class FileExplorerProgressDialog extends StatelessWidget {
                     Text(
                       'Item: ${data.currentFile}',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: _Dlg.textPrimary,
                       ),
@@ -123,7 +123,7 @@ class FileExplorerProgressDialog extends StatelessWidget {
                       liveRegion: true,
                       child: Text(
                         data.errorMessage!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: _Dlg.danger,
                         ),
@@ -146,7 +146,7 @@ class FileExplorerProgressDialog extends StatelessWidget {
                             ? null
                             : data.progress.clamp(0.0, 1.0),
                         backgroundColor: _Dlg.field,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
+                        valueColor: AlwaysStoppedAnimation<Color>(
                           _Dlg.accent,
                         ),
                         minHeight: 8,

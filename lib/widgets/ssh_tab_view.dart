@@ -535,7 +535,7 @@ class SshTabViewState extends State<SshTabView> {
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(6),
-          side: const BorderSide(color: AppTheme.inputBorderColor),
+          side: BorderSide(color: AppTheme.inputBorderColor),
         ),
         items: [
           PopupMenuItem<String>(
@@ -624,7 +624,7 @@ class SshTabViewState extends State<SshTabView> {
             ),
           ),
           const PopupMenuDivider(height: 1),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'select_all',
             height: 36,
             child: Row(
@@ -645,7 +645,7 @@ class SshTabViewState extends State<SshTabView> {
               ],
             ),
           ),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'clear',
             height: 36,
             child: Row(
@@ -661,7 +661,7 @@ class SshTabViewState extends State<SshTabView> {
               ],
             ),
           ),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'save_output',
             height: 36,
             child: Row(
@@ -698,7 +698,7 @@ class SshTabViewState extends State<SshTabView> {
                   Expanded(
                     child: Text(
                       widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
-                      style: const TextStyle(fontSize: 12, color: AppTheme.textColor),
+                      style: TextStyle(fontSize: 12, color: AppTheme.textColor),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -710,7 +710,7 @@ class SshTabViewState extends State<SshTabView> {
               ),
             ),
           if (widget.connection.logFile != null)
-            const PopupMenuItem<String>(
+            PopupMenuItem<String>(
               value: 'open_log',
               height: 36,
               child: Row(
@@ -728,7 +728,7 @@ class SshTabViewState extends State<SshTabView> {
               ),
             ),
           const PopupMenuDivider(height: 1),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'zoom_in',
             height: 36,
             child: Row(
@@ -749,7 +749,7 @@ class SshTabViewState extends State<SshTabView> {
               ],
             ),
           ),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'zoom_out',
             height: 36,
             child: Row(
@@ -770,7 +770,7 @@ class SshTabViewState extends State<SshTabView> {
               ],
             ),
           ),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'zoom_reset',
             height: 36,
             child: Row(

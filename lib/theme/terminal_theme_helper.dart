@@ -71,6 +71,35 @@ class TerminalThemeHelper {
         if (palette.id == 'antigravity') {
           return antigravityDark;
         }
+        if (palette.isLight) {
+          return TerminalTheme(
+            cursor: palette.primaryColor,
+            selection: palette.primaryColor.withValues(alpha: 0.25),
+            foreground: palette.titleColor,
+            background: palette.background,
+            // On a white background "white" must still be readable, so the
+            // achromatic slots run from dark to mid grey.
+            black: const Color(0xFF24292F),
+            red: palette.errorColor,
+            green: palette.successColor,
+            yellow: palette.warningColor,
+            blue: palette.primaryColor,
+            magenta: const Color(0xFF8250DF),
+            cyan: const Color(0xFF0E7490),
+            white: const Color(0xFF6E7781),
+            brightBlack: const Color(0xFF57606A),
+            brightRed: const Color(0xFFCF222E),
+            brightGreen: const Color(0xFF1A7F37),
+            brightYellow: const Color(0xFF9A6700),
+            brightBlue: const Color(0xFF0969DA),
+            brightMagenta: const Color(0xFFA475F9),
+            brightCyan: const Color(0xFF1B7C83),
+            brightWhite: const Color(0xFF8C959F),
+            searchHitBackground: const Color(0xFFFFE58F),
+            searchHitBackgroundCurrent: const Color(0xFFFFC53D),
+            searchHitForeground: const Color(0xFF111827),
+          );
+        }
         return TerminalTheme(
           cursor: palette.primaryColor,
           selection: palette.primaryColor.withValues(alpha: 0.35),

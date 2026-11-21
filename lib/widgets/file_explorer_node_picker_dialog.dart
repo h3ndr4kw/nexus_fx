@@ -135,7 +135,7 @@ class _FileExplorerNodePickerDialogState
               child: Text(
                 "No node matches '${_searchFilter.trim()}'.\nClear the filter or connect a custom SSH node below.",
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               ),
             )
           : ListView.builder(
@@ -152,7 +152,7 @@ class _FileExplorerNodePickerDialogState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (filter.isEmpty && nodeOptions.length == 1)
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: Text(
                 'No saved SSH sessions yet. Add one in Sessions, or connect a custom node below.',
@@ -182,7 +182,7 @@ class _FileExplorerNodePickerDialogState
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
@@ -228,7 +228,7 @@ class _FileExplorerNodePickerDialogState
       trailing: [
         if (canEditCredentials)
           IconButton(
-            icon: const Icon(Icons.key, size: 14, color: AppTheme.textSecondary),
+            icon: Icon(Icons.key, size: 14, color: AppTheme.textSecondary),
             tooltip: 'Edit Credentials for ${node.label}',
             visualDensity: VisualDensity.compact,
             onPressed: () async {
@@ -239,7 +239,7 @@ class _FileExplorerNodePickerDialogState
             },
           ),
         if (isCurrent)
-          const PaletteBadge(text: 'ACTIVE', color: AppTheme.accentColor),
+          PaletteBadge(text: 'ACTIVE', color: AppTheme.accentColor),
         PaletteBadge(text: tag, color: tagColor),
       ],
     );
@@ -303,21 +303,21 @@ class _FileExplorerNodePickerDialogState
                   if (node.host.isEmpty) ...[
                     TextField(
                       controller: hostCtrl,
-                      style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                      style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                       decoration: _formFieldDecoration('Host IP / Hostname'),
                     ),
                     const SizedBox(height: 12),
                   ],
                   TextField(
                     controller: userCtrl,
-                    style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                    style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                     decoration: _formFieldDecoration('Username'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: passCtrl,
                     obscureText: obscure,
-                    style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                    style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                     onSubmitted: (_) => save(),
                     decoration: _formFieldDecoration(
                       'Password',
@@ -405,7 +405,7 @@ class _FileExplorerNodePickerDialogState
                         child: TextField(
                           controller: hostCtrl,
                           autofocus: true,
-                          style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                          style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                           onChanged: (_) {
                             if (hostError != null) {
                               setDialogState(() => hostError = null);
@@ -423,7 +423,7 @@ class _FileExplorerNodePickerDialogState
                         child: TextField(
                           controller: portCtrl,
                           keyboardType: TextInputType.number,
-                          style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                          style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                           decoration: _formFieldDecoration('Port'),
                         ),
                       ),
@@ -432,14 +432,14 @@ class _FileExplorerNodePickerDialogState
                   const SizedBox(height: 12),
                   TextField(
                     controller: userCtrl,
-                    style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                    style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                     decoration: _formFieldDecoration('Username'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: passCtrl,
                     obscureText: true,
-                    style: const TextStyle(fontSize: 13, color: _Dlg.textPrimary),
+                    style: TextStyle(fontSize: 13, color: _Dlg.textPrimary),
                     onSubmitted: (_) => connect(),
                     decoration: _formFieldDecoration('Password'),
                   ),

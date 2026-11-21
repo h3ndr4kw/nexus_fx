@@ -532,20 +532,20 @@ class _SessionsScreenState extends State<SessionsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.bgSurface,
-        title: const Text('Create New Folder', style: TextStyle(fontSize: 14, color: AppTheme.textPrimary)),
+        title: Text('Create New Folder', style: TextStyle(fontSize: 14, color: AppTheme.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
               autofocus: true,
-              style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Folder Name'),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: descCtrl,
-              style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
               decoration: const InputDecoration(labelText: 'Description (optional)'),
             ),
           ],
@@ -600,19 +600,19 @@ class _SessionsScreenState extends State<SessionsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppTheme.bgSurface,
-          title: const Text('Folder Properties', style: TextStyle(fontSize: 14, color: AppTheme.textPrimary)),
+          title: Text('Folder Properties', style: TextStyle(fontSize: 14, color: AppTheme.textPrimary)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                 decoration: const InputDecoration(labelText: 'Folder Name'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: descCtrl,
-                style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                 decoration: const InputDecoration(labelText: 'Description'),
               ),
             ],
@@ -647,7 +647,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             deps.isNotEmpty
                 ? 'This session is currently used as a Jump Host for ${deps.length} other session(s). Deleting it will reset those sessions to Direct connection. Continue?'
                 : 'Are you sure you want to permanently delete this session?',
-            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
@@ -671,7 +671,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: AppTheme.bgSurface,
           title: Text('Delete Folder "${f.name}"?'),
-          content: const Text(
+          content: Text(
             'Deleting this folder will delete all subfolders and sessions inside it. Continue?',
             style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ),
@@ -774,7 +774,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Widget _buildToolbar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.bgSurfaceSecondary,
         border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
       ),
@@ -790,7 +790,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
               if (val == 'import_putty') _importFromPutty();
             },
             itemBuilder: (ctx) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'session',
                 child: Row(
                   children: [
@@ -800,18 +800,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'folder',
                 child: Row(
                   children: [
-                    Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
+                    Icon(Icons.create_new_folder_outlined, size: 16, color: AppTheme.adaptive(const Color(0xFFFFCA28))),
                     SizedBox(width: 8),
                     Flexible(child: Text('New Folder (Ctrl+Shift+N)', style: TextStyle(fontSize: 12))),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'import_openssh',
                 child: Row(
                   children: [
@@ -822,7 +822,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 ),
               ),
               if (PuttySessionsReader.supported)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'import_putty',
                   child: Row(
                     children: [
@@ -840,7 +840,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.add, size: 16, color: AppTheme.accentPrimary),
                   SizedBox(width: 4),
@@ -857,7 +857,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           _buildToolbarIcon(Icons.paste_outlined, 'Paste (Ctrl+V)', _mgr.hasClipboardItem ? _paste : null),
           _buildToolbarIcon(Icons.delete_outline, 'Delete (Del)', _selectedSessionId != null || _selectedFolderId != null ? _deleteSelected : null),
           const SizedBox(width: 8),
-          const SizedBox(height: 20, child: VerticalDivider(width: 1, color: AppTheme.borderSubtle)),
+          SizedBox(height: 20, child: VerticalDivider(width: 1, color: AppTheme.borderSubtle)),
           const SizedBox(width: 8),
           _buildToolbarIcon(Icons.tune, 'Properties (Alt+Enter)', _selectedSessionId != null || _selectedFolderId != null ? _editSelectedProperties : null),
           const Spacer(),
@@ -880,11 +880,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   }
                 });
               },
-              style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Search sessions... (/ or Ctrl+F)',
-                hintStyle: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                prefixIcon: const Icon(Icons.search, size: 16, color: AppTheme.textSecondary),
+                hintStyle: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                prefixIcon: Icon(Icons.search, size: 16, color: AppTheme.textSecondary),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 14),
@@ -989,7 +989,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             const SizedBox(width: 8),
             Text(
               name,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
             ),
           ],
         ),
@@ -1010,7 +1010,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'open',
           child: Row(
             children: [
@@ -1020,7 +1020,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'new_session',
           child: Row(
             children: [
@@ -1030,18 +1030,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'new_subfolder',
           child: Row(
             children: [
-              Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
+              Icon(Icons.create_new_folder_outlined, size: 16, color: AppTheme.adaptive(const Color(0xFFFFCA28))),
               SizedBox(width: 8),
               Text('New Subfolder', style: TextStyle(fontSize: 12)),
             ],
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'cut',
           child: Row(
             children: [
@@ -1051,7 +1051,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'copy',
           child: Row(
             children: [
@@ -1062,7 +1062,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'properties',
           child: Row(
             children: [
@@ -1072,7 +1072,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'delete',
           child: Row(
             children: [
@@ -1107,7 +1107,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'connect',
           child: Row(
             children: [
@@ -1117,7 +1117,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'file_explorer',
           child: Row(
             children: [
@@ -1127,7 +1127,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'duplicate',
           child: Row(
             children: [
@@ -1138,7 +1138,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'cut',
           child: Row(
             children: [
@@ -1148,7 +1148,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'copy',
           child: Row(
             children: [
@@ -1159,7 +1159,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'properties',
           child: Row(
             children: [
@@ -1169,7 +1169,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'delete',
           child: Row(
             children: [
@@ -1201,7 +1201,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: AppTheme.bgSurface,
       items: [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'new_session',
           child: Row(
             children: [
@@ -1211,11 +1211,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'new_folder',
           child: Row(
             children: [
-              Icon(Icons.create_new_folder_outlined, size: 16, color: Color(0xFFFFCA28)),
+              Icon(Icons.create_new_folder_outlined, size: 16, color: AppTheme.adaptive(const Color(0xFFFFCA28))),
               SizedBox(width: 8),
               Text('New Folder (Ctrl+Shift+N)', style: TextStyle(fontSize: 12)),
             ],
@@ -1223,7 +1223,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
         ),
         if (_mgr.hasClipboardItem) ...[
           const PopupMenuDivider(),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'paste',
             child: Row(
               children: [
@@ -1246,7 +1246,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     final crumbs = _mgr.getBreadcrumbPath(_currentFolderId);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.bgSurface,
         border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
       ),
@@ -1283,7 +1283,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             },
           ),
           for (final f in crumbs) ...[
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
               child: Icon(Icons.chevron_right, size: 14, color: AppTheme.textMuted),
             ),
@@ -1353,7 +1353,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
           const SizedBox(width: 12),
           IconButton(
-            icon: const Icon(Icons.refresh, size: 16, color: AppTheme.textSecondary),
+            icon: Icon(Icons.refresh, size: 16, color: AppTheme.textSecondary),
             tooltip: 'Refresh',
             onPressed: () => setState(() {}),
             splashRadius: 14,
@@ -1398,10 +1398,10 @@ class _SessionsScreenState extends State<SessionsScreen> {
                       ? AppTheme.accentPrimary.withValues(alpha: 0.15)
                       : Colors.transparent),
               border: Border(
-                bottom: const BorderSide(color: AppTheme.borderSubtle, width: 0.5),
-                top: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
-                left: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
-                right: isHovered ? const BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+                bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5),
+                top: isHovered ? BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+                left: isHovered ? BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
+                right: isHovered ? BorderSide(color: AppTheme.accentPrimary, width: 1.5) : BorderSide.none,
               ),
             ),
             child: Row(
@@ -1410,7 +1410,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 Icon(
                   isHovered ? Icons.drive_folder_upload : Icons.arrow_upward,
                   size: 16,
-                  color: isHovered ? AppTheme.accentPrimary : const Color(0xFFFFCA28),
+                  color: isHovered ? AppTheme.accentPrimary : AppTheme.adaptive(const Color(0xFFFFCA28)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1424,19 +1424,19 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     ),
                   ),
                 ),
-                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-                const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-                const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+                Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
                 Expanded(
                   flex: 3,
                   child: Text(
                     'Up to $parentFolderName',
-                    style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppTheme.textMuted),
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppTheme.textMuted),
                   ),
                 ),
-                const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
+                Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
               ],
             ),
           ),
@@ -1488,11 +1488,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Widget _buildTableHeader() {
     return Container(
       height: 32,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.bgSurfaceSecondary,
         border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
       ),
-      child: const Row(
+      child: Row(
         children: [
           SizedBox(width: 32),
           Expanded(flex: 3, child: Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary))),
@@ -1525,21 +1525,21 @@ class _SessionsScreenState extends State<SessionsScreen> {
         height: 30,
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.accentPrimary.withValues(alpha: 0.15) : Colors.transparent,
-          border: const Border(bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5)),
+          border: Border(bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5)),
         ),
         child: Row(
           children: [
             const SizedBox(width: 8),
-            const Icon(Icons.folder, size: 16, color: Color(0xFFFFCA28)),
+            Icon(Icons.folder, size: 16, color: AppTheme.adaptive(const Color(0xFFFFCA28))),
             const SizedBox(width: 8),
-            Expanded(flex: 3, child: Text(folder.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textPrimary))),
-            const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-            const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-            const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-            const Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-            const Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
-            Expanded(flex: 3, child: Text(folder.description, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary))),
-            Expanded(flex: 2, child: Text(_formatDate(folder.modifiedAt), style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))),
+            Expanded(flex: 3, child: Text(folder.name, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textPrimary))),
+            Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+            Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+            Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+            Expanded(flex: 1, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+            Expanded(flex: 2, child: Text('-', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))),
+            Expanded(flex: 3, child: Text(folder.description, style: TextStyle(fontSize: 11, color: AppTheme.textSecondary))),
+            Expanded(flex: 2, child: Text(_formatDate(folder.modifiedAt), style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
           ],
         ),
       ),
@@ -1548,7 +1548,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     final draggableRow = Draggable<_SessionDragPayload>(
       data: _SessionDragPayload.folder(folder),
       dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: _buildDragFeedback(folder.name, Icons.folder, const Color(0xFFFFCA28)),
+      feedback: _buildDragFeedback(folder.name, Icons.folder, AppTheme.adaptive(const Color(0xFFFFCA28))),
       childWhenDragging: Opacity(opacity: 0.3, child: rowWidget),
       child: rowWidget,
     );
@@ -1608,7 +1608,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
         height: 30,
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.accentPrimary.withValues(alpha: 0.15) : Colors.transparent,
-          border: const Border(bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5)),
+          border: Border(bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5)),
         ),
         child: Row(
           children: [
@@ -1616,7 +1616,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
             Icon(
               isLocal ? Icons.terminal : Icons.cloud_queue,
               size: 16,
-              color: isLocal ? const Color(0xFF64B5F6) : const Color(0xFFFF7043),
+              color: isLocal ? AppTheme.adaptive(const Color(0xFF64B5F6)) : AppTheme.adaptive(const Color(0xFFFF7043)),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1626,20 +1626,20 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   Flexible(
                     child: Text(
                       session.name,
-                      style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                      style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
-            Expanded(flex: 2, child: Text(isLocal ? '-' : session.host, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
-            Expanded(flex: 2, child: Text(isLocal ? '-' : session.username, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
-            Expanded(flex: 1, child: Text(isLocal ? 'LOCAL' : 'SSH', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary))),
-            Expanded(flex: 1, child: Text(isLocal ? '-' : session.port.toString(), style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
-            Expanded(flex: 2, child: Text(routeText, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))),
-            Expanded(flex: 3, child: Text(session.description, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary))),
-            Expanded(flex: 2, child: Text(_formatDate(session.modifiedAt), style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))),
+            Expanded(flex: 2, child: Text(isLocal ? '-' : session.host, style: TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
+            Expanded(flex: 2, child: Text(isLocal ? '-' : session.username, style: TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
+            Expanded(flex: 1, child: Text(isLocal ? 'LOCAL' : 'SSH', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary))),
+            Expanded(flex: 1, child: Text(isLocal ? '-' : session.port.toString(), style: TextStyle(fontSize: 12, color: AppTheme.textSecondary))),
+            Expanded(flex: 2, child: Text(routeText, style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
+            Expanded(flex: 3, child: Text(session.description, style: TextStyle(fontSize: 11, color: AppTheme.textSecondary))),
+            Expanded(flex: 2, child: Text(_formatDate(session.modifiedAt), style: TextStyle(fontSize: 11, color: AppTheme.textMuted))),
           ],
         ),
       ),
@@ -1651,7 +1651,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
       feedback: _buildDragFeedback(
         session.name,
         isLocal ? Icons.terminal : Icons.cloud_queue,
-        isLocal ? const Color(0xFF64B5F6) : const Color(0xFFFF7043),
+        isLocal ? AppTheme.adaptive(const Color(0xFF64B5F6)) : AppTheme.adaptive(const Color(0xFFFF7043)),
       ),
       childWhenDragging: Opacity(opacity: 0.3, child: rowWidget),
       child: rowWidget,
@@ -1670,7 +1670,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.bgSurfaceSecondary,
         border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
       ),
@@ -1699,11 +1699,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
                       ),
                     ),
                     child: _showAtStartup
-                        ? const Icon(Icons.check, size: 12, color: AppTheme.background)
+                        ? Icon(Icons.check, size: 12, color: AppTheme.background)
                         : null,
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Show this dialog box at startup',
                     style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
@@ -1731,7 +1731,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           const SizedBox(width: 8),
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppTheme.borderSubtle),
+              side: BorderSide(color: AppTheme.borderSubtle),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),

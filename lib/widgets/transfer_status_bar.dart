@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../services/transfer_manager.dart';
 import '../theme/app_theme.dart';
 
-const _kGreen = Color(0xFF98C379);
-const _kRed = Color(0xFFE06C75);
-const _kCyan = Color(0xFF56B6C2);
-const _kText = Color(0xFFABB2BF);
-const _kMuted = Color(0xFF5C6370);
-const _kAmber = Color(0xFFE5C07B);
+Color get _kGreen => AppTheme.adaptive(const Color(0xFF98C379));
+Color get _kRed => AppTheme.adaptive(const Color(0xFFE06C75));
+Color get _kCyan => AppTheme.adaptive(const Color(0xFF56B6C2));
+Color get _kText => AppTheme.adaptive(const Color(0xFFABB2BF));
+Color get _kMuted => AppTheme.adaptive(const Color(0xFF5C6370));
+Color get _kAmber => AppTheme.adaptive(const Color(0xFFE5C07B));
 
 /// App-wide strip at the bottom of the window showing copy/move jobs.
 ///
@@ -98,7 +98,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     } else {
       final pausedCount = active.where((j) => j.isPaused).length;
       leading = pausedCount == active.length
-          ? const Icon(Icons.pause_circle, size: 13, color: _kMuted)
+          ? Icon(Icons.pause_circle, size: 13, color: _kMuted)
           : _spinner();
       text = '${active.length} transfers'
           '${pausedCount > 0 ? ' · $pausedCount paused' : ''}'
@@ -166,7 +166,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
       padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 14, color: _kAmber),
+          Icon(Icons.warning_amber_rounded, size: 14, color: _kAmber),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -250,7 +250,7 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
             children: [for (final job in jobs) _jobRow(job)],
           ),
         ),
-        const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
+        Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
       ],
     );
   }
@@ -403,26 +403,26 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
 
   Widget _statusIcon(TransferJob job) {
     if (job.needsAttention) {
-      return const Icon(Icons.warning_amber_rounded, size: 13, color: _kAmber);
+      return Icon(Icons.warning_amber_rounded, size: 13, color: _kAmber);
     }
     if (job.isPaused) {
-      return const Icon(Icons.pause_circle, size: 13, color: _kMuted);
+      return Icon(Icons.pause_circle, size: 13, color: _kMuted);
     }
     switch (job.status) {
       case TransferStatus.running:
         return _spinner();
       case TransferStatus.queued:
-        return const Icon(Icons.schedule, size: 13, color: _kMuted);
+        return Icon(Icons.schedule, size: 13, color: _kMuted);
       case TransferStatus.completed:
-        return const Icon(Icons.check_circle, size: 13, color: _kGreen);
+        return Icon(Icons.check_circle, size: 13, color: _kGreen);
       case TransferStatus.cancelled:
-        return const Icon(Icons.block, size: 13, color: _kMuted);
+        return Icon(Icons.block, size: 13, color: _kMuted);
       case TransferStatus.failed:
-        return const Icon(Icons.error, size: 13, color: _kRed);
+        return Icon(Icons.error, size: 13, color: _kRed);
     }
   }
 
-  Widget _spinner() => const SizedBox(
+  Widget _spinner() => SizedBox(
         width: 12,
         height: 12,
         child: CircularProgressIndicator(strokeWidth: 1.6, color: _kCyan),
@@ -447,14 +447,14 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
-    Color color = _kText,
+    Color? color,
   }) {
     return IconButton(
       key: key,
       onPressed: onPressed,
       tooltip: tooltip,
       icon: Icon(icon, size: 14),
-      color: color,
+      color: color ?? _kText,
       disabledColor: _kMuted,
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
@@ -463,17 +463,17 @@ class _TransferStatusBarState extends State<TransferStatusBar> {
   }
 
   Widget _textButton(String label, VoidCallback onPressed,
-      {Key? key, Color color = _kText}) {
+      {Key? key, Color? color}) {
     return TextButton(
       key: key,
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: color,
+        foregroundColor: color ?? _kText,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         minimumSize: const Size(0, 22),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      child: Text(label, style: _mono(10, color, bold: true)),
+      child: Text(label, style: _mono(10, color ?? _kText, bold: true)),
     );
   }
 

@@ -299,8 +299,8 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
                         children: [
                           Text(
                             widget.itemLabel(item),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -334,9 +334,9 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
               if (widget.isClearable && item != null) ...[
                 InkWell(
                   onTap: () => widget.onChanged(null),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(Icons.clear, size: 14, color: Colors.white54),
+                    child: Icon(Icons.clear, size: 14, color: AppTheme.dimText(0.54)),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -344,7 +344,7 @@ class _FuzzySearchableDropdownState<T> extends State<FuzzySearchableDropdown<T>>
               AnimatedRotation(
                 turns: _isOpen ? 0.5 : 0.0,
                 duration: const Duration(milliseconds: 200),
-                child: const Icon(
+                child: Icon(
                   Icons.keyboard_arrow_down_rounded,
                   color: AppTheme.textColor,
                   size: 20,
@@ -506,16 +506,16 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
               controller: _searchCtrl,
               focusNode: _focusNode,
               onChanged: _applyFilter,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: widget.searchPlaceholder,
                 hintStyle:
                     TextStyle(color: AppTheme.dimText(0.4)),
-                prefixIcon: const Icon(Icons.search,
+                prefixIcon: Icon(Icons.search,
                     size: 18, color: AppTheme.primaryColor),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 16, color: Colors.white60),
+                        icon: Icon(Icons.clear, size: 16, color: AppTheme.dimText(0.6)),
                         onPressed: () {
                           _searchCtrl.clear();
                           _applyFilter('');
@@ -537,12 +537,12 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppTheme.primaryColor),
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
                 ),
               ),
             ),
           ),
-          const Divider(height: 1, color: AppTheme.inputBorderColor),
+          Divider(height: 1, color: AppTheme.inputBorderColor),
           // List of items
           Flexible(
             child: _filtered.isEmpty
@@ -590,7 +590,7 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
                             color: isHighlighted
                                 ? AppTheme.primaryColor.withValues(alpha: 0.18)
                                 : isSelected
-                                    ? Colors.white.withValues(alpha: 0.05)
+                                    ? AppTheme.ink.withValues(alpha: 0.05)
                                     : Colors.transparent,
                             border: Border(
                               left: BorderSide(
@@ -635,7 +635,7 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
                               ],
                               if (isSelected) ...[
                                 const SizedBox(width: 8),
-                                const Icon(
+                                Icon(
                                   Icons.check,
                                   size: 16,
                                   color: AppTheme.primaryColor,
@@ -657,8 +657,8 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
     if (matchedIndices.isEmpty) {
       return Text(
         text,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppTheme.textPrimary,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -673,7 +673,7 @@ class _DropdownOverlayContentState<T> extends State<_DropdownOverlayContent<T>> 
       spans.add(TextSpan(
         text: text[i],
         style: TextStyle(
-          color: isMatched ? AppTheme.accentColor : Colors.white,
+          color: isMatched ? AppTheme.accentColor : AppTheme.textPrimary,
           fontWeight: isMatched ? FontWeight.bold : FontWeight.normal,
           backgroundColor: isMatched
               ? AppTheme.accentColor.withValues(alpha: 0.2)

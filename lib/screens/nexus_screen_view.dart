@@ -273,7 +273,7 @@ extension _NexusScreenView on NexusScreenState {
                         ),
                       ),
                     ),
-                    const VerticalDivider(
+                    VerticalDivider(
                       width: 1,
                       thickness: 1,
                       color: AppTheme.inputBorderColor,
@@ -376,7 +376,7 @@ extension _NexusScreenView on NexusScreenState {
               color: AppTheme.titleColor.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'NEXUS SSH TERMINAL',
               style: TextStyle(
                 color: AppTheme.titleColor,
@@ -386,7 +386,7 @@ extension _NexusScreenView on NexusScreenState {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Press Ctrl+Space to quick-connect to a node',
               textAlign: TextAlign.center,
               style: TextStyle(

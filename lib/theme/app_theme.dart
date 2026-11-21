@@ -15,6 +15,7 @@ enum AppThemeType {
   dracula,
   monokaiPro,
   gruvboxDark,
+  light,
 }
 
 enum AppFontSize {
@@ -37,6 +38,17 @@ class AppPalette {
   final Color errorColor;
   final Color successColor;
   final Color warningColor;
+  final Brightness brightness;
+
+  /// Panel tone between [background] and [surfaceColor]; derived when null.
+  final Color? _surfaceSecondaryColor;
+
+  /// Opaque muted label color; derived from [mutedTextColor] when null.
+  final Color? _mutedColor;
+
+  /// Neutral high-emphasis text; derived when null. Unlike [titleColor],
+  /// which several palettes tint (cyan, purple), this stays neutral.
+  final Color? _primaryTextColor;
 
   const AppPalette({
     required this.id,
@@ -51,7 +63,36 @@ class AppPalette {
     required this.errorColor,
     required this.successColor,
     required this.warningColor,
-  });
+    this.brightness = Brightness.dark,
+    Color? surfaceSecondaryColor,
+    Color? mutedColor,
+    Color? primaryTextColor,
+  })  : _surfaceSecondaryColor = surfaceSecondaryColor,
+        _mutedColor = mutedColor,
+        _primaryTextColor = primaryTextColor;
+
+  Color get primaryTextColor =>
+      _primaryTextColor ??
+      (isLight ? titleColor : Color.lerp(textColor, const Color(0xFFFFFFFF), 0.5)!);
+
+  bool get isLight => brightness == Brightness.light;
+
+  Color get surfaceSecondaryColor =>
+      _surfaceSecondaryColor ?? Color.lerp(background, surfaceColor, 0.5)!;
+
+  /// Opaque muted text that still meets 4.5:1 on [background],
+  /// [surfaceColor] and [surfaceSecondaryColor].
+  Color get mutedColor => _mutedColor ?? (_mutedCache[id] ??= AppContrast.towardContrast(
+      Color.lerp(textColor, background, 0.35)!, textColor,
+      [background, surfaceColor, surfaceSecondaryColor]));
+
+  static final Map<String, Color> _mutedCache = {};
+
+  /// Foreground for text and icons placed on a [primaryColor] fill.
+  Color get onPrimaryColor =>
+      AppContrast.ratio(Colors.white, primaryColor) >= AppContrast.ratio(Colors.black, primaryColor)
+          ? Colors.white
+          : Colors.black;
 
   /// [textColor] faded to [alpha], but never fainter than WCAG AA (4.5:1)
   /// allows on [background] and [surfaceColor]. Keeps the relative
@@ -129,37 +170,76 @@ class AppContrast {
 }
 
 class AppTheme {
-  // Original constant colors for backwards compatibility with const widgets
-  static const Color background = Color(0xFF0D0E12);
-  static const Color surfaceColor = Color(0xFF16181F);
-  static const Color primaryColor = Color(0xFF60A5FA);
-  static const Color accentColor = Color(0xFF34D399);
-  static const Color textColor = Color(0xFF9AA0A6);
-  static const Color titleColor = Color(0xFFE2E4E9);
-  static const Color inputBorderColor = Color(0xFF232630);
-  static const Color errorColor = Color(0xFFF87171);
-  static const Color successColor = Color(0xFF34D399);
-  static const Color warningColor = Color(0xFFFBBF24);
+  // Colors of the active palette. These used to be compile-time constants
+  // fixed to the Antigravity palette; they now follow [currentTheme] so light
+  // palettes apply everywhere.
+  static Color get background => activePalette.background;
+  static Color get surfaceColor => activePalette.surfaceColor;
+  static Color get primaryColor => activePalette.primaryColor;
+  static Color get accentColor => activePalette.accentColor;
+  static Color get textColor => activePalette.textColor;
+  static Color get titleColor => activePalette.titleColor;
+  static Color get inputBorderColor => activePalette.inputBorderColor;
+  static Color get errorColor => activePalette.errorColor;
+  static Color get successColor => activePalette.successColor;
+  static Color get warningColor => activePalette.warningColor;
 
   // Semantic aliases for modern widgets
-  static const Color bgSurface = surfaceColor;
-  static const Color bgSurfaceSecondary = Color(0xFF13151B);
-  static const Color accentPrimary = primaryColor;
-  static const Color borderSubtle = inputBorderColor;
+  static Color get bgSurface => surfaceColor;
+  static Color get bgSurfaceSecondary => activePalette.surfaceSecondaryColor;
+  static Color get accentPrimary => primaryColor;
+  static Color get borderSubtle => inputBorderColor;
 
   /// Field outline for the active theme (meets 3:1); see
   /// [AppPalette.inputOutlineColor].
   static Color get inputOutline => activePalette.inputOutlineColor;
-  static const Color textPrimary = Color(0xFFE2E4E9);
-  static const Color textSecondary = textColor;
-  static const Color textMuted = Color(0xFF7B828E);
-  static const Color statusError = errorColor;
-  static const Color statusSuccess = successColor;
-  static const Color statusWarning = warningColor;
+  static Color get textPrimary => activePalette.primaryTextColor;
+  static Color get textSecondary => textColor;
+  static Color get textMuted => activePalette.mutedColor;
+  static Color get statusError => errorColor;
+  static Color get statusSuccess => successColor;
+  static Color get statusWarning => warningColor;
 
-  /// [textColor] faded to [alpha], floored at WCAG AA on the default
-  /// background and surface. For widgets that use the static colors.
-  static Color dimText(double alpha) => getPalette(AppThemeType.antigravity).dimText(alpha);
+  /// Text/icon color for content on a [primaryColor] fill.
+  static Color get onPrimary => activePalette.onPrimaryColor;
+
+  static bool get isLight => activePalette.isLight;
+
+  /// High-contrast "ink" for overlays (hover tints, shadows-as-highlights):
+  /// white on dark palettes, near-black on light ones.
+  static Color get ink => isLight ? const Color(0xFF111827) : Colors.white;
+
+  /// [textColor] faded to [alpha], floored at WCAG AA on the active
+  /// background and surface.
+  static Color dimText(double alpha) => activePalette.dimText(alpha);
+
+  /// A color picked for a dark UI, carried over to the active palette.
+  ///
+  /// Dark palettes return [c] unchanged. Light palettes mirror its HSL
+  /// lightness: dark surfaces and borders become light ones (kept close to
+  /// white so panels stay distinguishable), and light text and accents
+  /// become dark ones, darkened further if needed to reach 4.5:1 on the
+  /// background. Alpha is preserved.
+  static Color adaptive(Color c) {
+    if (!isLight) return c;
+    final p = activePalette;
+    return _adaptiveCache.putIfAbsent('${p.id}:${c.toARGB32()}', () => adaptToLight(c, p.background));
+  }
+
+  static final Map<String, Color> _adaptiveCache = {};
+
+  /// See [adaptive]; exposed for tests.
+  static Color adaptToLight(Color c, Color background) {
+    final hsl = HSLColor.fromColor(c.withValues(alpha: 1));
+    final l = hsl.lightness;
+    if (l < 0.5) {
+      // Surface / border: 0.0 -> 1.0, 0.5 -> 0.75.
+      return hsl.withLightness(1 - l * 0.5).toColor().withValues(alpha: c.a);
+    }
+    var fg = hsl.withLightness((1 - l).clamp(0.08, 0.45)).toColor();
+    fg = AppContrast.towardContrast(fg, const Color(0xFF000000), [background]);
+    return fg.withValues(alpha: c.a);
+  }
 
   // Current active palette (defaults to antigravity)
   static AppThemeType currentTheme = AppThemeType.antigravity;
@@ -181,6 +261,9 @@ class AppTheme {
       errorColor: Color(0xFFF87171),
       successColor: Color(0xFF34D399),
       warningColor: Color(0xFFFBBF24),
+      surfaceSecondaryColor: Color(0xFF13151B),
+      mutedColor: Color(0xFF7B828E),
+      primaryTextColor: Color(0xFFE2E4E9),
     ),
 
     // 2. Catppuccin Mocha
@@ -358,13 +441,34 @@ class AppTheme {
       successColor: Color(0xFFB8BB26),
       warningColor: Color(0xFFFE8019),
     ),
+
+    // 13. Light (white)
+    AppThemeType.light: const AppPalette(
+      id: 'light',
+      name: 'Light',
+      brightness: Brightness.light,
+      background: Color(0xFFFFFFFF),
+      surfaceColor: Color(0xFFF4F5F7),
+      primaryColor: Color(0xFF2563EB),
+      accentColor: Color(0xFF047857),
+      textColor: Color(0xFF4B5563),
+      titleColor: Color(0xFF111827),
+      inputBorderColor: Color(0xFFE2E5EA),
+      errorColor: Color(0xFFB91C1C),
+      successColor: Color(0xFF047857),
+      warningColor: Color(0xFFA16207),
+      surfaceSecondaryColor: Color(0xFFF9FAFB),
+    ),
   };
 
   static AppPalette getPalette(AppThemeType type) {
     return _palettes[type] ?? _palettes[AppThemeType.antigravity]!;
   }
 
-  static ThemeData get darkTheme => getThemeData(currentTheme);
+  static ThemeData get theme => getThemeData(currentTheme);
+
+  @Deprecated('Use AppTheme.theme; the active palette may be light.')
+  static ThemeData get darkTheme => theme;
 
   // Cached per type: ThemeData holds WidgetStateProperty closures that never
   // compare equal, so a fresh instance on every settings-driven MaterialApp
@@ -376,16 +480,26 @@ class AppTheme {
 
   static ThemeData _buildThemeData(AppThemeType type) {
     final palette = getPalette(type);
+    final scheme = palette.isLight
+        ? ColorScheme.light(
+            primary: palette.primaryColor,
+            onPrimary: palette.onPrimaryColor,
+            secondary: palette.accentColor,
+            surface: palette.surfaceColor,
+            onSurface: palette.titleColor,
+            error: palette.errorColor,
+          )
+        : ColorScheme.dark(
+            primary: palette.primaryColor,
+            secondary: palette.accentColor,
+            surface: palette.surfaceColor,
+            error: palette.errorColor,
+          );
     return ThemeData(
-      brightness: Brightness.dark,
+      brightness: palette.brightness,
       scaffoldBackgroundColor: palette.background,
       fontFamily: 'Courier',
-      colorScheme: ColorScheme.dark(
-        primary: palette.primaryColor,
-        secondary: palette.accentColor,
-        surface: palette.surfaceColor,
-        error: palette.errorColor,
-      ),
+      colorScheme: scheme,
       appBarTheme: AppBarTheme(
         backgroundColor: palette.background,
         elevation: 0,
@@ -420,7 +534,7 @@ class AppTheme {
           }
           return Colors.transparent;
         }),
-        checkColor: const WidgetStatePropertyAll(Colors.white),
+        checkColor: WidgetStatePropertyAll(palette.isLight ? palette.onPrimaryColor : Colors.white),
       ),
       scrollbarTheme: const ScrollbarThemeData(
         thumbVisibility: WidgetStatePropertyAll(false),
@@ -451,6 +565,8 @@ class AppTheme {
       textTheme: TextTheme(
         bodyMedium: TextStyle(color: palette.textColor, fontFamily: 'Courier'),
         bodyLarge: TextStyle(color: palette.textColor, fontFamily: 'Courier'),
+        bodySmall: TextStyle(color: palette.textColor, fontFamily: 'Courier'),
+        titleMedium: TextStyle(color: palette.titleColor, fontFamily: 'Courier'),
         titleLarge: TextStyle(
           color: palette.primaryColor,
           fontFamily: 'Courier',

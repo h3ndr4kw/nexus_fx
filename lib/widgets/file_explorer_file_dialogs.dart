@@ -60,19 +60,19 @@ class _FileExplorerViewFileDialogState
                   const Spacer(),
                   ElevatedButton.icon(
                     icon: _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.black,
+                              color: AppTheme.onPrimary,
                             ),
                           )
                         : const Icon(Icons.save, size: 16),
                     label: const Text('Save'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _Dlg.accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: AppTheme.onPrimary,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
@@ -88,14 +88,14 @@ class _FileExplorerViewFileDialogState
               liveRegion: true,
               child: Container(
                 width: double.infinity,
-                color: const Color(0xFF2B1D20),
+                color: AppTheme.adaptive(const Color(0xFF2B1D20)),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 8,
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline,
                       size: 16,
                       color: _Dlg.danger,
@@ -104,7 +104,7 @@ class _FileExplorerViewFileDialogState
                     Expanded(
                       child: Text(
                         _saveError!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: _Dlg.danger,
                         ),
@@ -123,7 +123,7 @@ class _FileExplorerViewFileDialogState
                 maxLines: null,
                 expands: true,
                 readOnly: widget.readOnly,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 12,
                   color: _Dlg.textPrimary,
@@ -256,7 +256,7 @@ class _FileExplorerOpenWithDialogState
         icon: Icons.open_in_new,
         width: 520,
         onClose: () => Navigator.of(context).pop(null),
-        footerLeading: const Text(
+        footerLeading: Text(
           '↑/↓ or j/k to move  ·  1-5 to choose  ·  Enter to open',
           style: TextStyle(fontSize: 11, color: _Dlg.textMuted),
         ),
@@ -277,7 +277,7 @@ class _FileExplorerOpenWithDialogState
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.insert_drive_file_outlined,
                     size: 14,
                     color: _Dlg.textSecondary,
@@ -287,7 +287,7 @@ class _FileExplorerOpenWithDialogState
                     child: Text(
                       widget.fileName,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: _Dlg.textPrimary,
                       ),
@@ -296,7 +296,7 @@ class _FileExplorerOpenWithDialogState
                 ],
               ),
             ),
-            const Divider(height: 1, thickness: 1, color: _Dlg.divider),
+            Divider(height: 1, thickness: 1, color: _Dlg.divider),
             for (var idx = 0; idx < _options.length; idx++)
               _buildOption(idx),
           ],
@@ -331,7 +331,7 @@ class _FileExplorerOpenWithDialogState
           onTap: () => _submit(opt),
           trailing: [
             if (isDefault)
-              const PaletteBadge(text: 'DEFAULT', color: _Dlg.accent),
+              PaletteBadge(text: 'DEFAULT', color: _Dlg.accent),
             _Keycap('${idx + 1}'),
           ],
         ),

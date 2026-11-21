@@ -7,9 +7,9 @@ import '../theme/app_theme.dart';
 
 /// Badge colors for session kinds, shared by the pickers.
 class PaletteColors {
-  static const Color local = Color(0xFF64B5F6);
-  static const Color ssh = Color(0xFFFF7043);
-  static const Color web = Color(0xFF4DB6AC);
+  static Color get local => AppTheme.adaptive(const Color(0xFF64B5F6));
+  static Color get ssh => AppTheme.adaptive(const Color(0xFFFF7043));
+  static Color get web => AppTheme.adaptive(const Color(0xFF4DB6AC));
 }
 
 /// Top-anchored card holding a [PaletteSearchHeader], a list and an optional
@@ -56,13 +56,13 @@ class PaletteFrame extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             header,
-            const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
+            Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
             ConstrainedBox(
               constraints: BoxConstraints(maxHeight: maxBodyHeight),
               child: body,
             ),
             if (footer != null) ...[
-              const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
+              Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
               footer!,
             ],
           ],
@@ -98,17 +98,17 @@ class PaletteSearchHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          const Icon(Icons.search, size: 20, color: AppTheme.accentPrimary),
+          Icon(Icons.search, size: 20, color: AppTheme.accentPrimary),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: controller,
               focusNode: focusNode,
               autofocus: true,
-              style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 14, color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: const TextStyle(fontSize: 14, color: AppTheme.textMuted),
+                hintStyle: TextStyle(fontSize: 14, color: AppTheme.textMuted),
                 // Theme sets enabled/focused outlines; the card is the field,
                 // so suppress every state.
                 border: InputBorder.none,
@@ -154,7 +154,7 @@ class PaletteEscKeycap extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: AppTheme.inputOutline),
           ),
-          child: const Text(
+          child: Text(
             'ESC',
             style: TextStyle(
               fontSize: 9,
@@ -250,7 +250,7 @@ class PaletteRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = AppTheme.accentPrimary;
+    final accent = AppTheme.accentPrimary;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -261,7 +261,7 @@ class PaletteRow extends StatelessWidget {
               color: isSelected ? accent : Colors.transparent,
               width: 3,
             ),
-            bottom: const BorderSide(color: AppTheme.borderSubtle),
+            bottom: BorderSide(color: AppTheme.borderSubtle),
           ),
         ),
         padding: const EdgeInsets.fromLTRB(13, 0, 16, 0),
@@ -296,7 +296,7 @@ class PaletteRow extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,

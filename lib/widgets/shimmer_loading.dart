@@ -5,17 +5,20 @@ import '../theme/app_theme.dart';
 
 class ShimmerEffect extends StatefulWidget {
   final Widget child;
-  final Color baseColor;
-  final Color highlightColor;
+  final Color? _baseColor;
+  final Color? _highlightColor;
+  Color get baseColor => _baseColor ?? AppTheme.adaptive(const Color(0xFF1B2433));
+  Color get highlightColor => _highlightColor ?? AppTheme.adaptive(const Color(0xFF2E3D56));
 
   static bool enableAnimation = true;
 
   const ShimmerEffect({
     super.key,
     required this.child,
-    this.baseColor = const Color(0xFF1B2433),
-    this.highlightColor = const Color(0xFF2E3D56),
-  });
+    Color? baseColor,
+    Color? highlightColor,
+  })  : _baseColor = baseColor,
+        _highlightColor = highlightColor;
 
   @override
   State<ShimmerEffect> createState() => _ShimmerEffectState();

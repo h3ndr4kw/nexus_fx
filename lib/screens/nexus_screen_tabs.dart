@@ -307,9 +307,9 @@ extension _NexusTabOps on NexusScreenState {
         backgroundColor: AppTheme.surfaceColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppTheme.inputBorderColor),
+          side: BorderSide(color: AppTheme.inputBorderColor),
         ),
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: AppTheme.warningColor, size: 20),
             SizedBox(width: 8),
@@ -325,7 +325,7 @@ extension _NexusTabOps on NexusScreenState {
         ),
         content: Text(
           'Are you sure you want to close all $totalCount active SSH connections?',
-          style: const TextStyle(
+          style: TextStyle(
             color: AppTheme.textColor,
             fontSize: 13,
           ),
@@ -333,7 +333,7 @@ extension _NexusTabOps on NexusScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.textColor)),
+            child: Text('Cancel', style: TextStyle(color: AppTheme.textColor)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -375,7 +375,7 @@ extension _NexusTabOps on NexusScreenState {
       elevation: 6,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: AppTheme.inputBorderColor),
+        side: BorderSide(color: AppTheme.inputBorderColor),
       ),
       items: [
         PopupMenuItem<String>(
@@ -391,12 +391,12 @@ extension _NexusTabOps on NexusScreenState {
               const SizedBox(width: 8),
               Text(
                 identical(_fullscreen.target, conn) ? 'Exit Fullscreen' : 'Fullscreen',
-                style: const TextStyle(fontSize: 12, color: AppTheme.textColor),
+                style: TextStyle(fontSize: 12, color: AppTheme.textColor),
               ),
             ],
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'duplicate',
           height: 36,
           child: Row(
@@ -407,7 +407,7 @@ extension _NexusTabOps on NexusScreenState {
             ],
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'close',
           height: 36,
           child: Row(
@@ -441,7 +441,7 @@ extension _NexusTabOps on NexusScreenState {
           ),
         ),
         const PopupMenuDivider(height: 1),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'close_all',
           height: 36,
           child: Row(
@@ -454,7 +454,7 @@ extension _NexusTabOps on NexusScreenState {
         ),
         if (conn.logFile != null) ...[
           const PopupMenuDivider(height: 1),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'copy_log_path',
             height: 36,
             child: Row(
@@ -539,7 +539,7 @@ extension _NexusTabOps on NexusScreenState {
                     shape: BoxShape.circle,
                     color: pColor.primary,
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3),
+                      color: AppTheme.ink.withValues(alpha: 0.3),
                       width: 1,
                     ),
                   ),

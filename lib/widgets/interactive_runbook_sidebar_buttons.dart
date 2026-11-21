@@ -40,11 +40,11 @@ class _SidebarToolbarButtonState extends State<_SidebarToolbarButton> {
 
     final Color hoverColor = widget.isDanger
         ? widget.palette.errorColor
-        : Colors.white;
+        : AppTheme.ink;
 
     final Color hoverBgColor = widget.isDanger
         ? widget.palette.errorColor.withValues(alpha: 0.18)
-        : Colors.white.withValues(alpha: 0.1);
+        : AppTheme.ink.withValues(alpha: 0.1);
 
     final displayIconColor = enabled
         ? (_isHovered ? hoverColor : effectiveIdleColor)
@@ -129,7 +129,7 @@ class _SidebarCaptionCloseButtonState
             Icons.close,
             size: 14,
             color: _isHovered
-                ? Colors.white
+                ? AppTheme.ink
                 : widget.palette.dimText(0.7),
           ),
         ),
@@ -165,7 +165,7 @@ class _SidebarTabCloseButtonState extends State<_SidebarTabCloseButton> {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
       splashRadius: 12,
-      hoverColor: Colors.white.withValues(alpha: 0.12),
+      hoverColor: AppTheme.ink.withValues(alpha: 0.12),
       style: IconButton.styleFrom(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(3),
@@ -178,7 +178,7 @@ class _SidebarTabCloseButtonState extends State<_SidebarTabCloseButton> {
           Icons.close,
           size: 13,
           color: _isHovered
-              ? Colors.white
+              ? AppTheme.ink
               : widget.palette.dimText(0.7),
         ),
       ),

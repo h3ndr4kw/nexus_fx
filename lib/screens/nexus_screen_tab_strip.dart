@@ -379,7 +379,7 @@ extension _NexusTabStrip on NexusScreenState {
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(right: 8),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppTheme.successColor,
                 ),

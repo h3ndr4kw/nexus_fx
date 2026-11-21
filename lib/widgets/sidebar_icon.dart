@@ -128,7 +128,7 @@ class _SidebarToggleButtonState extends State<SidebarToggleButton> {
             ? 'Hide Sidebar (Ctrl+B)'
             : 'Show Sidebar (Ctrl+B)');
 
-    final iconColor = _isHovered ? Colors.white : AppTheme.textColor;
+    final iconColor = _isHovered ? AppTheme.ink : AppTheme.textColor;
 
     return Tooltip(
       message: effectiveTooltip,
@@ -145,7 +145,7 @@ class _SidebarToggleButtonState extends State<SidebarToggleButton> {
             height: widget.height,
             decoration: BoxDecoration(
               color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
+                  ? AppTheme.ink.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -286,7 +286,7 @@ class _RightSidebarToggleButtonState extends State<RightSidebarToggleButton> {
   Widget build(BuildContext context) {
     final effectiveTooltip =
         widget.tooltip ?? 'Toggle Runbook Sidebar (Ctrl+Shift+B)';
-    final iconColor = _isHovered ? Colors.white : AppTheme.textColor;
+    final iconColor = _isHovered ? AppTheme.ink : AppTheme.textColor;
 
     return Tooltip(
       message: effectiveTooltip,
@@ -303,7 +303,7 @@ class _RightSidebarToggleButtonState extends State<RightSidebarToggleButton> {
             height: widget.height,
             decoration: BoxDecoration(
               color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
+                  ? AppTheme.ink.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -505,7 +505,7 @@ class _FullscreenToggleButtonState extends State<FullscreenToggleButton> {
             : 'Full Screen (F11)');
 
     final iconColor = _isHovered
-        ? Colors.white
+        ? AppTheme.ink
         : (effectiveIsFullScreen
             ? AppTheme.textPrimary
             : AppTheme.textSecondary);
@@ -525,7 +525,7 @@ class _FullscreenToggleButtonState extends State<FullscreenToggleButton> {
             height: widget.height,
             decoration: BoxDecoration(
               color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
+                  ? AppTheme.ink.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(4),
             ),

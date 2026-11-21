@@ -306,12 +306,12 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
                     color: AppTheme.statusError.withValues(alpha: 0.15),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, size: 16, color: AppTheme.statusError),
+                        Icon(Icons.error_outline, size: 16, color: AppTheme.statusError),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: const TextStyle(fontSize: 12, color: AppTheme.statusError),
+                            style: TextStyle(fontSize: 12, color: AppTheme.statusError),
                           ),
                         ),
                       ],
@@ -322,14 +322,14 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildCategoryTree(),
-                      const VerticalDivider(width: 1, thickness: 1, color: AppTheme.borderSubtle),
+                      VerticalDivider(width: 1, thickness: 1, color: AppTheme.borderSubtle),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: _buildCategoryContent(),
                         ),
                       ),
-                      const VerticalDivider(width: 1, thickness: 1, color: AppTheme.borderSubtle),
+                      VerticalDivider(width: 1, thickness: 1, color: AppTheme.borderSubtle),
                       _buildActionButtons(),
                     ],
                   ),
@@ -359,17 +359,17 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.bgSurfaceSecondary,
             border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.settings_ethernet, size: 18, color: AppTheme.accentPrimary),
+              Icon(Icons.settings_ethernet, size: 18, color: AppTheme.accentPrimary),
               const SizedBox(width: 8),
               Text(
                 widget.initialSession == null ? 'Properties of New Session' : 'Properties of ${widget.initialSession!.name}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -377,7 +377,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.close, size: 18, color: AppTheme.textSecondary),
+                icon: Icon(Icons.close, size: 18, color: AppTheme.textSecondary),
                 onPressed: () => Navigator.of(context).pop(),
                 splashRadius: 16,
                 padding: EdgeInsets.zero,
@@ -398,7 +398,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Text(
               'Category:',
@@ -480,7 +480,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
 
     return Row(
       children: [
-        const SizedBox(
+        SizedBox(
           width: 110,
           child: Text('Folder:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
         ),
@@ -513,7 +513,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 110,
                 child: Text('Protocol:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -540,7 +540,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
             Material(
               type: MaterialType.transparency,
               child: CheckboxListTile(
-                title: const Text(
+                title: Text(
                   'Enable Web (show WEB in Ctrl+Space to open the device web UI)',
                   style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                 ),
@@ -556,7 +556,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 110,
                   child: Text('MAC Algorithm:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                 ),
@@ -588,7 +588,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           Material(
             type: MaterialType.transparency,
             child: CheckboxListTile(
-              title: const Text(
+              title: Text(
                 'Reconnect automatically if connection is terminated unexpectedly',
                 style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
               ),
@@ -615,7 +615,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
 
   Widget _buildAuthenticationTab() {
     if (_protocol == SessionProtocol.local) {
-      return const Center(
+      return Center(
         child: Text(
           'Local shell inherits current user permissions. No authentication required.',
           style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
@@ -631,7 +631,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 110,
                 child: Text('Method:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -651,7 +651,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           if (_authMethod == AuthMethod.password) ...[
             Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 110,
                   child: Text('Password:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                 ),
@@ -659,7 +659,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
                   child: TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -685,10 +685,10 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           TextField(
             controller: _loginScriptController,
             maxLines: 4,
-            style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 12, fontFamily: 'Consolas', color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: 'e.g.\nsudo su -\nexport TERM=xterm-256color',
-              hintStyle: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+              hintStyle: TextStyle(fontSize: 11, color: AppTheme.textMuted),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
             ),
           ),
@@ -699,7 +699,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
 
   Widget _buildTunnelingTab() {
     if (_protocol == SessionProtocol.local) {
-      return const Center(
+      return Center(
         child: Text(
           'Tunneling / Jump Host is not applicable for Local Shell.',
           style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
@@ -718,7 +718,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           _buildSectionHeader('SSH Tunneling / Jump Host'),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 130,
                 child: Text('Connection Mode:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -747,7 +747,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           if (_jumpHostMode == JumpHostMode.existingSession) ...[
             Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 130,
                   child: Text('Jump Session:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                 ),
@@ -779,7 +779,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           _buildSectionHeader('Multiplexing Mode'),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 130,
                 child: Text('Tunnel Mode:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -822,7 +822,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
         Material(
           type: MaterialType.transparency,
           child: CheckboxListTile(
-            title: const Text(
+            title: Text(
               'Automatically log terminal session output to file upon connection',
               style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
             ),
@@ -842,7 +842,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary),
       ),
     );
   }
@@ -861,7 +861,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
       children: [
         SizedBox(
           width: labelWidth,
-          child: Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+          child: Text(label, style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
         ),
         SizedBox(
           width: width,
@@ -870,7 +870,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
                   controller: controller,
                   maxLines: maxLines,
                   obscureText: obscureText,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                  style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                   decoration: InputDecoration(
                     hintText: hintText,
                     isDense: true,
@@ -886,7 +886,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
               controller: controller,
               maxLines: maxLines,
               obscureText: obscureText,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 hintText: hintText,
                 isDense: true,
@@ -921,7 +921,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.accentPrimary,
-              side: const BorderSide(color: AppTheme.accentPrimary),
+              side: BorderSide(color: AppTheme.accentPrimary),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(double.infinity, 34),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -933,7 +933,7 @@ class _SessionPropertiesDialogState extends State<SessionPropertiesDialog> {
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.borderSubtle),
+              side: BorderSide(color: AppTheme.borderSubtle),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(double.infinity, 34),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),

@@ -57,7 +57,7 @@ class _SessionImportDialogState extends State<SessionImportDialog> {
       backgroundColor: AppTheme.bgSurface,
       title: Text(
         'Import from ${widget.sourceLabel}',
-        style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+        style: TextStyle(fontSize: 14, color: AppTheme.textPrimary),
       ),
       content: SizedBox(
         width: 560,
@@ -66,7 +66,7 @@ class _SessionImportDialogState extends State<SessionImportDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (hosts.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text('No SSH hosts found.', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
               )
@@ -75,7 +75,7 @@ class _SessionImportDialogState extends State<SessionImportDialog> {
                 children: [
                   Text(
                     '${hosts.length} host${hosts.length == 1 ? '' : 's'} found',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                   const Spacer(),
                   TextButton(
@@ -104,10 +104,10 @@ class _SessionImportDialogState extends State<SessionImportDialog> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, size: 14, color: AppTheme.statusWarning),
+                      Icon(Icons.info_outline, size: 14, color: AppTheme.statusWarning),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(w, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                        child: Text(w, style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
                       ),
                     ],
                   ),
@@ -154,21 +154,21 @@ class _SessionImportDialogState extends State<SessionImportDialog> {
             child: Text(
               h.name,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
             ),
           ),
           if (_duplicate[i]) ...[
             const SizedBox(width: 8),
-            const Text('already saved', style: TextStyle(fontSize: 11, color: AppTheme.statusWarning)),
+            Text('already saved', style: TextStyle(fontSize: 11, color: AppTheme.statusWarning)),
           ],
         ],
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(details.join('  ·  '), style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+          Text(details.join('  ·  '), style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
           for (final n in h.notes)
-            Text(n, style: const TextStyle(fontSize: 11, color: AppTheme.statusWarning)),
+            Text(n, style: TextStyle(fontSize: 11, color: AppTheme.statusWarning)),
         ],
       ),
     );

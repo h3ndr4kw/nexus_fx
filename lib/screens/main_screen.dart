@@ -596,7 +596,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         content: Text(
           '$count file transfer(s) are still running. Quitting cancels them and '
           'may leave incomplete files at the destination.',
-          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
@@ -629,7 +629,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         title: Text('Exit ${widget.appTitle}?'),
         content: Text(
           'Are you sure you want to exit ${widget.appTitle}? Any running terminal sessions will be terminated.$transferNote',
-          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
@@ -716,6 +716,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         });
         break;
       case CommandAction.setTheme:
+        if (item.appTheme != null) {
+          SettingsService.instance.setAppTheme(item.appTheme!);
+        }
         break;
       case CommandAction.setFontSize:
         break;
@@ -909,10 +912,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       elevation: 6,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: AppTheme.inputBorderColor),
+        side: BorderSide(color: AppTheme.inputBorderColor),
       ),
       items: [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'new_tab',
           height: 36,
           child: Row(
@@ -926,7 +929,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             ],
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'close',
           height: 36,
           child: Row(
@@ -963,7 +966,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           ),
         ),
         const PopupMenuDivider(height: 1),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'close_all',
           height: 36,
           child: Row(
@@ -1090,13 +1093,13 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   padding: const EdgeInsets.only(left: 12, right: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.bolt, size: 18, color: AppTheme.accentPrimary),
+                      Icon(Icons.bolt, size: 18, color: AppTheme.accentPrimary),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           widget.appTitle,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
@@ -1499,7 +1502,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       children: [
         Container(
           height: 38,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.bgSurfaceSecondary,
             border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
           ),
@@ -1624,7 +1627,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    color: isActive ? Colors.white : AppTheme.textSecondary,
+                    color: isActive ? AppTheme.ink : AppTheme.textSecondary,
                   ),
                 ),
               ),
@@ -1642,7 +1645,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                       Icons.close,
                       size: 13,
                       color: isActive
-                          ? Colors.white70
+                          ? AppTheme.ink.withValues(alpha: 0.7)
                           : AppTheme.textSecondary.withValues(alpha: 0.6),
                     ),
                   ),
@@ -1665,7 +1668,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           width: 34,
           height: 38,
           alignment: Alignment.center,
-          child: const Icon(
+          child: Icon(
             Icons.add,
             size: 18,
             color: AppTheme.textSecondary,
@@ -1678,7 +1681,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   Widget _buildFileExplorerCloseAllButton() {
     return Container(
       height: 38,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           left: BorderSide(color: AppTheme.borderSubtle),
         ),
@@ -1729,7 +1732,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Application & Terminal Settings',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
           ),
@@ -1738,7 +1741,27 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           const SizedBox(height: 12),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
+                width: 140,
+                child: Text('App Theme:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ),
+              SizedBox(
+                width: 280,
+                child: FuzzySearchableDropdown<AppThemeType>(
+                  items: AppThemeType.values,
+                  selectedItem: settings.appTheme,
+                  itemLabel: (t) => AppTheme.getPalette(t).name,
+                  onChanged: (val) {
+                    if (val != null) settings.setAppTheme(val);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
                 width: 140,
                 child: Text('Terminal Theme:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -1761,7 +1784,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           const SizedBox(height: 12),
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 140,
                 child: Text('Terminal Font:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -1785,7 +1808,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 140,
                 child: Text('Terminal Font Size:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -1823,7 +1846,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppTheme.inputBorderColor),
                     ),
-                    child: const Icon(Icons.remove, size: 14, color: AppTheme.textSecondary),
+                    child: Icon(Icons.remove, size: 14, color: AppTheme.textSecondary),
                   ),
                 ),
               ),
@@ -1847,7 +1870,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppTheme.inputBorderColor),
                     ),
-                    child: const Icon(Icons.add, size: 14, color: AppTheme.textSecondary),
+                    child: Icon(Icons.add, size: 14, color: AppTheme.textSecondary),
                   ),
                 ),
               ),
@@ -1862,7 +1885,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.terminal, size: 15, color: AppTheme.accentPrimary),
+                    Icon(Icons.terminal, size: 15, color: AppTheme.accentPrimary),
                     const SizedBox(width: 8),
                     Text(
                       'nexus@terminal:~ \$',
@@ -1875,7 +1898,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                     const SizedBox(width: 8),
                     Text(
                       '(${settings.nexusTerminalFontSize.toInt()} pt)',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppTheme.textMuted,
                       ),
@@ -1888,9 +1911,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           const SizedBox(height: 8),
           CheckboxListTile(
             key: const ValueKey('settings_reduce_motion'),
-            title: const Text('Reduce motion',
+            title: Text('Reduce motion',
                 style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
-            subtitle: const Text(
+            subtitle: Text(
               'Stop looping animations (tab beacons, animated borders, loading shimmer). '
               'Also on automatically when animation effects are turned off in Windows.',
               style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
@@ -1916,13 +1939,13 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               NexusTabStyle.attached => 'Tab aktif menyatu langsung dengan area terminal di bawahnya, '
                   'sedangkan tombol Close All dibuat netral agar tidak tertekan tidak sengaja.',
             },
-            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
           ),
           const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 140,
                 child: Text('Tab Style:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -1946,7 +1969,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           const SizedBox(height: 24),
           _buildSettingsSection('SSH Session Tab Beacon Indicator'),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Indikator denyut pada tab sesi SSH aktif (Nexus workspace) menandakan sesi terhubung dan terfokus.',
             style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
           ),
@@ -1954,7 +1977,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 140,
                 child: Text('Pulse Style:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -1990,7 +2013,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                     const SizedBox(width: 6),
                     Text(
                       'Preview: ${settings.nexusPulseStyle.label}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppTheme.textSecondary,
                         fontWeight: FontWeight.w500,
@@ -2005,7 +2028,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 140,
                 child: Text('Pulse Color:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ),
@@ -2050,8 +2073,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                               ),
                               border: Border.all(
                                 color: settings.nexusPulseColor == pc
-                                    ? Colors.white
-                                    : Colors.white.withValues(alpha: 0.25),
+                                    ? AppTheme.ink
+                                    : AppTheme.ink.withValues(alpha: 0.25),
                                 width: settings.nexusPulseColor == pc ? 2.5 : 1,
                               ),
                               boxShadow: settings.nexusPulseColor == pc
@@ -2080,7 +2103,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           const SizedBox(height: 24),
           _buildSettingsSection('Startup & Sessions'),
           CheckboxListTile(
-            title: const Text('Show Sessions Manager dialog at startup', style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
+            title: Text('Show Sessions Manager dialog at startup', style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
             value: settings.showSessionDialogAtStartup,
             onChanged: (val) {
               settings.setShowSessionDialogAtStartup(val ?? true);
@@ -2094,11 +2117,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           _buildSettingsSection('File Transfers'),
           CheckboxListTile(
             key: const ValueKey('settings_transfer_notifications'),
-            title: const Text('Desktop notifications for file transfers',
+            title: Text('Desktop notifications for file transfers',
                 style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
             subtitle: Text(
               'Only while ${widget.appTitle} is in the background: when a copy/move longer than 10 s finishes, any transfer fails, or a name conflict needs your decision.',
-              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
             ),
             value: settings.transferNotifications,
             onChanged: (val) {
@@ -2113,8 +2136,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           _buildSettingsSection('Keyboard Shortcuts & Assistance'),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('View All Keyboard Shortcuts', style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
-            subtitle: const Text('See shortcuts for navigation, terminal workspace, sessions, and explorer', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+            title: Text('View All Keyboard Shortcuts', style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
+            subtitle: Text('See shortcuts for navigation, terminal workspace, sessions, and explorer', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
             trailing: OutlinedButton.icon(
               icon: const Icon(Icons.keyboard_outlined, size: 14),
               label: const Text('View Shortcuts (F1)', style: TextStyle(fontSize: 11)),
@@ -2155,7 +2178,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.accentPrimary,
-                  side: const BorderSide(color: AppTheme.accentPrimary),
+                  side: BorderSide(color: AppTheme.accentPrimary),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
                 icon: const Icon(Icons.file_download_outlined, size: 16),
@@ -2189,10 +2212,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.accentPrimary),
         ),
         const SizedBox(height: 4),
-        const Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
+        Divider(height: 1, thickness: 1, color: AppTheme.borderSubtle),
       ],
     );
   }
@@ -2217,7 +2240,7 @@ class _SettingsTopBarButtonState extends State<_SettingsTopBarButton> {
   @override
   Widget build(BuildContext context) {
     final iconColor = _isHovered
-        ? Colors.white
+        ? AppTheme.ink
         : (widget.isSelected ? AppTheme.accentPrimary : AppTheme.textSecondary);
 
     return Tooltip(
@@ -2236,7 +2259,7 @@ class _SettingsTopBarButtonState extends State<_SettingsTopBarButton> {
             decoration: BoxDecoration(
               color: widget.isSelected
                   ? AppTheme.accentPrimary.withValues(alpha: 0.15)
-                  : (_isHovered ? Colors.white.withValues(alpha: 0.1) : Colors.transparent),
+                  : (_isHovered ? AppTheme.ink.withValues(alpha: 0.1) : Colors.transparent),
               borderRadius: BorderRadius.circular(4),
               border: widget.isSelected
                   ? Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.4))
@@ -2271,7 +2294,7 @@ class _SessionManagerTopBarButtonState extends State<_SessionManagerTopBarButton
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = _isHovered ? Colors.white : AppTheme.textSecondary;
+    final iconColor = _isHovered ? AppTheme.ink : AppTheme.textSecondary;
 
     return Tooltip(
       message: 'Session Manager',
@@ -2289,7 +2312,7 @@ class _SessionManagerTopBarButtonState extends State<_SessionManagerTopBarButton
             height: 28.0,
             decoration: BoxDecoration(
               color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
+                  ? AppTheme.ink.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -2325,7 +2348,7 @@ class _KeyboardShortcutsTopBarButtonState
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = _isHovered ? Colors.white : AppTheme.textSecondary;
+    final iconColor = _isHovered ? AppTheme.ink : AppTheme.textSecondary;
 
     return Tooltip(
       message: 'Keyboard Shortcuts (F1 / Ctrl+/)',
@@ -2343,7 +2366,7 @@ class _KeyboardShortcutsTopBarButtonState
             height: 28.0,
             decoration: BoxDecoration(
               color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
+                  ? AppTheme.ink.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -2386,14 +2409,14 @@ class _FileExplorerTabTransferBadge extends StatelessWidget {
           child: Tooltip(
             message: tooltip,
             child: needsAttention
-                ? const Icon(Icons.warning_amber_rounded,
+                ? Icon(Icons.warning_amber_rounded,
                     size: 13, color: AppTheme.statusWarning)
-                : const SizedBox(
+                : SizedBox(
                     width: 10,
                     height: 10,
                     child: CircularProgressIndicator(
                       strokeWidth: 1.5,
-                      color: Color(0xFF56B6C2),
+                      color: AppTheme.adaptive(const Color(0xFF56B6C2)),
                     ),
                   ),
           ),

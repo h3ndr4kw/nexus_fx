@@ -163,7 +163,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
               ],
               Text(
                 widget.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -172,7 +172,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
               const Spacer(),
               if (widget.actions != null) ...widget.actions!,
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.close,
                   size: 16,
                   color: AppTheme.textSecondary,

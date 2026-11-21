@@ -498,10 +498,10 @@ class ScriptCellWidgetState extends State<ScriptCellWidget> {
                                   ),
                                 )
                               : (isSent && !hasSelection)
-                              ? const Icon(
+                              ? Icon(
                                   Icons.check_rounded,
                                   size: 16,
-                                  color: Color(0xFF66BB6A),
+                                  color: AppTheme.adaptive(const Color(0xFF66BB6A)),
                                 )
                               : Icon(
                                   Icons.play_arrow_outlined,

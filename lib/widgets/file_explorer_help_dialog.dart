@@ -28,7 +28,7 @@ class FileExplorerHelpDialog extends StatelessWidget {
         icon: Icons.keyboard_outlined,
         width: 620,
         onClose: () => Navigator.of(context).pop(),
-        footerLeading: const Text(
+        footerLeading: Text(
           'Press Enter or Esc to close',
           style: TextStyle(fontSize: 11, color: _Dlg.textMuted),
         ),
@@ -107,7 +107,7 @@ class _ShortcutRow extends StatelessWidget {
                 ),
                 child: Text(
                   keyLabel,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: _Dlg.textSecondary,
@@ -119,7 +119,7 @@ class _ShortcutRow extends StatelessWidget {
           Expanded(
             child: Text(
               description,
-              style: const TextStyle(fontSize: 12.5, color: _Dlg.textPrimary),
+              style: TextStyle(fontSize: 12.5, color: _Dlg.textPrimary),
             ),
           ),
         ],

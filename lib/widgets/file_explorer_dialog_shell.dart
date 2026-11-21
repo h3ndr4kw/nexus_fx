@@ -10,27 +10,31 @@ part of 'file_explorer_dialogs.dart';
 class _Dlg {
   const _Dlg._();
 
-  static const Color surface = AppTheme.bgSurface;
-  static const Color field = AppTheme.bgSurfaceSecondary;
-  static const Color editor = Color(0xFF111318);
-  static const Color divider = AppTheme.borderSubtle;
+  static Color get surface => AppTheme.bgSurface;
+  static Color get field => AppTheme.bgSurfaceSecondary;
+  static Color get editor =>
+      AppTheme.isLight ? AppTheme.bgSurfaceSecondary : const Color(0xFF111318);
+  static Color get divider => AppTheme.borderSubtle;
 
   /// Accent at 8% on [surface]: the palette's selected-row tint.
-  static const Color selected = Color(0xFF1C2330);
+  static Color get selected => AppTheme.isLight
+      ? Color.alphaBlend(AppTheme.accentPrimary.withValues(alpha: 0.10), surface)
+      : const Color(0xFF1C2330);
 
   /// Field and unselected-control boundary (3:1 on [surface] and [field]).
-  static const Color outline = Color(0xFF6B7280);
+  static Color get outline =>
+      AppTheme.isLight ? const Color(0xFF8A919C) : const Color(0xFF6B7280);
 
-  static const Color textPrimary = AppTheme.textPrimary;
-  static const Color textSecondary = AppTheme.textSecondary;
-  static const Color textMuted = AppTheme.textMuted;
+  static Color get textPrimary => AppTheme.textPrimary;
+  static Color get textSecondary => AppTheme.textSecondary;
+  static Color get textMuted => AppTheme.textMuted;
 
   static const OutlinedBorder buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(6)),
   );
 
-  static const Color accent = AppTheme.accentPrimary;
-  static const Color danger = AppTheme.errorColor;
+  static Color get accent => AppTheme.accentPrimary;
+  static Color get danger => AppTheme.errorColor;
 }
 
 const _titleAcronyms = {
@@ -67,7 +71,7 @@ String _displayTitle(String title) {
 class _DialogShell extends StatelessWidget {
   final String title;
   final IconData? icon;
-  final Color accent;
+  final Color? accent;
   final double width;
   final double? height;
   final VoidCallback? onClose;
@@ -89,7 +93,7 @@ class _DialogShell extends StatelessWidget {
     required this.width,
     this.height,
     this.icon,
-    this.accent = _Dlg.accent,
+    this.accent,
     this.onClose,
     this.actions,
     this.footerLeading,
@@ -140,10 +144,10 @@ class _DialogShell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _header(),
-              const Divider(height: 1, thickness: 1, color: _Dlg.divider),
+              Divider(height: 1, thickness: 1, color: _Dlg.divider),
               if (height != null) Expanded(child: child) else child,
               if (hasFooter) ...[
-                const Divider(height: 1, thickness: 1, color: _Dlg.divider),
+                Divider(height: 1, thickness: 1, color: _Dlg.divider),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -180,6 +184,7 @@ class _DialogShell extends StatelessWidget {
   }
 
   Widget _header() {
+    final accent = this.accent ?? _Dlg.accent;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -203,7 +208,7 @@ class _DialogShell extends StatelessWidget {
               rawTitle ? title : _displayTitle(title),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: _Dlg.textPrimary,
@@ -284,7 +289,7 @@ class FileExplorerDialogButton extends StatelessWidget {
 InputDecoration _formFieldDecoration(String label, {Widget? suffixIcon, String? errorText}) {
   return InputDecoration(
     labelText: label,
-    labelStyle: const TextStyle(fontSize: 12, color: _Dlg.textSecondary),
+    labelStyle: TextStyle(fontSize: 12, color: _Dlg.textSecondary),
     errorText: errorText,
     filled: true,
     fillColor: _Dlg.field,
@@ -293,15 +298,15 @@ InputDecoration _formFieldDecoration(String label, {Widget? suffixIcon, String? 
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: const BorderSide(color: _Dlg.outline),
+      borderSide: BorderSide(color: _Dlg.outline),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: const BorderSide(color: _Dlg.outline),
+      borderSide: BorderSide(color: _Dlg.outline),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: const BorderSide(color: _Dlg.accent, width: 1.5),
+      borderSide: BorderSide(color: _Dlg.accent, width: 1.5),
     ),
   );
 }

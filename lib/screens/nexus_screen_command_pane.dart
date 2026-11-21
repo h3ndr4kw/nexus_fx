@@ -230,7 +230,7 @@ extension _NexusCommandPane on NexusScreenState {
         backgroundColor: palette.surfaceColor,
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+            Icon(Icons.warning_amber_rounded, color: AppTheme.adaptive(Colors.amber)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -264,10 +264,10 @@ extension _NexusCommandPane on NexusScreenState {
                 children: lines
                     .map((l) => Text(
                           l,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Courier New',
                             fontSize: 12,
-                            color: Colors.amber,
+                            color: AppTheme.adaptive(Colors.amber),
                           ),
                         ))
                     .toList(),

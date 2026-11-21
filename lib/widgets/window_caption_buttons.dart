@@ -137,14 +137,14 @@ class _WindowCaptionButtonState extends State<_WindowCaptionButton> {
   Widget build(BuildContext context) {
     final hoverBgColor = widget.isClose
         ? const Color(0xFFC42B1C)
-        : Colors.white.withValues(alpha: 0.1);
+        : AppTheme.ink.withValues(alpha: 0.1);
 
     final defaultIconColor = widget.isClose
         ? AppTheme.textColor.withValues(alpha: 0.8)
         : AppTheme.textColor;
 
     final iconColor = _isHovered
-        ? Colors.white
+        ? (widget.isClose ? Colors.white : AppTheme.ink)
         : defaultIconColor;
 
     return Tooltip(

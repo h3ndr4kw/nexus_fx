@@ -662,7 +662,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
             width: 1080,
             height: 640,
             decoration: BoxDecoration(
-              color: const Color(0xFF181818),
+              color: AppTheme.adaptive(const Color(0xFF181818)),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: palette.inputBorderColor,
@@ -697,23 +697,23 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                     child: Container(
                       height: 44,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: Color(0xFF2B2B2B), width: 1),
+                          bottom: BorderSide(color: AppTheme.adaptive(const Color(0xFF2B2B2B)), width: 1),
                         ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.keyboard_outlined,
                             size: 18,
-                            color: Color(0xFFCCCCCC),
+                            color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                           ),
                           const SizedBox(width: 10),
-                          const Text(
+                          Text(
                             'Keyboard Shortcuts',
                             style: TextStyle(
-                              color: Color(0xFFCCCCCC),
+                              color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               fontFamily: 'Courier',
@@ -725,7 +725,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.close, size: 16, color: Color(0xFF888888)),
+                                icon: Icon(Icons.close, size: 16, color: AppTheme.adaptive(const Color(0xFF888888))),
                                 tooltip: 'Close',
                                 onPressed: () => Navigator.of(context).pop(),
                                 padding: EdgeInsets.zero,
@@ -748,7 +748,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                       child: Container(
                         height: 34,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF252526),
+                          color: AppTheme.adaptive(const Color(0xFF252526)),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: palette.inputBorderColor,
@@ -758,25 +758,25 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                         child: Row(
                           children: [
                             const SizedBox(width: 10),
-                            const Icon(
+                            Icon(
                               Icons.search,
                               size: 16,
-                              color: Color(0xFF858585),
+                              color: AppTheme.adaptive(const Color(0xFF858585)),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
                                 controller: _searchController,
                                 focusNode: _searchFocusNode,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: AppTheme.textPrimary,
                                   fontSize: 13,
                                   fontFamily: 'Courier',
                                 ),
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   hintText: 'Type to search in keybindings',
                                   hintStyle: TextStyle(
-                                    color: Color(0xFF858585),
+                                    color: AppTheme.adaptive(const Color(0xFF858585)),
                                     fontSize: 12,
                                   ),
                                   border: InputBorder.none,
@@ -794,7 +794,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                             ),
                             if (_searchQuery.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.clear, size: 14, color: Color(0xFF858585)),
+                                icon: Icon(Icons.clear, size: 14, color: AppTheme.adaptive(const Color(0xFF858585))),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
@@ -815,15 +815,15 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                       height: 32,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF252526),
+                        color: AppTheme.adaptive(const Color(0xFF252526)),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: palette.inputBorderColor, width: 1),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.keyboard, size: 16, color: Color(0xFF858585)),
+                          Icon(Icons.keyboard, size: 16, color: AppTheme.adaptive(const Color(0xFF858585))),
                           SizedBox(width: 6),
-                          Icon(Icons.filter_list, size: 16, color: Color(0xFF858585)),
+                          Icon(Icons.filter_list, size: 16, color: AppTheme.adaptive(const Color(0xFF858585))),
                         ],
                       ),
                     ),
@@ -835,20 +835,20 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
               Container(
                 height: 32,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1E1E1E),
+                decoration: BoxDecoration(
+                  color: AppTheme.adaptive(const Color(0xFF1E1E1E)),
                   border: Border(
-                    bottom: BorderSide(color: Color(0xFF2D2D2D), width: 1),
+                    bottom: BorderSide(color: AppTheme.adaptive(const Color(0xFF2D2D2D)), width: 1),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Expanded(
                       flex: 4,
                       child: Text(
                         'Command',
                         style: TextStyle(
-                          color: Color(0xFFCCCCCC),
+                          color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Courier',
@@ -860,7 +860,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                       child: Text(
                         'Keybinding',
                         style: TextStyle(
-                          color: Color(0xFFCCCCCC),
+                          color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Courier',
@@ -872,7 +872,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                       child: Text(
                         'When',
                         style: TextStyle(
-                          color: Color(0xFFCCCCCC),
+                          color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Courier',
@@ -884,7 +884,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                       child: Text(
                         'Source',
                         style: TextStyle(
-                          color: Color(0xFFCCCCCC),
+                          color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Courier',
@@ -907,9 +907,9 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
                       decoration: BoxDecoration(
-                        color: index.isEven ? const Color(0xFF181818) : const Color(0xFF1C1C1C),
-                        border: const Border(
-                          bottom: BorderSide(color: Color(0xFF222222), width: 0.8),
+                        color: index.isEven ? AppTheme.adaptive(const Color(0xFF181818)) : AppTheme.adaptive(const Color(0xFF1C1C1C)),
+                        border: Border(
+                          bottom: BorderSide(color: AppTheme.adaptive(const Color(0xFF222222)), width: 0.8),
                         ),
                       ),
                       child: Row(
@@ -919,8 +919,8 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                             flex: 4,
                             child: Text(
                               item.command,
-                              style: const TextStyle(
-                                color: Color(0xFFCCCCCC),
+                              style: TextStyle(
+                                color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
                                 fontSize: 12,
                                 fontFamily: 'Courier',
                               ),
@@ -940,12 +940,12 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                                   for (int i = 0; i < item.keys.length; i++) ...[
                                     _buildKeyCap(item.keys[i]),
                                     if (i < item.keys.length - 1)
-                                      const Padding(
+                                      Padding(
                                         padding: EdgeInsets.symmetric(horizontal: 3),
                                         child: Text(
                                           '+',
                                           style: TextStyle(
-                                            color: Color(0xFF888888),
+                                            color: AppTheme.adaptive(const Color(0xFF888888)),
                                             fontSize: 11,
                                           ),
                                         ),
@@ -961,8 +961,8 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                             flex: 5,
                             child: Text(
                               item.when,
-                              style: const TextStyle(
-                                color: Color(0xFF7A7A7A),
+                              style: TextStyle(
+                                color: AppTheme.adaptive(const Color(0xFF7A7A7A)),
                                 fontSize: 11,
                                 fontFamily: 'Courier',
                               ),
@@ -977,10 +977,10 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                               item.source,
                               style: TextStyle(
                                 color: isAntigravity
-                                    ? const Color(0xFF4FC1FF)
+                                    ? AppTheme.adaptive(const Color(0xFF4FC1FF))
                                     : isSmartE
-                                        ? const Color(0xFF98C379)
-                                        : const Color(0xFF888888),
+                                        ? AppTheme.adaptive(const Color(0xFF98C379))
+                                        : AppTheme.adaptive(const Color(0xFF888888)),
                                 fontSize: 11,
                                 fontFamily: 'Courier',
                               ),
@@ -1005,17 +1005,17 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF2B2B2B),
+        color: AppTheme.adaptive(const Color(0xFF2B2B2B)),
         borderRadius: BorderRadius.circular(3),
         border: Border.all(
-          color: const Color(0xFF3C3C3C),
+          color: AppTheme.adaptive(const Color(0xFF3C3C3C)),
           width: 1,
         ),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Color(0xFFCCCCCC),
+        style: TextStyle(
+          color: AppTheme.adaptive(const Color(0xFFCCCCCC)),
           fontSize: 11,
           fontFamily: 'Courier',
           fontWeight: FontWeight.w500,
