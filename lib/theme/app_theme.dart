@@ -66,12 +66,10 @@ class AppPalette {
     required this.successColor,
     required this.warningColor,
     this.brightness = Brightness.dark,
-    Color? surfaceSecondaryColor,
-    Color? mutedColor,
-    Color? primaryTextColor,
-  })  : _surfaceSecondaryColor = surfaceSecondaryColor,
-        _mutedColor = mutedColor,
-        _primaryTextColor = primaryTextColor;
+    this._surfaceSecondaryColor,
+    this._mutedColor,
+    this._primaryTextColor,
+  });
 
   Color get primaryTextColor =>
       _primaryTextColor ??

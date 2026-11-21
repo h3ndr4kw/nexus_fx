@@ -56,11 +56,11 @@ class FileExplorerConfirmDialog extends StatefulWidget {
     required this.title,
     required this.message1,
     this.message2,
-    Color? borderColor,
+    this._borderColor,
     this.confirmText = 'Yes',
     this.cancelText = 'No',
     this.defaultYes = true,
-  }) : _borderColor = borderColor;
+  });
 
   @override
   State<FileExplorerConfirmDialog> createState() =>
@@ -403,10 +403,10 @@ class FileExplorerNotificationDialog extends StatelessWidget {
     required this.title,
     required this.message,
     this.subMessage,
-    Color? borderColor,
+    this._borderColor,
     this.icon,
     this.buttonText = 'OK',
-  }) : _borderColor = borderColor;
+  });
 
   @override
   Widget build(BuildContext context) {
