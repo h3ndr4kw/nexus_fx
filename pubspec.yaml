@@ -23,6 +23,7 @@ dependencies:
   pointycastle: 4.0.0
   local_notifier: ^0.1.6
   flutter_pty: ^0.4.2
+  material_ui: ^1.11.1
 
 dev_dependencies:
   flutter_test:

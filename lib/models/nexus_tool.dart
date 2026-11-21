@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../controllers/broadcast_coordinator.dart';
 import '../controllers/terminal_tab_controller.dart';
 import '../services/crypto_vault_service.dart';
