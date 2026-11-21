@@ -256,6 +256,17 @@ enum FileExplorerStatusBarStyle {
   const FileExplorerStatusBarStyle(this.label);
 }
 
+/// Archive format the File Explorer writes when compressing.
+enum FileExplorerArchiveFormat {
+  tarGz('tar.gz', '.tar.gz'),
+  zip('zip', '.zip');
+
+  final String label;
+  final String extension;
+
+  const FileExplorerArchiveFormat(this.label, this.extension);
+}
+
 enum ExplorerInputMode {
   normal,
   search,

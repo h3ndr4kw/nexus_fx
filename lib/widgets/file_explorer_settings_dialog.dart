@@ -148,6 +148,30 @@ class _FileExplorerSettingsDialogState
 
               const SizedBox(height: 16),
 
+              _buildSectionHeader('COMPRESS FORMAT', Icons.archive_outlined),
+              const SizedBox(height: 8),
+              Row(
+                children: FileExplorerArchiveFormat.values.map((f) {
+                  final isSelected = settings.fileExplorerArchiveFormat == f;
+                  return Expanded(
+                    child: _buildOptionTile(
+                      label: f.label,
+                      subtitle: f == FileExplorerArchiveFormat.tarGz
+                          ? 'Built into every Linux server'
+                          : 'Opens on any Windows; needs zip on servers',
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          settings.setFileExplorerArchiveFormat(f);
+                        });
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 16),
+
               _buildSectionHeader('LIVE PREVIEW', Icons.remove_red_eye_outlined),
               const SizedBox(height: 8),
               _buildPreviewBox(settings),

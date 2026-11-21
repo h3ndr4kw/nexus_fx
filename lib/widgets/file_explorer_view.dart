@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/file_explorer_models.dart';
+import '../services/archive_commands.dart';
 import '../services/file_explorer_service.dart';
 import '../services/transfer_manager.dart';
 import 'file_explorer_dialogs.dart';
@@ -1569,6 +1570,174 @@ class _FileExplorerViewState extends State<FileExplorerView> {
     _focusNode.requestFocus();
   }
 
+  bool _archiveBusy = false;
+
+  /// Last path segment of [path], local or remote; empty at a root.
+  String _dirName(String path) {
+    final parts = path.split(RegExp(r'[\\/]')).where((p) => p.isNotEmpty);
+    if (parts.isEmpty) return '';
+    final last = parts.last;
+    return last.endsWith(':') ? '' : last;
+  }
+
+  String _childPath(_PaneController pane, String name) {
+    final dir = pane.currentPath;
+    if (pane.target.isLocal) return '$dir${Platform.pathSeparator}$name';
+    final clean = dir.length > 1 && dir.endsWith('/')
+        ? dir.substring(0, dir.length - 1)
+        : dir;
+    return clean == '/' ? '/$name' : '$clean/$name';
+  }
+
+  Set<String> _existingNames(_PaneController pane) =>
+      pane.items.where((i) => i.name != '..').map((i) => i.name).toSet();
+
+  /// Error text for a new item name in [pane], or null when it is usable.
+  String? _newNameProblem(_PaneController pane, String name) {
+    if (name.isEmpty) return 'Name is empty.';
+    if (name.contains('/') || (pane.target.isLocal && name.contains(r'\'))) {
+      return 'Name cannot contain a path separator.';
+    }
+    if (name == '.' || name == '..') return 'Invalid name.';
+    if (_existingNames(pane).contains(name)) return "'$name' already exists here.";
+    return null;
+  }
+
+  Future<void> _initiateCompress() async {
+    final targets = _getTargetItems();
+    if (targets.isEmpty) {
+      _setStatus('No item selected to compress.');
+      return;
+    }
+    if (_archiveBusy) {
+      _setStatus('A compress or extract is still running.');
+      return;
+    }
+
+    final pane = activePaneState;
+    final format = SettingsService.instance.fileExplorerArchiveFormat;
+    final suggested = defaultArchiveName(
+      targets.map((t) => ArchiveSource(t.name, isDir: t.isDir)).toList(),
+      currentDirName: _dirName(pane.currentPath),
+      format: format,
+      existing: _existingNames(pane),
+    );
+
+    final input = await showDialog<String>(
+      context: context,
+      builder: (ctx) => FileExplorerPromptDialog(
+        title: 'COMPRESS',
+        promptLabel: targets.length > 1
+            ? 'Archive ${targets.length} items as (${format.label}, change in Settings):'
+            : "Archive '${targets.first.name}' as (${format.label}, change in Settings):",
+        initialValue: suggested,
+      ),
+    );
+    final name = input?.trim();
+    if (name == null || name.isEmpty || !mounted) {
+      _focusNode.requestFocus();
+      return;
+    }
+    final problem = _newNameProblem(pane, name);
+    if (problem != null) {
+      _setStatus('Compress failed: $problem', isError: true);
+      _focusNode.requestFocus();
+      return;
+    }
+
+    final names = targets.map((t) => t.name).toList();
+    _archiveBusy = true;
+    _setStatus("Compressing ${targets.length} item(s) into '$name'...");
+    try {
+      if (pane.target.isLocal) {
+        await compressLocalArchive(
+          dir: pane.currentPath,
+          names: names,
+          archiveName: name,
+          format: format,
+        );
+      } else {
+        pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
+        await _service.compressRemote(
+            pane.remoteSession!, pane.currentPath, names, name, format);
+      }
+      pane.multiSelected.clear();
+      _setStatus("Created archive '$name'.", isSuccess: true);
+      await _loadPane(pane);
+    } catch (e) {
+      _setStatus('Compress failed: $e', isError: true);
+    } finally {
+      _archiveBusy = false;
+    }
+    _focusNode.requestFocus();
+  }
+
+  Future<void> _initiateExtract() async {
+    final targets = _getTargetItems();
+    if (targets.length != 1) {
+      _setStatus(targets.isEmpty
+          ? 'No archive selected to extract.'
+          : 'Select a single archive to extract.');
+      return;
+    }
+    final archive = targets.first;
+    final kind = archive.isDir ? null : archiveKindOf(archive.name);
+    if (kind == null) {
+      _setStatus(
+        "'${archive.name}' is not an archive (tar.gz, tgz, tar, tar.bz2, tar.xz, zip).",
+        isError: true,
+      );
+      return;
+    }
+    if (_archiveBusy) {
+      _setStatus('A compress or extract is still running.');
+      return;
+    }
+
+    final pane = activePaneState;
+    final input = await showDialog<String>(
+      context: context,
+      builder: (ctx) => FileExplorerPromptDialog(
+        title: 'EXTRACT',
+        promptLabel: "Extract '${archive.name}' into new folder:",
+        initialValue:
+            uniqueName(archiveBaseName(archive.name), _existingNames(pane)),
+      ),
+    );
+    final folder = input?.trim();
+    if (folder == null || folder.isEmpty || !mounted) {
+      _focusNode.requestFocus();
+      return;
+    }
+    final problem = _newNameProblem(pane, folder);
+    if (problem != null) {
+      _setStatus('Extract failed: $problem', isError: true);
+      _focusNode.requestFocus();
+      return;
+    }
+
+    final destDir = _childPath(pane, folder);
+    _archiveBusy = true;
+    _setStatus("Extracting '${archive.name}' into '$folder'...");
+    try {
+      if (pane.target.isLocal) {
+        await extractLocalArchive(
+            archivePath: archive.path, destDir: destDir, kind: kind);
+      } else {
+        pane.remoteSession ??= await _service.getOrConnectRemote(pane.target);
+        await _service.extractRemote(
+            pane.remoteSession!, archive.path, destDir, kind);
+      }
+      _setStatus("Extracted '${archive.name}' into '$folder'.", isSuccess: true);
+      await _loadPane(pane);
+    } catch (e) {
+      _setStatus('Extract failed: $e', isError: true);
+    } finally {
+      _archiveBusy = false;
+    }
+    _focusNode.requestFocus();
+  }
+
   void _showHelpDialog() {
     showDialog(
       context: context,
@@ -1804,6 +1973,16 @@ class _FileExplorerViewState extends State<FileExplorerView> {
 
     if (isDownOnly && !isCtrl && event.logicalKey == LogicalKeyboardKey.keyR) {
       _initiateRename();
+      return KeyEventResult.handled;
+    }
+
+    if (isDownOnly && !isCtrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
+      _initiateCompress();
+      return KeyEventResult.handled;
+    }
+
+    if (isDownOnly && !isCtrl && event.logicalKey == LogicalKeyboardKey.keyX) {
+      _initiateExtract();
       return KeyEventResult.handled;
     }
 
