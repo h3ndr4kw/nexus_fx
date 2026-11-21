@@ -326,8 +326,8 @@ class PaletteRow extends StatelessWidget {
   }
 }
 
-/// Right-click menu in the palette look: a bordered card with a soft shadow,
-/// [PaletteMenuItem] rows and [PaletteMenuDivider] separators.
+/// Right-click menu: a flat card with a thin border, plain-text rows with
+/// right-aligned shortcuts, and full-width [PaletteMenuDivider] separators.
 Future<T?> showPaletteMenu<T>({
   required BuildContext context,
   required Offset position,
@@ -337,33 +337,38 @@ Future<T?> showPaletteMenu<T>({
     context: context,
     popUpAnimationStyle: AnimationStyle.noAnimation,
     position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
-    color: AppTheme.bgSurface,
+    color: PaletteMenuColors.background,
     surfaceTintColor: Colors.transparent,
-    elevation: 16,
+    elevation: 12,
     shadowColor: Colors.black,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
-      side: const BorderSide(color: AppTheme.borderSubtle),
+      borderRadius: BorderRadius.circular(8),
+      side: const BorderSide(color: PaletteMenuColors.border),
     ),
     clipBehavior: Clip.antiAlias,
-    menuPadding: const EdgeInsets.symmetric(vertical: 6),
-    constraints: const BoxConstraints(minWidth: 240, maxWidth: 380),
+    menuPadding: const EdgeInsets.symmetric(vertical: 4),
+    constraints: const BoxConstraints(minWidth: 260, maxWidth: 400),
     items: items,
   );
 }
 
-class PaletteMenuDivider extends PopupMenuDivider {
-  const PaletteMenuDivider({super.key}) : super(height: 9, color: AppTheme.borderSubtle);
+class PaletteMenuColors {
+  static const Color background = Color(0xFF22252C);
+  static const Color border = Color(0xFF3A3E47);
+  static const Color divider = Color(0xFF33363E);
+  static const Color highlight = Color(0xFF2F3D52);
 }
 
-/// A [showPaletteMenu] row: icon box, label, optional shortcut keycap. Hover
-/// and keyboard focus both show the palette's accent bar and tint.
+class PaletteMenuDivider extends PopupMenuDivider {
+  const PaletteMenuDivider({super.key}) : super(height: 9, color: PaletteMenuColors.divider);
+}
+
+/// A [showPaletteMenu] row: label on the left, shortcut on the right. Hover
+/// and keyboard focus share one highlight.
 class PaletteMenuItem<T> extends PopupMenuEntry<T> {
   final T value;
-  final IconData icon;
   final String label;
   final String? shortcut;
-  final Color iconColor;
 
   /// Overrides the label color, e.g. for destructive actions.
   final Color? labelColor;
@@ -372,16 +377,14 @@ class PaletteMenuItem<T> extends PopupMenuEntry<T> {
   const PaletteMenuItem({
     super.key,
     required this.value,
-    required this.icon,
     required this.label,
     this.shortcut,
-    this.iconColor = AppTheme.textSecondary,
     this.labelColor,
     this.enabled = true,
   });
 
   @override
-  double get height => 34;
+  double get height => 30;
 
   @override
   bool represents(T? value) => false;
@@ -398,36 +401,19 @@ class _PaletteMenuItemState<T> extends State<PaletteMenuItem<T>> {
 
   @override
   Widget build(BuildContext context) {
-    const accent = AppTheme.accentPrimary;
     final enabled = widget.enabled;
     final active = enabled && (_hovered || _focused);
-    final iconColor = enabled ? widget.iconColor : AppTheme.textMuted;
 
     final row = Container(
       height: widget.height,
-      padding: const EdgeInsets.fromLTRB(9, 0, 12, 0),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
       decoration: BoxDecoration(
-        color: active ? accent.withValues(alpha: 0.08) : Colors.transparent,
-        border: Border(
-          left: BorderSide(color: active ? accent : Colors.transparent, width: 3),
-        ),
+        color: active ? PaletteMenuColors.highlight : Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active ? iconColor.withValues(alpha: 0.15) : AppTheme.bgSurfaceSecondary,
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(
-                color: active ? iconColor.withValues(alpha: 0.35) : AppTheme.borderSubtle,
-              ),
-            ),
-            child: Icon(widget.icon, size: 14, color: iconColor),
-          ),
-          const SizedBox(width: 10),
           Expanded(
             child: Text(
               widget.label,
@@ -435,16 +421,18 @@ class _PaletteMenuItemState<T> extends State<PaletteMenuItem<T>> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w500,
                 color: enabled ? (widget.labelColor ?? AppTheme.textPrimary) : AppTheme.textMuted,
               ),
             ),
           ),
           if (widget.shortcut != null) ...[
-            const SizedBox(width: 16),
-            Opacity(
-              opacity: enabled ? 1 : 0.5,
-              child: _PaletteKeycap(widget.shortcut!),
+            const SizedBox(width: 32),
+            Text(
+              widget.shortcut!,
+              style: TextStyle(
+                fontSize: 12,
+                color: enabled ? AppTheme.textSecondary : AppTheme.textMuted,
+              ),
             ),
           ],
         ],
@@ -472,34 +460,6 @@ class _PaletteMenuItemState<T> extends State<PaletteMenuItem<T>> {
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? _select : null,
           child: row,
-        ),
-      ),
-    );
-  }
-}
-
-/// Shortcut hint drawn like the palette's ESC keycap.
-class _PaletteKeycap extends StatelessWidget {
-  final String text;
-
-  const _PaletteKeycap(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.bgSurfaceSecondary,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppTheme.inputOutline),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
-          color: AppTheme.textSecondary,
         ),
       ),
     );

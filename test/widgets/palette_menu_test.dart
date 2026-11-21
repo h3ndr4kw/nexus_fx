@@ -16,9 +16,9 @@ void main() {
       context: ctx,
       position: const Offset(20, 20),
       items: const [
-        PaletteMenuItem(value: 'open', icon: Icons.folder_open, label: 'Open', shortcut: 'Enter'),
+        PaletteMenuItem(value: 'open', label: 'Open', shortcut: 'Enter'),
         PaletteMenuDivider(),
-        PaletteMenuItem(value: 'rename', icon: Icons.edit, label: 'Rename', enabled: false),
+        PaletteMenuItem(value: 'rename', label: 'Rename', enabled: false),
       ],
     );
     await tester.pumpAndSettle();
